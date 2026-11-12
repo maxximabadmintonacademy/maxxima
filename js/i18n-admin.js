@@ -186,6 +186,8 @@ export const AD = {
   'Set semula kata laluan ibu bapa?': ["Reset parent's password?", '重设家长密码？'], 'Kata laluan baharu akan dijana. Kata laluan lama tidak boleh digunakan lagi.': ['A new password will be generated. The old password will stop working.', '将生成新密码，旧密码将失效。'],
   'Cipta akaun': ['Create account', '创建账户'], 'Set semula': ['Reset', '重设'], 'Akaun ibu bapa sedia': ['Parent account ready', '家长账户已就绪'], 'Log masuk:': ['Login:', '登录：'], 'Kata laluan:': ['Password:', '密码：'],
   'Kata laluan ini hanya dipaparkan sekali. Hantar kepada ibu bapa sekarang.': ['This password is shown only once. Send it to the parent now.', '此密码只显示一次，请立即发送给家长。'], 'Hantar melalui WhatsApp': ['Send via WhatsApp', '通过 WhatsApp 发送'],
+  'Daftar online': ['Online registration', '网上报名'], 'Tolak': ['Reject', '拒绝'], 'Terima & Tetapkan Penempatan': ['Accept & Set Placement', '接受并分班'], 'Minat:': ['Interest:', '意向：'], 'Lokasi:': ['Location:', '地点：'],
+  'Semak maklumat, kemudian terima dengan memilih pakej dan kelas (atau mod fleksibel). Jika tidak sesuai, tekan': ['Review the details, then accept by choosing a package and class (or flexible mode). If not suitable, press', '请核对资料，然后选择配套和班级（或灵活模式）以接受。如不合适，请按'],
 };
 
 let trAll = x => x;
