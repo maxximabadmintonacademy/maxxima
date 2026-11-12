@@ -2,10 +2,11 @@ import { qrSvg } from '../qr.js';
 // Pengguna & Akses (peranan, jemputan, pautan ibu bapa/coach) dan Tetapan.
 import { themeSwitch } from '../theme.js';
 import { langSwitch } from '../i18n.js';
-import { VIEWS, ACTIONS } from '../registry.js';
-import { S, insert, update, remove, saveSetting, inviteUser } from '../data.js';
+import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
+import { S, insert, update, remove, saveSetting, inviteUser, rpc } from '../data.js';
 import { ic, esc, F, num, val, badge, avatar, app, toast, openModal, confirmModal, pageHead, fmtDate, LABEL, $ } from '../ui.js';
 import { T, byId, venueName, progName, academy, billing } from './helpers.js';
+import { LANGS_ALL, ageGroups } from './sessions.js';
 
 /* =====================================================================
    PENGGUNA & AKSES
@@ -109,11 +110,38 @@ const regCard = () => `<div class="card card-pad mb" style="display:flex;gap:16p
   <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><input readonly value="${esc(regUrl())}" style="flex:1;min-width:200px" onclick="this.select()"><button type="button" class="btn sm" data-action="reg-copy">Salin pautan</button><a class="btn sm" href="${esc(regUrl())}" target="_blank" rel="noopener">Buka borang</a></div></div></div>`;
 ACTIONS['reg-copy'] = async () => { try { await navigator.clipboard.writeText(regUrl()); toast('Pautan disalin'); } catch { toast(regUrl()); } };
 
+/* ---- Notifikasi admin boleh diubah (setiap admin sendiri) ---- */
+export const NOTIF_KINDS = [['booking', 'Tempahan baharu daripada ibu bapa'], ['enrolment', 'Pendaftaran online baharu'], ['payment', 'Bayaran / bukti bayaran baharu'], ['payment_ok', 'Bayaran disahkan'],
+  ['renewal', 'Invois pembaharuan pakej dijana'], ['student', 'Pelajar baharu ditambah'], ['leave', 'Permohonan cuti staf']];
+const myProfile = () => T('profiles').find(p => p.id === S.profile.id) || S.profile;
+const notifCard = () => { const off = new Set(myProfile().notify_off || []); return `<div class="card card-pad mb"><h3 style="font-size:14.5px;margin-bottom:4px">${ic('bell', 'sm')} Notifikasi saya</h3>
+  <p class="muted" style="font-size:12.5px;margin-bottom:10px">Pilih notifikasi loceng yang anda mahu terima. Setiap admin boleh pilih sendiri.</p>
+  <div class="langchk" style="flex-direction:column;gap:8px">${NOTIF_KINDS.map(([k, l]) => `<label><input type="checkbox" data-on-change="notif-tog" data-key="${k}" ${off.has(k) ? '' : 'checked'}> ${l}</label>`).join('')}</div></div>`; };
+const ageCard = () => `<div class="card card-pad mb"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="font-size:14.5px">Kategori umur (sesi kumpulan)</h3><button class="btn sm" data-action="age-edit">${ic('edit', 'sm')} Ubah</button></div>
+  <p class="muted" style="font-size:12.5px;margin:4px 0 10px">Pelajar yang menempah / hadir sesi kumpulan diletakkan automatik ke kategori ikut umur pada tarikh sesi. Admin hanya tetapkan coach & court setiap kategori.</p>
+  <div class="chips" style="margin:0">${ageGroups().map(g => `<span class="chip">${esc(g.code)} · ${g.min}–${g.max} thn</span>`).join('')}</div></div>`;
+INPUTS['notif-tog'] = async (v, el) => {
+  const p = myProfile(), off = new Set(p.notify_off || []), k = el.dataset.key;
+  if (el.checked) off.delete(k); else off.add(k);
+  const arr = [...off];
+  if (S.mode === 'supabase') await rpc('set_notify_off', { p_kinds: arr });
+  p.notify_off = arr; S.profile.notify_off = arr; toast('Tetapan notifikasi disimpan');
+};
+ACTIONS['age-edit'] = () => openModal({ title: 'Kategori umur', body: `<p class="muted" style="font-size:12.5px;margin-bottom:10px">Satu baris setiap kategori: <b>KOD, umur min, umur max</b> (cth. U12, 9, 12).</p>
+  ${F('Kategori', 'rows', { type: 'textarea', full: true, value: ageGroups().map(g => `${g.code}, ${g.min}, ${g.max}`).join('\n') })}`,
+  onSubmit: async d => {
+    const rows = String(d.rows || '').split('\n').map(l => l.split(',').map(x => x.trim())).filter(r => r[0]).map(([code, min, max]) => ({ code, min: Number(min) || 0, max: Number(max) || 99 }));
+    if (!rows.length) throw new Error('Isi sekurang-kurangnya satu kategori.');
+    await saveSetting('age_groups', rows); toast('Kategori umur disimpan'); app.render();
+  } });
+
 VIEWS.tetapan = () => {
   const a = academy(), b = billing();
   return `
   ${pageHead('Tetapan', 'Profil akademi, caj dan senarai rujukan (lokasi & program).', `<span class="muted" style="font-size:12.5px">Bahasa</span>${langSwitch()}<span class="muted" style="font-size:12.5px">Tema</span>${themeSwitch()}`)}
   ${regCard()}
+  ${notifCard()}
+  ${ageCard()}
   <div class="grid g-2 mb">
     <div class="card card-pad"><h3 style="font-size:14.5px;margin-bottom:14px">Profil Akademi</h3>
       <div class="form-grid">
@@ -159,14 +187,15 @@ VIEWS.tetapan = () => {
 };
 
 const activeBox = on => `<label class="f full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="active" value="1" ${on ? 'checked' : ''} style="width:auto;height:auto"> Aktif</label>`;
+const langBox = V => `<div class="f full">Coach mesti bertutur (kosong = tiada syarat)<div class="langchk">${LANGS_ALL.map(([k, l]) => `<label><input type="checkbox" name="required_langs" value="${k}" ${(V?.required_langs || []).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>`;
 Object.assign(ACTIONS, {
   'save-academy': async () => { const g = i => $(i).value.trim(); await saveSetting('academy', { ...academy(), name: g('#setName'), legal_name: g('#setLegal'), registration_no: g('#setReg'), tin: g('#setTin').toUpperCase(), msic: g('#setMsic'), sst_no: g('#setSst'), sports_reg_no: g('#setSports'), address: g('#setAddr'), tagline: g('#setTag'), phones: g('#setPhones'), whatsapp: $('#setWa').value.replace(/\D/g, ''), email: g('#setEmail'), instagram: g('#setIg') }); toast('Profil disimpan'); app.render(); },
   'save-billing': async () => { await saveSetting('billing', { ...billing(), due_days: Number($('#setDue').value) || 7, cancel_notice_hours: Number($('#setCancel').value) || 0, bank_name: $('#setBank').value.trim(), bank_account: $('#setAcc').value.trim(), bank_holder: $('#setHolder').value.trim(), duitnow_note: $('#setNote').value.trim(), billplz_url: $('#setBpUrl').value.trim(), qr_duitnow: $('#setQrDuit').checked, qr_billplz: $('#setQrBp').checked, policy_on: $('#setPolOn').checked, policy_text: $('#setPol').value.trim() }); toast('Tetapan disimpan'); app.render(); },
 
-  'venue-add': () => openModal({ title: 'Lokasi Baharu', submit: 'Tambah', body: `<div class="form-grid">${F('Nama lokasi', 'name', { req: true, full: true })}${F('Kawasan', 'area', { full: true })}</div>`, onSubmit: async d => { await insert('venues', { name: d.name.trim(), area: val(d.area), active: true }); toast('Lokasi ditambah'); app.render(); } }),
+  'venue-add': () => openModal({ title: 'Lokasi Baharu', submit: 'Tambah', body: `<div class="form-grid">${F('Nama lokasi', 'name', { req: true, full: true })}${F('Kawasan', 'area', { full: true })}${langBox(null)}</div>`, onSubmit: async d => { await insert('venues', { name: d.name.trim(), area: val(d.area), active: true, required_langs: [].concat(d.required_langs || []).filter(Boolean) }); toast('Lokasi ditambah'); app.render(); } }),
   'venue-edit': id => { const v = byId('venues', id); openModal({
-    title: 'Edit Lokasi', body: `<div class="form-grid">${F('Nama lokasi', 'name', { value: v.name, req: true, full: true })}${F('Kawasan', 'area', { value: v.area, full: true })}${activeBox(v.active)}</div><div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="venue-del" data-id="${id}">${ic('trash', 'sm')} Padam</button></div>`,
-    onSubmit: async d => { await update('venues', id, { name: d.name.trim(), area: val(d.area), active: d.active === '1' }); toast('Lokasi dikemas kini'); app.render(); } }); },
+    title: 'Edit Lokasi', body: `<div class="form-grid">${F('Nama lokasi', 'name', { value: v.name, req: true, full: true })}${F('Kawasan', 'area', { value: v.area, full: true })}${langBox(v)}${activeBox(v.active)}</div><div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="venue-del" data-id="${id}">${ic('trash', 'sm')} Padam</button></div>`,
+    onSubmit: async d => { await update('venues', id, { name: d.name.trim(), area: val(d.area), active: d.active === '1', required_langs: [].concat(d.required_langs || []).filter(Boolean) }); toast('Lokasi dikemas kini'); app.render(); } }); },
   'venue-del': id => confirmModal({ title: 'Padam lokasi?', message: `Semua kelas di <b>${esc(venueName(id))}</b> akan turut dipadam. Pertimbangkan "Tidak aktif" sahaja.`, ok: 'Padam', danger: true, onOk: async () => { await remove('venues', id); toast('Lokasi dipadam'); app.render(); } }),
 
   'prog-add': () => openModal({ title: 'Program Baharu', submit: 'Tambah', body: progForm(), onSubmit: async d => { await insert('programmes', progPatch(d)); toast('Program ditambah'); app.render(); } }),

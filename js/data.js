@@ -16,7 +16,7 @@ export const S = {
 export const ADMIN_TABLES = [
   'settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'parent_tax_info', 'invoice_items', 'expenses', 'leads', 'trials', 'students',
   'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes',
-  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches',
+  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests',
 ];
 const WINDOWED = new Set(['class_sessions', 'attendance']);   // hanya 90 hari terakhir + akan datang
 const WINDOW_DAYS = 90;
@@ -105,7 +105,7 @@ async function fetchAll(table, sinceISO) {
 }
 
 const PARENT_TABLES = ['settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'students', 'classes', 'class_enrolments',
-  'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'parent_tax_info', 'invoice_items'];
+  'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'parent_tax_info', 'invoice_items', 'booking_requests', 'session_groups'];
 /* Portal ibu bapa: RLS hanya memulangkan data anak sendiri. */
 export async function loadParent() {
   if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
@@ -114,6 +114,43 @@ export async function loadParent() {
   next.staff = await fetchAll('staff_directory');
   next.profiles = []; next.leads = []; next.trials = [];
   S.t = next;
+}
+
+/* Portal coach: RLS hanya memulangkan kelas, sesi dan pelajar yang coach itu ajar. */
+const COACH_TABLES = ['settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests'];
+export async function loadCoach() {
+  if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
+  const since = addDays(todayISO(), -WINDOW_DAYS), next = {};
+  await Promise.all(COACH_TABLES.map(async t => { next[t] = await fetchAll(t, since); }));
+  next.profiles = []; next.student_packages = []; next.invoices = []; next.payments = []; next.guardians = [];
+  S.t = next;
+}
+
+/* Muat sesi + kehadiran untuk julat tarikh di luar tetingkap 90 hari (kalendar). */
+const loadedRanges = [];
+export async function loadRange(from, to) {
+  if (S.mode !== 'supabase') return false;
+  const since = addDays(todayISO(), -WINDOW_DAYS);
+  if (from >= since || loadedRanges.some(([a, b]) => a <= from && b >= to)) return false;
+  const end = to < since ? to : since;
+  for (const table of ['class_sessions', 'attendance']) {
+    for (let i = 0; ; i += 1000) {
+      const { data, error } = await S.client.from(table).select('*').gte('session_date', from).lt('session_date', end).order('id').range(i, i + 999);
+      if (error) throw error;
+      const have = new Set(S.t[table].map(r => r.id));
+      S.t[table].push(...data.filter(r => !have.has(r.id)));
+      if (data.length < 1000) break;
+    }
+  }
+  loadedRanges.push([from, to]);
+  return true;
+}
+
+/* Panggilan RPC (pelayan sahaja). */
+export async function rpc(name, args) {
+  const { data, error } = await S.client.rpc(name, args || {});
+  if (error) throw error;
+  return data;
 }
 
 export async function loadAll() {
@@ -131,12 +168,12 @@ export async function loadAll() {
    CRUD (cache dikemas kini selepas pelayan berjaya)
    --------------------------------------------------------------------- */
 const CHILDREN = {
-  students: [['expenses', 'student_id', 'null'], ['guardians', 'student_id', 'cascade'], ['student_programmes', 'student_id', 'cascade'], ['student_packages', 'student_id', 'cascade'], ['class_enrolments', 'student_id', 'cascade'], ['attendance', 'student_id', 'cascade'], ['progress_records', 'student_id', 'cascade'], ['invoices', 'student_id', 'cascade'], ['tournament_entries', 'student_id', 'cascade'], ['tournament_entries', 'partner_id', 'null']],
+  students: [['expenses', 'student_id', 'null'], ['guardians', 'student_id', 'cascade'], ['student_programmes', 'student_id', 'cascade'], ['student_packages', 'student_id', 'cascade'], ['class_enrolments', 'student_id', 'cascade'], ['attendance', 'student_id', 'cascade'], ['progress_records', 'student_id', 'cascade'], ['invoices', 'student_id', 'cascade'], ['tournament_entries', 'student_id', 'cascade'], ['tournament_entries', 'partner_id', 'null'], ['booking_requests', 'student_id', 'cascade']],
   classes: [['class_enrolments', 'class_id', 'cascade'], ['class_sessions', 'class_id', 'cascade']],
-  class_sessions: [['attendance', 'session_id', 'cascade']],
+  class_sessions: [['attendance', 'session_id', 'cascade'], ['session_groups', 'session_id', 'cascade'], ['booking_requests', 'session_id', 'null']],
   leads: [['trials', 'lead_id', 'cascade'], ['students', 'lead_id', 'null']],
   invoices: [['invoice_items', 'invoice_id', 'cascade'], ['credit_notes', 'invoice_id', 'restrict'], ['payments', 'invoice_id', 'cascade'], ['tournament_entries', 'invoice_id', 'null'], ['student_packages', 'invoice_id', 'null']],
-  staff: [['classes', 'coach_id', 'null'], ['trials', 'coach_id', 'null'], ['leave_requests', 'staff_id', 'cascade'], ['class_sessions', 'coach_id', 'null']],
+  staff: [['classes', 'coach_id', 'null'], ['trials', 'coach_id', 'null'], ['leave_requests', 'staff_id', 'cascade'], ['class_sessions', 'coach_id', 'null'], ['session_groups', 'coach_id', 'null']],
   tournaments: [['tournament_categories', 'tournament_id', 'cascade']],
   tournament_categories: [['tournament_entries', 'category_id', 'cascade'], ['tournament_matches', 'category_id', 'cascade']],
   tournament_entries: [['tournament_matches', 'entry_a', 'null'], ['tournament_matches', 'entry_b', 'null'], ['tournament_matches', 'winner', 'null']],
@@ -168,6 +205,7 @@ function demoPrepare(table, r) {
   if (table === 'students') r.status ??= 'pending';
   if (table === 'leads') r.status ??= 'new';
   if (table === 'class_sessions') r.status ??= 'scheduled';
+  if (table === 'booking_requests') { r.status ??= 'new'; r.pref_days ??= []; }
   if (table === 'tournament_entries') r.status ??= 'registered';
   if (table === 'tournament_matches') r.status ??= 'pending';
   if (table === 'tournaments') r.status ??= 'draft';
@@ -194,6 +232,7 @@ export async function insert(table, rows) {
   const many = Array.isArray(rows);
   let arr = many ? rows : [rows];
   if (!arr.length) return many ? [] : null;
+  S.t[table] ||= [];
   if (S.mode === 'demo') {
     arr = arr.map(r => demoPrepare(table, { ...r }));
     S.t[table].push(...arr); arr.forEach(r => demoAfterInsert(table, r));

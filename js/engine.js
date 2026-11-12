@@ -8,7 +8,13 @@ const CONSUMES = new Set(['present', 'late', 'absent', 'late_cancel']);
 export const consumes = s => CONSUMES.has(s);
 const pad = (n, w = 4) => String(n).padStart(w, '0');
 
+const toMin = x => { const [h, m] = String(x || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
 export function createEngine(t, newId) {
+  const attHours = a => {
+    if (a.hours != null && a.hours !== '') return Number(a.hours);
+    const ses = t.class_sessions.find(s => s.id === a.session_id), c = ses && t.classes.find(x => x.id === ses.class_id);
+    return c ? Math.max((toMin(ses.end_time || c.end_time) - toMin(ses.start_time || c.start_time)) / 60, 0) : 1;
+  };
   const now = () => new Date().toISOString();
   const yymm = () => todayISO().slice(2, 4) + todayISO().slice(5, 7);
   const nextNo = (prefix, rows, field) => {
@@ -21,7 +27,7 @@ export function createEngine(t, newId) {
   const notify = (user_id, kind, title, body, link = null) => {
     if (user_id) t.notifications.push({ id: newId(), user_id, kind, title, body, link, read_at: null, created_at: now() });
   };
-  const notifyAdmins = (...a) => t.profiles.filter(p => p.role === 'admin' && p.active).forEach(p => notify(p.id, ...a));
+  const notifyAdmins = (kind, ...a) => t.profiles.filter(p => p.role === 'admin' && p.active && !(p.notify_off || []).includes(kind)).forEach(p => notify(p.id, kind, ...a));
 
   const E = {
     nextInvoiceNo: () => nextNo('INV', t.invoices, 'number'),
@@ -39,7 +45,8 @@ export function createEngine(t, newId) {
     },
     recount(id) {
       const p = t.student_packages.find(x => x.id === id); if (!p) return;
-      p.sessions_used = t.attendance.filter(a => a.student_package_id === id && consumes(a.status)).length;
+      const used = t.attendance.filter(a => a.student_package_id === id && consumes(a.status));
+      p.sessions_used = p.unit === 'jam' ? Math.round(used.reduce((n, a) => n + attHours(a), 0) * 100) / 100 : used.length;
       if (p.status === 'active' && p.sessions_used >= p.sessions_total) p.status = 'completed';
       else if (p.status === 'completed' && p.sessions_used < p.sessions_total) p.status = 'active';
     },

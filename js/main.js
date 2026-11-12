@@ -17,6 +17,9 @@ import './admin/team.js';
 import './admin/system.js';
 import './admin/setup.js';
 import './admin/review.js';
+import './admin/sessions.js';
+import './admin/calendar.js';
+import './admin/ops.js';
 
 const root = () => $('#root');
 const logoSvg = `<img src="assets/logo.png" alt="MBA" class="brand-img">`;
@@ -103,6 +106,7 @@ async function enter() {
   if (!p.active) return showMessage('Akaun dinyahaktifkan', 'Sila hubungi admin akademi.');
   if (p.lang) setLang(p.lang);   // bahasa diingat pada akaun, bukan hanya peranti
   if (p.role === 'parent') { const pp = await import('./parent/portal.js'); return pp.enterParent(); }
+  if (p.role === 'coach') { const cp = await import('./coach/portal.js'); return cp.enterCoach(); }
   if (p.role !== 'admin') return showPortalSoon(p.role);
   setI18nActive(true); startDomI18n(); app.relang = () => { renderShell(); route(); };   // Portal Admin: teks diterjemah oleh i18n-dom.js
   renderShell();

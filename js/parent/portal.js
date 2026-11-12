@@ -1,7 +1,7 @@
 // Portal Ibu Bapa & Pelajar: ringkasan anak, jadual & tempahan, yuran (bayar + bukti + resit), progres.
 // Semua teks melalui t() supaya boleh dipaparkan dalam BM / English / 中文.
 import { ACTIONS, INPUTS } from '../registry.js';
-import { S, loadParent, insert, update, remove, refresh, markRead, subscribeNotifications, setPassword } from '../data.js';
+import { S, loadParent, insert, update, remove, refresh, markRead, subscribeNotifications, setPassword, rpc } from '../data.js';
 import { $, esc, ic, F, RM, badge, avatar, UI, app, toast, openModal, confirmModal, fmtDate, fmtShort, hm, todayISO, addDays, DAYS, LABEL, friendlyError } from '../ui.js';
 import { T, byId, venueName, progName, staffName, invStatus, paidOf, creditOf, pkgRemaining } from '../admin/helpers.js';
 import { openReceipt } from '../receipt.js';
@@ -11,7 +11,7 @@ import { themeSwitch } from '../theme.js';
 import { tr } from '../i18n-dom.js';
 
 const PV = {};
-const NAV = [['utama', 'Utama', 'home'], ['jadual', 'Jadual', 'calendar'], ['yuran', 'Yuran', 'wallet'], ['progres', 'Progres', 'trend'], ['akaun', 'Akaun', 'user']];
+const NAV = [['utama', 'Utama', 'home'], ['jadual', 'Jadual', 'calendar'], ['tempah', 'Tempah', 'plus'], ['yuran', 'Yuran', 'wallet'], ['progres', 'Progres', 'trend'], ['akaun', 'Akaun', 'user']];
 const me = () => S.profile.id;
 const kids = () => T('students').filter(s => s.guardian_id === me()).sort((a, b) => a.full_name.localeCompare(b.full_name));
 const kidSet = () => new Set(kids().map(k => k.id));
@@ -101,6 +101,87 @@ function nextSessions(kidId, days = 30) {
   });
   return out.sort((a, b) => a.date.localeCompare(b.date) || (a.c?.start_time || '').localeCompare(b.c?.start_time || ''));
 }
+
+/* ===================================================================== TEMPAH (kumpulan / personal, walaupun belum ada pakej) */
+const ageCatOf = (st, on) => {
+  if (!st?.birth_date) return null; const b = new Date(st.birth_date + 'T00:00:00'), d = new Date(on + 'T00:00:00');
+  let a = d.getFullYear() - b.getFullYear(); if (d.getMonth() < b.getMonth() || (d.getMonth() === b.getMonth() && d.getDate() < b.getDate())) a--;
+  const gs = S.t.settings?.find(x => x.key === 'age_groups')?.value || []; return gs.find(g => a >= Number(g.min) && a <= Number(g.max))?.code || null;
+};
+async function loadOpen() {
+  if (S.pOpen) return;
+  S.pOpen = 'loading';
+  await new Promise(r => setTimeout(r, 0));
+  try {
+    if (S.mode === 'supabase') S.pOpen = await rpc('parent_open_sessions', { p_from: todayISO(), p_days: 21 }) || [];
+    else {
+      const out = []; for (let i = 0; i <= 21; i++) { const d = addDays(todayISO(), i), wd = new Date(d + 'T00:00:00').getDay();
+        T('classes').filter(c => c.active && c.weekday === wd && byId('programmes', c.programme_id)?.kind === 'group').forEach(c => out.push({ class_id: c.id, session_date: d, start_time: c.start_time, end_time: c.end_time, programme: progName(c.programme_id), programme_id: c.programme_id, venue: venueName(c.venue_id), venue_id: c.venue_id, categories: c.categories || [], capacity: c.capacity, booked: T('class_enrolments').filter(e => e.class_id === c.id).length })); }
+      S.pOpen = out;
+    }
+  } catch (e) { console.error(e); S.pOpen = []; toast(friendlyError(e), true); }
+  render();
+}
+const myReq = k => T('booking_requests').filter(b => b.student_id === k.id).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+const REQ_ST = { new: ['Menunggu pengesahan', 'b-warn'], accepted: ['Diterima', 'b-ok'], rejected: ['Ditolak', 'b-bad'], cancelled: ['Dibatalkan', 'b-muted'] };
+PV.tempah = () => {
+  const k = curKid(); if (!k) return head(t('Tempah'), '') + noKids();
+  const tab = UI.pBk || 'group', has = activePkgs(k.id);
+  let body = '';
+  if (tab === 'group') {
+    if (!S.pOpen || S.pOpen === 'loading') { loadOpen(); body = `<div class="boot">${t('Memuatkan slot…')}</div>`; }
+    else {
+      const vf = UI.pBkV ?? (k.venue_id || ''), pf = UI.pBkP ?? (k.programme_id || '');
+      const taken = new Set([...T('attendance').filter(a => a.student_id === k.id).map(a => byId('class_sessions', a.session_id)).filter(Boolean).map(s => s.class_id + '|' + s.session_date),
+        ...T('booking_requests').filter(b => b.student_id === k.id && ['new', 'accepted'].includes(b.status)).map(b => b.class_id + '|' + b.session_date)]);
+      const fixed = new Set(T('class_enrolments').filter(e => e.student_id === k.id).map(e => e.class_id));
+      const slots = S.pOpen.filter(x => (!vf || x.venue_id === vf) && (!pf || x.programme_id === pf) && !fixed.has(x.class_id) && x.session_date >= todayISO());
+      const vs = [...new Map(S.pOpen.map(x => [x.venue_id, x.venue])).entries()], ps = [...new Map(S.pOpen.map(x => [x.programme_id, x.programme])).entries()];
+      body = `<div class="card card-pad mb"><div class="filters">
+        <label class="field"><select data-on-change="p-bkv"><option value="">${t('Semua lokasi')}</option>${vs.map(([id, n]) => `<option value="${id}" ${vf === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+        <label class="field"><select data-on-change="p-bkp"><option value="">${t('Semua program')}</option>${ps.map(([id, n]) => `<option value="${id}" ${pf === id ? 'selected' : ''}>${esc(tr(n))}</option>`).join('')}</select></label></div>
+        <p class="muted" style="font-size:12.5px;margin-top:8px">${has.length ? t('Sesi akan ditolak daripada pakej aktif anak anda.') : t('Belum ada pakej? Tidak mengapa — admin akan sahkan tempahan dan menghantar invois walk-in.')}</p></div>
+      <div class="card"><ul class="list">${slots.slice(0, 60).map(x => { const key = x.class_id + '|' + x.session_date, left = Math.max(Number(x.capacity) - Number(x.booked || 0), 0), cat = ageCatOf(k, x.session_date);
+        return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${DAYS[new Date(x.session_date + 'T00:00:00').getDay()]}, ${fmtShort(x.session_date)} · ${hm(x.start_time)}–${hm(x.end_time)}</div>
+          <div class="li-sub">${esc(tr(x.programme))} · ${esc(x.venue)}${(x.categories || []).length ? ' · ' + x.categories.map(esc).join('/') : ''}${cat ? ` · ${t('Kategori anak')}: <b>${esc(cat)}</b>` : ''} · ${left > 0 ? t('{n} tempat kosong', { n: left }) : `<b style="color:var(--bad)">${t('penuh')}</b>`}</div></div>
+          ${taken.has(key) ? `<span class="badge b-info">${t('Sudah ditempah')}</span>` : `<button class="btn sm primary" data-action="p-req-g" data-id="${key}" ${left <= 0 ? 'disabled' : ''}>${t('Tempah')}</button>`}</li>`; }).join('') || `<li class="empty">${t('Tiada slot terbuka dalam 3 minggu ini.')}</li>`}</ul></div>`;
+    }
+  } else {
+    const progs = T('programmes').filter(p => p.active && p.kind === 'personal');
+    body = `<form class="card card-pad mb" id="pReqForm" novalidate><div class="form-grid">
+      ${F(t('Program'), 'programme_id', { req: true, opts: progs.map(p => [p.id, tr(p.name)]) })}
+      ${F(t('Lokasi pilihan'), 'venue_id', { opts: [['', t('Mana-mana')], ...T('venues').filter(v => v.active).map(v => [v.id, v.name])] })}
+      <div class="f full">${t('Hari pilihan')}<div class="langchk">${[1, 2, 3, 4, 5, 6, 0].map(d => `<label><input type="checkbox" name="days" value="${d}"> ${DAYS[d]}</label>`).join('')}</div></div>
+      ${F(t('Masa pilihan (cth. 6pm–8pm)'), 'pref_time', {})}
+      ${F(t('Bilangan sesi'), 'sessions', { type: 'number', min: 1, value: 4 })}
+      ${F(t('Catatan (tahap, sasaran, coach pilihan)'), 'notes', { type: 'textarea', full: true })}
+    </div><button class="btn primary" type="submit" style="margin-top:12px">${t('Hantar permintaan')}</button>
+    <p class="muted" style="font-size:12.5px;margin-top:8px">${t('Admin akan hubungi anda untuk sahkan slot, coach dan yuran. Tidak perlu beli pakej dahulu.')}</p></form>`;
+    setTimeout(() => { const f = $('#pReqForm'); if (f && !f._b) { f._b = 1; f.addEventListener('submit', async e => { e.preventDefault(); const fd = new FormData(f);
+      try { await insert('booking_requests', { student_id: k.id, requested_by: S.mode === 'demo' ? null : me(), kind: 'personal', programme_id: fd.get('programme_id') || null, venue_id: fd.get('venue_id') || null, pref_days: fd.getAll('days').map(Number), pref_time: fd.get('pref_time') || null, sessions: Number(fd.get('sessions')) || null, notes: fd.get('notes') || null, status: 'new' });
+        toast(t('Permintaan dihantar. Admin akan menghubungi anda.')); UI.pBk = 'mine'; render(); } catch (err) { toast(friendlyError(err), true); } }); } }, 0);
+  }
+  const reqs = myReq(k);
+  return `${head(t('Tempah'), t('Tempah sesi kumpulan atau minta sesi personal'))}${kidTabs()}
+  <div class="chips">${[['group', 'Sesi kumpulan'], ['personal', 'Sesi personal'], ['mine', 'Permintaan saya']].map(([x, l]) => `<button class="chip ${tab === x ? 'on' : ''}" style="cursor:pointer" data-action="p-bk" data-id="${x}">${t(l)}${x === 'mine' && reqs.filter(r => r.status === 'new').length ? ` <span class="n">${reqs.filter(r => r.status === 'new').length}</span>` : ''}</button>`).join('')}</div>
+  ${tab === 'mine' ? `<div class="card"><ul class="list">${reqs.map(b => { const c = byId('classes', b.class_id), [lbl, tone] = REQ_ST[b.status] || [b.status, 'b-muted']; return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main">
+      <div class="li-title">${b.kind === 'group' ? t('Sesi kumpulan') : t('Sesi personal')} <span class="badge ${tone}">${t(lbl)}</span></div>
+      <div class="li-sub">${b.kind === 'group' ? `${b.session_date ? when(b.session_date, c || { start_time: '', end_time: '' }) : ''}${c ? ' · ' + esc(where(c)) : ''}` : `${(b.pref_days || []).map(d => DAYS[d]).join(', ')}${b.pref_time ? ' · ' + esc(b.pref_time) : ''}`}${b.admin_note ? ' · ' + esc(b.admin_note) : ''}</div></div>
+      ${b.status === 'new' ? `<button class="btn sm danger-o" data-action="p-req-x" data-id="${b.id}">${t('Batal')}</button>` : ''}</li>`; }).join('') || `<li class="empty">${t('Belum ada permintaan.')}</li>`}</ul></div>` : body}`;
+};
+INPUTS['p-bkv'] = v => { UI.pBkV = v; render(); };
+INPUTS['p-bkp'] = v => { UI.pBkP = v; render(); };
+Object.assign(ACTIONS, {
+  'p-bk': x => { UI.pBk = x; render(); },
+  'p-req-g': async key => {
+    const [cid, d] = key.split('|'), k = curKid(), x = (Array.isArray(S.pOpen) ? S.pOpen : []).find(y => y.class_id === cid && y.session_date === d);
+    confirmModal({ title: t('Sahkan tempahan?'), message: `${esc(k.full_name)} — ${DAYS[new Date(d + 'T00:00:00').getDay()]}, ${fmtShort(d)} ${x ? hm(x.start_time) + ' · ' + esc(tr(x.programme)) + ' · ' + esc(x.venue) : ''}`, ok: t('Tempah'), onOk: async () => {
+      await insert('booking_requests', { student_id: k.id, requested_by: S.mode === 'demo' ? null : me(), kind: 'group', class_id: cid, session_date: d, programme_id: x?.programme_id || null, venue_id: x?.venue_id || null, status: 'new' });
+      toast(t('Tempahan dihantar. Admin akan sahkan.')); render();
+    } });
+  },
+  'p-req-x': async id => { await update('booking_requests', id, { status: 'cancelled' }); toast(t('Permintaan dibatalkan')); render(); },
+});
 
 /* ===================================================================== JADUAL */
 const seatCache = (S.pSeats ||= {});

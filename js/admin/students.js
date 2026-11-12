@@ -3,7 +3,7 @@ import { withLang, getLang } from '../i18n.js';
 import { langOf } from '../lang-of.js';
 import { msgLeadThanks, msgTrialReminder, msgEnrolEnquiry, msgEnrolInvoice } from './messages.js';
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
-import { S, insert, update, remove, refresh } from '../data.js';
+import { S, insert, update, remove, refresh, rpc } from '../data.js';
 import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, hm, todayISO, addDays, monthKey, monthLabel, DAYS, waLink, LABEL, barColor } from '../ui.js';
 import { T, byId, venueName, progName, staffName, studentName, invStatus, paidOf, attRate, classLabel, enrolledIn, ageOf, billing, academy, livePackages, studentPackages, pkgRemaining, catalogFor, daysLeft } from './helpers.js';
 import { sellPackage, dueDefault } from './finance.js';
@@ -496,6 +496,32 @@ Object.assign(INPUTS, {
 });
 
 Object.assign(ACTIONS, {
+  'student-merge': id => {
+    const a = byId('students', id), words = String(a.full_name).toLowerCase().split(/\s+/).filter(w => w.length > 1);
+    const cands = T('students').filter(x => x.id !== id && !x.merged_into).map(x => ({ x, sc: words.filter(w => x.full_name.toLowerCase().includes(w)).length })).sort((p, q) => q.sc - p.sc || p.x.full_name.localeCompare(q.x.full_name));
+    const cnt = sid => ({ att: T('attendance').filter(r => r.student_id === sid).length, inv: T('invoices').filter(r => r.student_id === sid).length, pk: T('student_packages').filter(r => r.student_id === sid).length });
+    const c0 = cnt(id);
+    openModal({ title: 'Gabung profil pelajar', submit: 'Gabungkan', body: `<p style="font-size:13.5px">Profil <b>${esc(a.full_name)}</b> (${c0.att} kehadiran · ${c0.inv} invois · ${c0.pk} pakej) akan digabungkan ke profil sebenar di bawah. Semua kehadiran, invois, pakej, kelas, progres dan penjaga dipindahkan — tiada data hilang. Profil ini kemudian ditanda "Berhenti" dengan nota "digabung".</p>
+      <label class="f full" style="margin-top:12px">Profil sebenar<select name="to" required><option value="">— Pilih —</option>${cands.map(({ x, sc }) => `<option value="${x.id}">${sc ? '★ ' : ''}${esc(x.full_name)}${x.status !== 'active' ? ' (' + esc(LABEL[x.status] || x.status) + ')' : ''}</option>`).join('')}</select></label>
+      <p class="muted" style="font-size:12px;margin-top:8px">★ = nama hampir sama. Rekod bertindih (sesi yang sama) mengekalkan rekod profil sebenar.</p>`,
+      onSubmit: async d => {
+        if (!d.to) throw new Error('Pilih profil sebenar.');
+        const b = byId('students', d.to);
+        if (S.mode === 'demo') {
+          const tabs = ['attendance', 'class_enrolments', 'invoices', 'student_packages', 'progress_records', 'guardians', 'student_programmes', 'tournament_entries', 'invoice_items', 'expenses', 'booking_requests'];
+          for (const t of tabs) (S.t[t] || []).filter(r => r.student_id === id).forEach(r => {
+            const dup = t === 'attendance' ? S.t[t].some(y => y.student_id === d.to && y.session_id === r.session_id) : t === 'class_enrolments' ? S.t[t].some(y => y.student_id === d.to && y.class_id === r.class_id) : false;
+            if (dup) S.t[t] = S.t[t].filter(y => y !== r); else r.student_id = d.to;
+          });
+          for (const k of ['birth_date', 'gender', 'guardian_id', 'guardian_name', 'guardian_phone', 'family_ref']) if (!b[k] && a[k]) b[k] = a[k];
+          Object.assign(a, { status: 'left', merged_into: d.to, guardian_id: null, notes: [a.notes, `DIGABUNG ke "${b.full_name}"`].filter(Boolean).join('\n') });
+        } else {
+          await rpc('merge_students', { p_from: id, p_to: d.to });
+          await refresh(['students', 'attendance', 'class_enrolments', 'invoices', 'student_packages', 'progress_records', 'guardians', 'student_programmes', 'invoice_items', 'booking_requests']);
+        }
+        toast(`${a.full_name} digabungkan ke ${b.full_name}`); app.render();
+      } });
+  },
   'student-view': id => {
     const s = byId('students', id), enr = T('class_enrolments').filter(e => e.student_id === id).map(e => byId('classes', e.class_id)).filter(Boolean);
     const invs = T('invoices').filter(i => (i.student_id === id || T('invoice_items').some(it => it.invoice_id === i.id && it.student_id === id)) && i.status !== 'void').sort((a, b) => (b.issued_on || '').localeCompare(a.issued_on || '')).slice(0, 5);
@@ -525,6 +551,7 @@ Object.assign(ACTIONS, {
         <button type="button" class="btn" data-action="student-edit" data-id="${id}">${ic('edit', 'sm')} Edit</button>
         ${['active', 'paused'].includes(s.status) ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|${s.status === 'active' ? 'paused' : 'active'}">${s.status === 'active' ? 'Gantung' : 'Aktifkan semula'}</button>` : ''}
         ${s.status !== 'left' ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|left">Berhenti</button>` : `<button type="button" class="btn" data-action="student-status" data-id="${id}|active">Aktifkan semula</button>`}
+        <button type="button" class="btn" data-action="student-merge" data-id="${id}" title="Gabungkan profil berganda (cth. nama pendek) ke profil sebenar">${ic('users', 'sm')} Gabung profil</button>
         <button type="button" class="btn danger-o" data-action="student-del" data-id="${id}">${ic('trash', 'sm')} Padam</button>
       </div>`,
     });

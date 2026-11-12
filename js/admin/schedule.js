@@ -3,6 +3,7 @@ import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove } from '../data.js';
 import { ic, esc, F, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, hm, todayISO, addDays, parseISO, iso, monthKey, monthLabel, DAYS, LABEL, barColor, $ } from '../ui.js';
 import { T, byId, venueName, progName, staffName, studentName, progColor, enrolledIn, classLabel, attRate, activeStudents, livePackages, pkgRemaining } from './helpers.js';
+import { ageGroups, langWarn, langGap, langName } from './sessions.js';
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0];
 
@@ -14,7 +15,7 @@ VIEWS.jadual = () => {
   const classes = T('classes').filter(c => c.active && (!vf || c.venue_id === vf));
   const seats = classes.reduce((t, c) => t + enrolledIn(c.id).length, 0), cap = classes.reduce((t, c) => t + c.capacity, 0);
   return `
-  ${pageHead('Jadual Kelas', `${classes.length} kelas seminggu · penggunaan kapasiti ${cap ? Math.round(seats / cap * 100) : 0}%`, `<button class="btn primary" data-action="class-add">${ic('plus', 'sm')} Tambah Kelas</button>`)}
+  ${pageHead('Jadual Kelas', `${classes.length} kelas seminggu · penggunaan kapasiti ${cap ? Math.round(seats / cap * 100) : 0}%`, `<a class="btn" href="#kalendar">${ic('calendar', 'sm')} Kalendar Sesi</a><button class="btn primary" data-action="class-add">${ic('plus', 'sm')} Tambah Kelas</button>`)}
   <div class="toolbar card" style="margin-bottom:14px;border-radius:var(--radius)">
     <label class="field">${ic('pin', 'sm')}<select data-on-change="sched-venue"><option value="">Semua lokasi</option>${T('venues').filter(v => v.active).map(v => `<option value="${v.id}" ${vf === v.id ? 'selected' : ''}>${esc(v.name)} — ${esc(v.area || '')}</option>`).join('')}</select></label>
     ${T('programmes').filter(p => p.active).map(p => `<span class="chip"><span style="width:10px;height:10px;border-radius:3px;background:${progColor(p.id)}"></span>${esc(p.name)}</span>`).join('')}
@@ -28,6 +29,8 @@ VIEWS.jadual = () => {
           <b>${hm(c.start_time)}–${hm(c.end_time)}</b>
           <div style="font-weight:600">${esc(progName(c.programme_id))}</div>
           <div class="meta">${esc(staffName(c.coach_id))}</div>
+          ${(c.categories || []).length ? `<div class="meta">${c.categories.map(esc).join(' · ')}</div>` : ''}
+          ${!c.coach_id || !c.court ? `<div class="warnline">${ic('alert', 'sm')} ${[!c.coach_id && 'tiada coach', !c.court && 'tiada court'].filter(Boolean).join(' · ')}</div>` : langGap(c.coach_id, c.venue_id).length ? `<div class="warnline">${ic('alert', 'sm')} bahasa coach</div>` : ''}
           <div class="meta">${vf ? '' : esc(venueName(c.venue_id)) + '<br>'}${esc(c.court || '')} · <span style="color:${n >= c.capacity ? 'var(--warn)' : 'inherit'};font-weight:600">${n}/${c.capacity}</span></div>
         </button>`; }).join('') || '<div class="muted" style="font-size:12px;padding:6px">Tiada kelas</div>'}</div>
     </div>`; }).join('')}</div>`;
@@ -43,16 +46,22 @@ const classForm = c => `<div class="form-grid">
   ${F('Tamat', 'end_time', { type: 'time', value: hm(c?.end_time) || '18:30', req: true })}
   ${F('Coach', 'coach_id', { value: c?.coach_id, opts: [['', '— Tentukan kemudian —'], ...T('staff').filter(s => s.active).map(s => [s.id, s.full_name])] })}
   ${F('Kapasiti', 'capacity', { type: 'number', value: c?.capacity ?? 12, min: 1, req: true })}
+  <div class="f full">Kategori umur dalam sesi ini (kosong = satu kumpulan)<div class="langchk">${ageGroups().map(g => `<label><input type="checkbox" name="categories" value="${esc(g.code)}" ${(c?.categories || []).includes(g.code) ? 'checked' : ''}> ${esc(g.code)} <span class="muted">(${g.min}–${g.max})</span></label>`).join('')}</div><span class="hint">Pelajar diletakkan automatik ikut umur. Coach & court setiap kategori ditetapkan pada sesi (Kalendar Sesi).</span></div>
+  ${F('Cara bil pelajar tanpa pakej', 'billing', { value: c?.billing || 'package', opts: [['package', 'Pakej (lalai)'], ['walkin', 'Walk-in setiap sesi'], ['monthly', 'Bil bulanan ikut sesi']] })}
+  ${F('Kadar walk-in / coach per jam (RM)', 'rate_coach', { type: 'number', step: '0.01', min: 0, value: c?.rate_coach ?? '' })}
+  ${F('Kadar court per jam (RM, personal)', 'rate_court', { type: 'number', step: '0.01', min: 0, value: c?.rate_court ?? '' })}
+  <div class="full" id="clsWarn">${c?.coach_id ? langWarn(c.coach_id, c.venue_id) : ''}</div>
   ${c ? `<label class="f full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="active" value="1" ${c.active ? 'checked' : ''} style="width:auto;height:auto"> Kelas aktif (nyahtanda untuk sembunyikan tanpa padam sejarah)</label>` : ''}
 </div>`;
 const classPatch = (d, isEdit) => {
   if (d.end_time <= d.start_time) throw new Error('Masa tamat mesti selepas masa mula.');
-  return { venue_id: d.venue_id, programme_id: d.programme_id, weekday: Number(d.weekday), start_time: d.start_time, end_time: d.end_time, court: val(d.court), coach_id: val(d.coach_id), capacity: Number(d.capacity), ...(isEdit ? { active: d.active === '1' } : { active: true }) };
+  return { venue_id: d.venue_id, programme_id: d.programme_id, weekday: Number(d.weekday), start_time: d.start_time, end_time: d.end_time, court: val(d.court), coach_id: val(d.coach_id), capacity: Number(d.capacity), categories: [].concat(d.categories || []).filter(Boolean), billing: d.billing || 'package', rate_coach: num(d.rate_coach), rate_court: num(d.rate_court), ...(isEdit ? { active: d.active === '1' } : { active: true }) };
 };
 
+const bindLang = f => { const chk = () => { f.querySelector('#clsWarn').innerHTML = f.coach_id.value && f.venue_id.value ? langWarn(f.coach_id.value, f.venue_id.value) : ''; }; f.coach_id.addEventListener('change', chk); f.venue_id.addEventListener('change', chk); return f; };
 Object.assign(ACTIONS, {
-  'class-add': () => openModal({ title: 'Tambah Kelas', submit: 'Tambah ke Jadual', body: classForm(), onSubmit: async d => { await insert('classes', classPatch(d)); toast('Kelas ditambah'); app.render(); } }),
-  'class-edit': id => openModal({ title: 'Edit Kelas', body: classForm(byId('classes', id)), onSubmit: async d => { await update('classes', id, classPatch(d, true)); toast('Kelas dikemas kini'); app.render(); } }),
+  'class-add': () => bindLang(openModal({ title: 'Tambah Kelas', submit: 'Tambah ke Jadual', wide: true, body: classForm(), onSubmit: async d => { await insert('classes', classPatch(d)); toast('Kelas ditambah'); app.render(); } })),
+  'class-edit': id => bindLang(openModal({ title: 'Edit Kelas', wide: true, body: classForm(byId('classes', id)), onSubmit: async d => { await update('classes', id, classPatch(d, true)); toast('Kelas dikemas kini'); app.render(); } })),
   'class-del': id => confirmModal({ title: 'Padam kelas?', message: 'Semua sesi dan rekod kehadiran kelas ini akan turut dipadam. Pertimbangkan menyahaktifkan kelas (Edit) untuk menyimpan sejarah.', ok: 'Padam Kelas', danger: true, onOk: async () => { await remove('classes', id); toast('Kelas dipadam'); app.render(); } }),
 
   'class-view': id => {
@@ -123,7 +132,7 @@ VIEWS.kehadiran = () => {
     return `<div class="card mb">
       <div class="card-head" style="flex-wrap:wrap">
         <div><h3>${hm(c.start_time)}–${hm(c.end_time)} · ${esc(progName(c.programme_id))}</h3><div class="sub">${esc(venueName(c.venue_id))}${c.court ? ' · ' + esc(c.court) : ''} · ${esc(staffName(s.coach_id || c.coach_id))}</div></div>
-        <div class="actions">${badge(s.status === 'scheduled' ? 'scheduled' : s.status)}
+        <div class="actions">${badge(s.status === 'scheduled' ? 'scheduled' : s.status)}<button class="btn sm" data-action="sess-open" data-id="${s.id}">${ic('users', 'sm')} Panel sesi</button>
           ${s.status !== 'cancelled' ? `<button class="btn sm" data-action="att-all" data-id="${s.id}">Semua hadir</button>` : ''}
           ${s.status === 'scheduled' ? `<button class="btn sm" data-action="sess-held" data-id="${s.id}">Tandakan selesai</button>` : ''}
           ${s.status !== 'cancelled' ? `<button class="btn sm" data-action="sess-cancel" data-id="${s.id}">Batal sesi</button>` : `<button class="btn sm" data-action="sess-reopen" data-id="${s.id}">Buka semula</button>`}

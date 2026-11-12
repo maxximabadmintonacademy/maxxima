@@ -78,9 +78,11 @@ export function setupChain() {
 export const setupGaps = () => setupChain().filter(s => !s.ok || s.issues.length);
 
 /** Senarai tugasan yang memerlukan tindakan admin (dashboard + loceng). */
+export const EXTRA_TASKS = [];
 export function tasks() {
   const out = [];
   const add = (n, icon, tone, text, href) => { if (n > 0) out.push({ n, icon, tone, text: text.replace('{n}', n), href }); };
+  EXTRA_TASKS.forEach(f => { try { f(add); } catch (e) { console.warn(e); } });
   add(T('leads').filter(l => l.status === 'new').length, 'target', 't-info', '{n} lead baharu belum dihubungi', 'leads');
   add(T('trials').filter(t => t.status === 'scheduled' && t.trial_date < todayISO()).length, 'flag', 't-warn', '{n} trial sudah lepas — rekod keputusan', 'trial');
   add(T('students').filter(s => s.status === 'pending').length, 'userplus', 't-warn', '{n} permohonan menunggu semakan', 'kemasukan');

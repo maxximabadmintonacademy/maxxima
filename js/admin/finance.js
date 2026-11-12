@@ -30,8 +30,8 @@ export async function sellPackage({ studentId, pkg, price, mode, due, reg, jerse
   const pkgPrice = Math.max(Number(price) - disc, 0);
   const inv = await insert('invoices', { student_id: studentId, issued_on: todayISO(), due_date: due, status: 'issued', kind: 'package', amount: total, description: pkg.name });
   await saveItems(inv.id, items);
-  if (pending) await update('student_packages', pending.id, { invoice_id: inv.id, package_id: pkg.id, programme_id: pkg.programme_id, name: pkg.name, sessions_total: pkg.sessions, price: pkgPrice, valid_days: pkg.valid_days, schedule_mode: mode });
-  else await insert('student_packages', { student_id: studentId, package_id: pkg.id, programme_id: pkg.programme_id, name: pkg.name, sessions_total: pkg.sessions, price: pkgPrice, valid_days: pkg.valid_days, schedule_mode: mode, status: 'pending', invoice_id: inv.id });
+  if (pending) await update('student_packages', pending.id, { invoice_id: inv.id, package_id: pkg.id, programme_id: pkg.programme_id, name: pkg.name, sessions_total: pkg.sessions, unit: pkg.unit || 'sesi', price: pkgPrice, valid_days: pkg.valid_days, schedule_mode: mode });
+  else await insert('student_packages', { student_id: studentId, package_id: pkg.id, programme_id: pkg.programme_id, name: pkg.name, sessions_total: pkg.sessions, unit: pkg.unit || 'sesi', price: pkgPrice, valid_days: pkg.valid_days, schedule_mode: mode, status: 'pending', invoice_id: inv.id });
   return inv;
 }
 export const dueDefault = () => addDays(todayISO(), billing().due_days ?? 7);
@@ -497,13 +497,14 @@ Object.assign(INPUTS, { 'sp-q': v => { UI.spQ = v; app.render(); } });
 const pkgForm = (p, progId) => `<div class="form-grid">
   ${F('Program', 'programme_id', { value: p?.programme_id || progId, req: true, opts: [['', '— Pilih —'], ...T('programmes').filter(x => x.active).map(x => [x.id, x.name])] })}
   ${F('Nama pakej', 'name', { value: p?.name, ph: 'cth. Foundation · 8 sesi (kosong = automatik)', full: true })}
-  ${F('Bilangan sesi', 'sessions', { type: 'number', min: 1, value: p?.sessions ?? 8, req: true })}
+  ${F('Bilangan', 'sessions', { type: 'number', min: 1, value: p?.sessions ?? 8, req: true })}
+  ${F('Unit', 'unit', { value: p?.unit || 'sesi', opts: [['sesi', 'Sesi'], ['jam', 'Jam (pakej jam, cth. personal 30 jam)']] })}
   ${F('Harga (RM)', 'price', { type: 'number', step: '0.01', min: 0, value: p?.price, req: true })}
   ${F('Sah (hari)', 'valid_days', { type: 'number', min: 1, value: p?.valid_days ?? 62, req: true })}
   ${F('Cara latihan lalai', 'schedule_mode', { value: p?.schedule_mode || 'fixed', opts: [['fixed', 'Jadual tetap'], ['flexible', 'Fleksibel (tempah sendiri)']] })}
   ${p ? `<label class="f full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="active" value="1" ${p.active ? 'checked' : ''} style="width:auto;height:auto"> Pakej aktif (boleh dijual)</label>` : ''}
 </div><p class="muted" style="font-size:12.5px;margin-top:10px">Pakej terpakai kepada semua kelas dalam program yang sama. Menukar harga tidak mengubah pakej yang sudah dijual.</p>`;
-const pkgPatch = (d, edit) => ({ programme_id: d.programme_id, name: (d.name || '').trim() || `${progName(d.programme_id)} · ${d.sessions} sesi`, sessions: Number(d.sessions), price: Number(d.price), valid_days: Number(d.valid_days), schedule_mode: d.schedule_mode, active: edit ? d.active === '1' : true });
+const pkgPatch = (d, edit) => ({ programme_id: d.programme_id, name: (d.name || '').trim() || `${progName(d.programme_id)} · ${d.sessions} ${d.unit || 'sesi'}`, sessions: Number(d.sessions), unit: d.unit || 'sesi', price: Number(d.price), valid_days: Number(d.valid_days), schedule_mode: d.schedule_mode, active: edit ? d.active === '1' : true });
 
 Object.assign(ACTIONS, {
   'pkg-tab': id => { UI.pkgTab = id; app.render(); },

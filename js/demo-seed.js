@@ -10,7 +10,7 @@ const rnd = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 21
 
 export function makeSeed() {
   const today = todayISO();
-  const t = Object.fromEntries(['settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'leads', 'trials', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes', 'parent_tax_info', 'invoice_items', 'expenses', 'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches'].map(k => [k, []]));
+  const t = Object.fromEntries(['settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'leads', 'trials', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes', 'parent_tax_info', 'invoice_items', 'expenses', 'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests'].map(k => [k, []]));
 
   t.settings.push(
     { key: 'academy', value: { name: 'Maxxima Badminton Academy', whatsapp: '60124965324', email: 'maxxima.academy@gmail.com', instagram: '@maxximaba' } },
@@ -154,5 +154,16 @@ export function makeSeed() {
   ent(c1, 'Aiman Hakimi'); ent(c1, 'Adam Mikail'); ent(c2, 'Chloe Tan');
   const ents = [ent(c3, 'Haziq Danial', 1), ent(c3, 'Ryan Lee', 2), ent(c3, 'Umar Al-Fateh'), ent(c3, 'Darshan Raj'), ent(c3, 'Irfan Harith')];
   buildDraw(ents.map(e => ({ id: e.id, seed: e.seed })), false).forEach(m => t.tournament_matches.push({ id: id('tm'), category_id: c3.id, court: null, play_date: null, play_time: null, ...m }));
+  // v16: bahasa coach, syarat bahasa lokasi, kategori umur, tempahan contoh
+  t.staff.forEach((s, i) => { s.languages = i % 3 === 0 ? ['ms', 'en'] : i % 3 === 1 ? ['ms', 'en', 'zh'] : ['ms']; s.qualifications = i === 0 ? 'BAM Level 2 · Bekas pemain negeri Selangor' : null; });
+  if (t.venues[0]) t.venues[0].required_langs = ['en'];
+  if (!t.settings.some(x => x.key === 'age_groups')) t.settings.push({ key: 'age_groups', value: [{ code: 'U8', min: 0, max: 8 }, { code: 'U12', min: 9, max: 12 }, { code: 'U17', min: 13, max: 17 }, { code: 'Dewasa', min: 18, max: 99 }] });
+  t.settings.push({ key: 'personal_rates', value: { coach: 80, court: 20, walkin: 40 } });
+  const g1 = t.classes.find(c => c.active && t.programmes.find(p => p.id === c.programme_id)?.kind === 'group');
+  if (g1) g1.categories = ['U8', 'U12', 'U17'];
+  const kid = t.students.find(x => x.status === 'active' && x.guardian_id), gc = t.classes.find(c => c.active && c !== g1);
+  if (kid && gc) { const d = new Date(); d.setDate(d.getDate() + ((gc.weekday - d.getDay() + 7) % 7 || 7)); const ds = d.toISOString().slice(0, 10);
+    t.booking_requests.push({ id: id('bk'), student_id: kid.id, requested_by: kid.guardian_id, kind: 'group', class_id: gc.id, session_date: ds, programme_id: gc.programme_id, venue_id: gc.venue_id, pref_days: [], status: 'new', created_at: new Date().toISOString() });
+    t.booking_requests.push({ id: id('bk'), student_id: kid.id, requested_by: kid.guardian_id, kind: 'personal', programme_id: (t.programmes.find(p => p.kind === 'personal') || {}).id, venue_id: gc.venue_id, pref_days: [3, 5], pref_time: '6pm–7pm', sessions: 4, notes: 'Fokus footwork', status: 'new', created_at: new Date().toISOString() }); }
   return t;
 }

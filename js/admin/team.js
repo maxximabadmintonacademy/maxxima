@@ -1,6 +1,7 @@
 // Coach dan HR & Staf.
 import { VIEWS, ACTIONS } from '../registry.js';
-import { S, insert, update, remove } from '../data.js';
+import { S, insert, update, remove, rpc } from '../data.js';
+import { LANGS_ALL, langName } from './sessions.js';
 import { ic, esc, F, RM, sum, num, val, badge, avatar, app, toast, openModal, confirmModal, pageHead, fmtShort, fmtDate, todayISO, LABEL, DAYS, hm } from '../ui.js';
 import { T, byId, venueName, progName, staffName, classHours, enrolledIn } from './helpers.js';
 
@@ -28,8 +29,10 @@ VIEWS.coach = () => {
     return `<div class="card coach-card">
       <div class="coach-top">${avatar(c.full_name, 'lg')}<div style="flex:1;min-width:0"><h4>${esc(c.full_name)}</h4><div class="muted" style="font-size:12.5px">${esc(c.position)}${c.certification ? ' · ' + esc(c.certification) : ''}</div></div><button class="btn sm" data-action="staff-edit" data-id="${c.id}">${ic('edit', 'sm')}</button></div>
       <div class="stats3"><div><b>${cls.length}</b><small>Kelas/minggu</small></div><div><b>${Math.round(hrs * 10) / 10}</b><small>Jam/minggu</small></div><div><b>${studs.size}</b><small>Pelajar</small></div></div>
+      ${(c.languages || []).length ? `<div class="chips" style="margin:0">${c.languages.map(l => `<span class="chip">${esc(langName(l))}</span>`).join('')}</div>` : '<div class="muted" style="font-size:12px;color:var(--warn)">Bahasa belum diisi</div>'}
+      ${c.qualifications ? `<div class="muted" style="font-size:12.5px;white-space:pre-line">${ic('award', 'sm')} ${esc(c.qualifications)}</div>` : ''}
       <div class="muted" style="font-size:12.5px;display:flex;gap:8px;align-items:flex-start">${ic('pin', 'sm')}<span>${venues.length ? esc(venues.join(', ')) : 'Belum ada kelas'}</span></div>
-      <div style="display:flex;justify-content:space-between;align-items:center">${acct ? `<span class="badge b-ok">Akaun portal aktif</span>` : `<span class="badge b-muted">Belum ada akaun portal</span>`}${c.phone ? `<span class="muted" style="font-size:12.5px">${esc(c.phone)}</span>` : ''}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">${acct || c.profile_id ? `<span class="badge b-ok">Akaun portal aktif</span><button class="btn sm" data-action="staff-acct" data-id="${c.id}|reset">Reset kata laluan</button>` : `<button class="btn sm primary" data-action="staff-acct" data-id="${c.id}">${ic('key', 'sm')} Cipta akaun Portal Coach</button>`}${c.phone ? `<span class="muted" style="font-size:12.5px">${esc(c.phone)}</span>` : ''}</div>
     </div>`; }).join('') || `<div class="card empty" style="grid-column:1/-1">Belum ada coach.</div>`}</div>`;
 };
 
@@ -75,10 +78,13 @@ const staffForm = s => `<div class="form-grid">
   ${F('Jenis pekerjaan', 'employment_type', { value: s?.employment_type || '', opts: [['', '—'], ['full_time', 'Sepenuh masa'], ['part_time', 'Sambilan']] })}
   ${F('Asas bayaran', 'pay_basis', { value: s?.pay_basis || '', opts: [['', '—'], ['monthly', 'Bulanan'], ['hourly', 'Per jam']] })}
   ${F('Kadar (RM)', 'pay_rate', { type: 'number', step: '0.01', min: 0, value: s?.pay_rate ?? '' })}
-  ${F('Sijil / kelayakan', 'certification', { value: s?.certification })}
+  ${F('Sijil / lesen kejurulatihan', 'certification', { value: s?.certification })}
+  ${F('E-mel (untuk log masuk Portal Coach)', 'email', { type: 'email', value: s?.email })}
+  <div class="f full">Bahasa pertuturan<div class="langchk">${LANGS_ALL.map(([k, l]) => `<label><input type="checkbox" name="languages" value="${k}" ${(s?.languages || []).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>
+  ${F('Kelayakan & pencapaian (cth. BAM Level 2, bekas pemain negeri, juara MSSM)', 'qualifications', { type: 'textarea', value: s?.qualifications, full: true })}
   ${s ? `<label class="f full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="active" value="1" ${s.active ? 'checked' : ''} style="width:auto;height:auto"> Staf aktif</label>` : ''}
 </div>`;
-const staffPatch = (d, edit) => ({ full_name: d.full_name.trim(), position: d.position, phone: val(d.phone), employment_type: val(d.employment_type), pay_basis: val(d.pay_basis), pay_rate: num(d.pay_rate), certification: val(d.certification), active: edit ? d.active === '1' : true });
+const staffPatch = (d, edit) => ({ full_name: d.full_name.trim(), position: d.position, phone: val(d.phone), employment_type: val(d.employment_type), pay_basis: val(d.pay_basis), pay_rate: num(d.pay_rate), certification: val(d.certification), email: val((d.email || '').trim()), languages: [].concat(d.languages || []).filter(Boolean), qualifications: val(d.qualifications), active: edit ? d.active === '1' : true });
 
 Object.assign(ACTIONS, {
   'staff-add': () => openModal({ title: 'Tambah Staf', submit: 'Tambah', body: staffForm(), onSubmit: async d => { await insert('staff', staffPatch(d)); toast('Staf ditambah'); app.render(); } }),
@@ -86,6 +92,17 @@ Object.assign(ACTIONS, {
     title: 'Edit Staf', body: staffForm(byId('staff', id)) + `<div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="staff-del" data-id="${id}">${ic('trash', 'sm')} Padam staf</button></div>`,
     onSubmit: async d => { await update('staff', id, staffPatch(d, true)); toast('Staf dikemas kini'); app.render(); },
   }),
+  'staff-acct': async key => {
+    const [id, mode] = key.split('|'), st = byId('staff', id);
+    let r;
+    if (S.mode === 'demo') { r = { login: (st.email || (st.phone || '0123456789').replace(/\D/g, '').replace(/^0/, '60') + '@maxxima.app'), password: Math.random().toString(36).slice(2, 10), created: !st.profile_id }; st.profile_id = st.profile_id || 'demo-coach-' + id; }
+    else { r = await rpc('admin_staff_account', { p_staff: id, p_reset: mode === 'reset' }); st.profile_id = st.profile_id || 'x'; await import('../data.js').then(m => m.refresh(['staff', 'profiles'])); }
+    const url = location.origin + location.pathname, msg = `Salam Coach ${st.full_name}, akaun Portal Coach Maxxima sudah sedia.\n\nPautan: ${url}\nLog masuk: ${r.login}${r.password ? '\nKata laluan: ' + r.password : ''}\n\nDi portal: jadual sesi anda, tanda kehadiran pelajar dan nota latihan. Sila tukar kata laluan selepas log masuk.`;
+    setTimeout(() => openModal({ title: 'Akaun Portal Coach', cancel: 'Tutup', body: `<p>Log masuk: <b>${esc(r.login)}</b>${r.password ? `<br>Kata laluan: <b>${esc(r.password)}</b>` : '<br><span class="muted">Kata laluan tidak berubah.</span>'}</p>
+      <textarea style="width:100%;min-height:150px;margin-top:10px" data-noi18n>${esc(msg)}</textarea>
+      ${st.phone ? `<a class="btn primary" style="margin-top:10px" target="_blank" rel="noopener" href="https://wa.me/${String(st.phone).replace(/\D/g, '').replace(/^0/, '60')}?text=${encodeURIComponent(msg)}">${ic('msg', 'sm')} Hantar WhatsApp</a>` : ''}` }), 60);
+    app.render();
+  },
   'staff-del': id => confirmModal({ title: 'Padam staf?', message: `Kelas yang dikendalikan <b>${esc(staffName(id))}</b> akan tinggal tanpa coach. Pertimbangkan menyahaktifkan staf sahaja.`, ok: 'Padam', danger: true, onOk: async () => { await remove('staff', id); toast('Staf dipadam'); app.render(); } }),
 
   'leave-add': () => openModal({
