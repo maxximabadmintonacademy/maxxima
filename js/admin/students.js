@@ -1,5 +1,5 @@
 // Leads, Kelas Percubaan (trial), Pendaftaran (kemasukan), Senarai Pelajar.
-import { withLang } from '../i18n.js';
+import { withLang, getLang } from '../i18n.js';
 import { langOf } from '../lang-of.js';
 import { msgLeadThanks, msgTrialReminder, msgEnrolEnquiry, msgEnrolInvoice } from './messages.js';
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
@@ -507,7 +507,7 @@ Object.assign(ACTIONS, {
         <dt>Program</dt><dd>${esc(progNamesOf(s))}</dd>
         <dt>Lokasi</dt><dd>${esc(venueName(s.venue_id))}</dd>
         ${guardiansOf(id).length ? guardiansOf(id).map((g, i) => `<dt>Penjaga ${i + 1}</dt><dd>${esc(g.full_name)}${g.relationship ? ' (' + esc((RELS.find(r => r[0] === g.relationship) || [0, g.relationship])[1]) + ')' : ''}<div class="muted" style="font-weight:400;font-size:12.5px">${esc(g.phone || '')}${g.email ? ' · ' + esc(g.email) : ''}${g.address ? '<br>' + esc(g.address) : ''}${g.ic_no ? '<br>No. KP: ' + esc(g.ic_no) : ''}</div>${g.phone ? `<a class="btn sm" href="${waLink(g.phone)}" target="_blank" rel="noopener">${ic('msg', 'sm')} WhatsApp</a>` : ''}</dd>`).join('') : `<dt>Ibu bapa</dt><dd>${esc(s.guardian_name || '—')} · ${esc(s.guardian_phone || '')}</dd>`}
-        <dt>Akaun ibu bapa</dt><dd>${s.guardian_id ? esc(byId('profiles', s.guardian_id)?.email || 'dipautkan') : '<span class="muted">belum dipautkan (Pengguna & Akses)</span>'}</dd>
+        <dt>Akaun ibu bapa</dt><dd>${s.guardian_id ? `${esc(byId('profiles', s.guardian_id)?.email || 'dipautkan')} <button class="btn sm" data-action="parent-acct" data-id="${s.id}" data-reset="1" style="margin-left:6px">Set semula kata laluan</button>` : `<span class="muted">belum ada akaun</span> <button class="btn sm primary" data-action="parent-acct" data-id="${s.id}" style="margin-left:6px">Cipta akaun ibu bapa</button>`}</dd>
         <dt>Tarikh masuk</dt><dd>${fmtDate(s.joined_on)}</dd>
         <dt>Kehadiran (60 hari)</dt><dd>${r == null ? '—' : r + '%'}</dd>
         ${sibs.length ? `<dt>Adik-beradik</dt><dd>${sibs.map(x => `<a href="#" data-action="student-view" data-id="${x.id}" style="color:var(--info)">${esc(x.full_name)}</a>`).join(', ')}</dd>` : ''}
@@ -545,3 +545,38 @@ Object.assign(ACTIONS, {
   },
   'student-del': id => confirmModal({ title: 'Padam pelajar?', message: `Semua rekod <b>${esc(byId('students', id).full_name)}</b> (kehadiran, invois, penyertaan kejohanan) akan dipadam kekal. Pertimbangkan "Berhenti" jika mahu simpan sejarah.`, ok: 'Padam Kekal', danger: true, onOk: async () => { await remove('students', id); toast('Pelajar dipadam'); app.render(); } }),
 });
+
+/* ---------- Akaun portal ibu bapa: cipta / set semula kata laluan, kemudian hantar melalui WhatsApp ---------- */
+const portalUrl = () => location.href.split('#')[0].replace(/index\.html$/, '');
+const credMsg = ({ name, login, password, kids, url }) => pickL(
+  `Salam ${name}, akaun portal ibu bapa Maxxima Badminton Academy untuk ${kids} sudah sedia.\n\nPautan: ${url}\nLog masuk: ${login}\nKata laluan: ${password}\n\nDi portal anda boleh lihat jadual, kehadiran, invois dan resit, serta muat naik bukti bayaran. Sila tukar kata laluan selepas log masuk (Akaun > Tukar kata laluan). Terima kasih! 🏸`,
+  `Hi ${name}, your Maxxima Badminton Academy parent portal account for ${kids} is ready.\n\nLink: ${url}\nLogin: ${login}\nPassword: ${password}\n\nIn the portal you can see the schedule, attendance, invoices and receipts, and upload payment proof. Please change your password after logging in (Account > Change password). Thank you! 🏸`,
+  `${name} 您好，${kids} 的 Maxxima Badminton Academy 家长平台账户已开通。\n\n链接：${url}\n登录：${login}\n密码：${password}\n\n您可在平台查看课程表、出席、发票和收据，并上传付款凭证。登录后请更改密码（账户 > 更改密码）。谢谢！🏸`);
+const pickL = (ms, en, zh) => ({ ms, en, zh }[getLang()] ?? ms);
+ACTIONS['parent-acct'] = (id, el) => {
+  const s = byId('students', id), reset = el?.dataset.reset === '1';
+  confirmModal({ title: reset ? 'Set semula kata laluan ibu bapa?' : 'Cipta akaun portal ibu bapa?',
+    message: reset ? 'Kata laluan baharu akan dijana. Kata laluan lama tidak boleh digunakan lagi.' : `Akaun dicipta untuk penjaga utama <b>${esc(s.guardian_name || '')}</b> menggunakan e-mel penjaga, atau no. WhatsApp jika tiada e-mel. Adik-beradik yang sama penjaga dipautkan sekali.`,
+    ok: reset ? 'Set semula' : 'Cipta akaun',
+    onOk: async () => {
+      let r;
+      if (S.mode === 'demo') {
+        const ph = String(s.guardian_phone || '').replace(/\D/g, ''), login = (T('guardians').find(g => g.student_id === id && g.email)?.email || (ph.startsWith('0') ? '6' + ph : ph) + '@maxxima.app').toLowerCase();
+        let pr = T('profiles').find(p => p.id === s.guardian_id) || T('profiles').find(p => p.email === login);
+        if (!pr) pr = await insert('profiles', { email: login, full_name: s.guardian_name, role: 'parent', active: true });
+        for (const x of [s, ...T('students').filter(x => !x.guardian_id && s.family_ref && x.family_ref === s.family_ref)]) await update('students', x.id, { guardian_id: pr.id });
+        r = { login, password: 'demo1234', name: s.guardian_name, children: T('students').filter(x => x.guardian_id === pr.id).length };
+      } else {
+        const { data, error } = await S.client.rpc('admin_parent_account', { p_student: id, p_reset: reset }); if (error) throw error; r = data;
+        await refresh(['students', 'profiles']);
+      }
+      app.render();
+      const kids = T('students').filter(x => x.guardian_id === s.guardian_id || x.id === id).filter(x => x.guardian_id).map(x => x.full_name.split(' ')[0]);
+      if (!r.password) return toast('Akaun sudah wujud dan dipautkan. Tekan "Set semula kata laluan" untuk hantar kata laluan baharu.');
+      const msg = withLang(langOf(s), () => credMsg({ name: r.name || s.guardian_name || '', login: r.login, password: r.password, kids: [...new Set(kids)].join(' & ') || s.full_name, url: portalUrl() }));
+      const phone = r.phone || s.guardian_phone;
+      setTimeout(() => openModal({ title: 'Akaun ibu bapa sedia', cancel: 'Tutup', body: `<div class="hint" style="margin-bottom:12px">Log masuk: <b>${esc(r.login)}</b><br>Kata laluan: <b style="font-size:16px;letter-spacing:.05em">${esc(r.password)}</b><br><span class="muted" style="font-size:12.5px">Kata laluan ini hanya dipaparkan sekali. Hantar kepada ibu bapa sekarang.</span></div>
+        <pre class="copybox" id="remindText">${esc(msg)}</pre>
+        <div class="actions" style="margin-top:12px">${phone ? `<a class="btn primary" href="${waLink(phone, msg)}" target="_blank" rel="noopener">${ic('msg', 'sm')} Hantar melalui WhatsApp</a>` : ''}<button type="button" class="btn" data-action="copy-remind">Salin mesej</button></div>` }), 60);
+    } });
+};

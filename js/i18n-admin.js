@@ -182,6 +182,10 @@ export const AD = {
   'Tiada ibu bapa. No. WhatsApp, e-mel dan alamat di bawah ialah milik pelajar.': ["No parent. The WhatsApp number, email and address below are the student's own.", '无家长。以下 WhatsApp 号码、电邮和地址为学员本人所有。'], 'Hubungan pelajar (diri sendiri)': ["Student's own contact", '学员本人联系方式'],
   'Borang pendaftaran online': ['Online registration form', '网上报名表'], 'Salin pautan': ['Copy link', '复制链接'], 'Buka borang': ['Open form', '打开表格'], 'Pautan disalin': ['Link copied', '链接已复制'],
   'Kongsi pautan ini kepada ibu bapa atau pelajar dewasa. Pendaftaran masuk ke': ['Share this link with parents or adult students. Registrations go to', '将此链接分享给家长或成人学员。报名会进入'], 'dengan status Menunggu Semakan, dan anda menerima notifikasi.': ['with Pending Review status, and you get a notification.', '，状态为待审核，您会收到通知。'],
+  'belum ada akaun': ['no account yet', '尚无账户'], 'Cipta akaun ibu bapa': ['Create parent account', '创建家长账户'], 'Set semula kata laluan': ['Reset password', '重设密码'], 'Cipta akaun portal ibu bapa?': ['Create parent portal account?', '创建家长平台账户？'],
+  'Set semula kata laluan ibu bapa?': ["Reset parent's password?", '重设家长密码？'], 'Kata laluan baharu akan dijana. Kata laluan lama tidak boleh digunakan lagi.': ['A new password will be generated. The old password will stop working.', '将生成新密码，旧密码将失效。'],
+  'Cipta akaun': ['Create account', '创建账户'], 'Set semula': ['Reset', '重设'], 'Akaun ibu bapa sedia': ['Parent account ready', '家长账户已就绪'], 'Log masuk:': ['Login:', '登录：'], 'Kata laluan:': ['Password:', '密码：'],
+  'Kata laluan ini hanya dipaparkan sekali. Hantar kepada ibu bapa sekarang.': ['This password is shown only once. Send it to the parent now.', '此密码只显示一次，请立即发送给家长。'], 'Hantar melalui WhatsApp': ['Send via WhatsApp', '通过 WhatsApp 发送'],
 };
 
 let trAll = x => x;
