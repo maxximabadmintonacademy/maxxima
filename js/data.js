@@ -16,7 +16,7 @@ export const S = {
 export const ADMIN_TABLES = [
   'settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'parent_tax_info', 'invoice_items', 'expenses', 'leads', 'trials', 'students',
   'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes',
-  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests',
+  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log',
 ];
 const WINDOWED = new Set(['class_sessions', 'attendance']);   // hanya 90 hari terakhir + akan datang
 const WINDOW_DAYS = 90;
@@ -105,7 +105,7 @@ async function fetchAll(table, sinceISO) {
 }
 
 const PARENT_TABLES = ['settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'students', 'classes', 'class_enrolments',
-  'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'parent_tax_info', 'invoice_items', 'booking_requests', 'session_groups'];
+  'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'parent_tax_info', 'invoice_items', 'booking_requests', 'session_groups', 'announcements', 'tournaments'];
 /* Portal ibu bapa: RLS hanya memulangkan data anak sendiri. */
 export async function loadParent() {
   if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
@@ -117,7 +117,7 @@ export async function loadParent() {
 }
 
 /* Portal coach: RLS hanya memulangkan kelas, sesi dan pelajar yang coach itu ajar. */
-const COACH_TABLES = ['trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests'];
+const COACH_TABLES = ['announcements', 'trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests'];
 export async function loadCoach() {
   if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
   const since = addDays(todayISO(), -WINDOW_DAYS), next = {};
@@ -206,6 +206,9 @@ function demoPrepare(table, r) {
   if (table === 'leads') r.status ??= 'new';
   if (table === 'class_sessions') r.status ??= 'scheduled';
   if (table === 'booking_requests') { r.status ??= 'new'; r.pref_days ??= []; }
+  if (table === 'announcements') { r.created_at ??= new Date().toISOString(); r.publish_at ??= r.created_at; r.target_ids ??= []; r.target_cats ??= []; }
+  if (table === 'progress_records') { r.media ??= []; }
+  if (table === 'tournament_entries') { r.created_at ??= new Date().toISOString(); r.pay_status ??= 'unpaid'; }
   if (table === 'tournament_entries') r.status ??= 'registered';
   if (table === 'tournament_matches') r.status ??= 'pending';
   if (table === 'tournaments') r.status ??= 'draft';

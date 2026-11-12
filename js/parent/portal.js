@@ -1,6 +1,8 @@
 // Portal Ibu Bapa & Pelajar: ringkasan anak, jadual & tempahan, yuran (bayar + bukti + resit), progres.
 // Semua teks melalui t() supaya boleh dipaparkan dalam BM / English / 中文.
 import { ACTIONS, INPUTS } from '../registry.js';
+import { annCard, visibleAnns } from '../admin/announce.js';
+import { mediaGrid } from '../media.js';
 import { S, loadParent, insert, update, remove, refresh, markRead, subscribeNotifications, setPassword, rpc } from '../data.js';
 import { $, esc, ic, F, RM, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, fmtDate, fmtShort, hm, todayISO, addDays, DAYS, LABEL, friendlyError } from '../ui.js';
 import { T, byId, venueName, progName, staffName, invStatus, paidOf, creditOf, pkgRemaining } from '../admin/helpers.js';
@@ -49,7 +51,7 @@ function render() {
   if (!$('#view')) return;
   const id = parse(), sy = window.scrollY;
   try { $('#view').innerHTML = PV[id](); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>${t('Ralat memaparkan halaman.')}</b><p class="muted">${esc(e.message)}</p></div>`; }
-  const item = NAV.find(n => n[0] === id);
+  const item = NAV.find(n => n[0] === id) || [id, 'Berita & acara', 'msg'];
   $('#crumbTitle').textContent = t(item[1]); document.title = `${t(item[1])} — Maxxima`;
   $('#nav').innerHTML = `<div class="nav-group">${NAV.map(([k, l, i]) => `<a href="#${k}" class="nav-link ${k === id ? 'active' : ''}">${ic(i)}<span>${t(l)}</span>${k === 'yuran' && dueNow().length ? `<span class="nav-count red">${dueNow().length}</span>` : ''}</a>`).join('')}</div>`;
   $('#bottomnav').innerHTML = NAV.map(([k, l, i]) => `<a href="#${k}" class="${k === id ? 'active' : ''}">${ic(i)}${t(l)}</a>`).join('');
@@ -112,6 +114,8 @@ PV.utama = () => {
   const ks = kids(); if (!ks.length) return head(t('Selamat datang'), '') + noKids();
   const due = dueNow(), toConfirm = T('attendance').filter(a => kidSet().has(a.student_id) && ['present', 'late'].includes(a.status) && !a.parent_confirmed);
   return `${head(t('Salam, {name} 👋', { name: esc((S.profile.full_name || '').split(' ').slice(0, 2).join(' ')) }), t('Ringkasan anak anda di Maxxima Badminton Academy'))}
+  ${T('tournaments').filter(x => x.public_page && x.slug && x.status === 'open').map(x => `<div class="card card-pad mb" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${ic('trophy')}<div style="flex:1;min-width:180px"><b>${esc(x.name)}</b><div class="muted" style="font-size:12.5px">${x.start_date ? fmtShort(x.start_date) : ''}${x.registration_deadline ? ' · ' + t('tutup pendaftaran') + ' ' + fmtShort(x.registration_deadline) : ''}</div></div><a class="btn sm primary" target="_blank" rel="noopener" href="tournament.html?t=${encodeURIComponent(x.slug)}">${t('Daftar sekarang')}</a></div>`).join('')}
+  ${visibleAnns().length ? `<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px"><h3 style="font-size:15px">${t('Berita & acara terkini')}</h3>${visibleAnns().length > 2 ? `<a class="btn sm ghost" href="#berita">${t('Lihat semua')}</a>` : ''}</div>${visibleAnns().slice(0, 2).map(a => annCard(a, t)).join('')}` : ''}
   ${due.length ? `<div class="card mb" style="border-color:var(--warn)"><div class="card-head"><div><h3>${t('Yuran belum dijelaskan')}</h3><div class="sub">${t('Bayar melalui QR atau pindahan bank, kemudian muat naik bukti.')}</div></div><span class="badge b-warn">${due.length}</span></div>
     <ul class="list">${due.map(i => `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${esc(kidName(i.student_id))} · <span class="num">${RM(balanceOf(i) - pendingOf(i))}</span></div><div class="li-sub">${kindLabel(i)} · ${esc(i.number)} · ${t('akhir {d}', { d: fmtShort(i.due_date) })}</div></div>
     <div class="actions"><button class="btn sm primary" data-action="p-pay" data-id="${i.id}">${t('Bayar')}</button></div></li>`).join('')}</ul></div>` : ''}
@@ -165,6 +169,8 @@ async function changeSession(args) {
   await insert('booking_requests', { student_id: p_student, kind: 'group', action: p_action, from_class_id: p_class, from_date: p_date, class_id: p_to_class || null, session_date: p_to_date || null, late, status: 'accepted', admin_note: 'Disahkan automatik oleh sistem', created_at: new Date().toISOString() });
   return { mode: 'done', late };
 }
+
+PV.berita = () => `${head(t('Berita & acara'), t('Pengumuman daripada Maxxima Badminton Academy'))}${visibleAnns().map(a => annCard(a, t)).join('') || `<div class="card empty">${t('Belum ada berita.')}</div>`}`;
 
 /* ===================================================================== TEMPAH (kumpulan / personal, walaupun belum ada pakej) */
 const ageCatOf = (st, on) => {
@@ -468,7 +474,7 @@ PV.progres = () => {
   return `${head(t('Progres'), t('Penilaian daripada jurulatih (skala 1–5)'))}${kidTabs()}
   ${recs.length ? recs.slice(0, 10).map(r => `<div class="card card-pad mb"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><b>${fmtDate(r.recorded_on)}</b><span class="muted" style="font-size:12px">${esc(r.coach_id ? staffName(r.coach_id) : '')}</span></div>
     ${SK.map(([f, l]) => r[f] ? `<div style="display:flex;align-items:center;gap:10px;font-size:13px;margin:5px 0"><span style="width:84px">${t(l)}</span><div class="bar" style="flex:1"><span style="width:${r[f] * 20}%;background:var(--ok)"></span></div><b class="num">${r[f]}/5</b></div>` : '').join('')}
-    ${r.notes ? `<div class="muted" style="margin-top:10px;font-size:13px">${esc(r.notes)}</div>` : ''}</div>`).join('') : `<div class="card card-pad"><div class="empty">${t('Belum ada penilaian untuk {name}.', { name: esc(k.full_name) })}</div></div>`}`;
+    ${r.title ? `<div style="margin-top:10px;font-weight:700">${esc(r.title)}</div>` : ''}${r.notes ? `<div class="muted" style="margin-top:6px;font-size:13px;white-space:pre-line">${esc(r.notes)}</div>` : ''}${mediaGrid(r.media)}</div>`).join('') : `<div class="card card-pad"><div class="empty">${t('Belum ada penilaian untuk {name}.', { name: esc(k.full_name) })}</div></div>`}`;
 };
 
 /* ===================================================================== AKAUN + NOTIFIKASI */

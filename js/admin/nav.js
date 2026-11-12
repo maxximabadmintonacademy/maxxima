@@ -16,6 +16,7 @@ export const NAV = [
     { id: 'trial', label: 'Kelas Percubaan', icon: 'flag', count: () => T('trials').filter(t => t.status === 'scheduled').length },
     { id: 'kemasukan', label: 'Pendaftaran', icon: 'userplus', count: () => T('students').filter(s => ['pending', 'awaiting_payment'].includes(s.status)).length },
     { id: 'pelajar', label: 'Senarai Pelajar', icon: 'users' },
+    { id: 'berita', label: 'Pengumuman', icon: 'msg' },
     { id: 'tempahan', label: 'Tempahan', icon: 'calendar', count: () => T('booking_requests').filter(b => b.status === 'new').length, red: true },
   ] },
   { group: 'Operasi', items: [

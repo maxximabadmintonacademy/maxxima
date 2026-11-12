@@ -53,7 +53,7 @@ export function ageOf(birth) {
 }
 export function entryLabel(e) {
   if (!e) return '—';
-  const a = studentName(e.student_id), p = e.partner_id ? studentName(e.partner_id) : null;
+  const a = e.student_id ? studentName(e.student_id) : (e.player_name || '—'), p = e.partner_id ? studentName(e.partner_id) : null;
   return p ? `${a} / ${p}` : a;
 }
 

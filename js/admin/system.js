@@ -68,6 +68,7 @@ ACTIONS['user-edit'] = id => {
     body: `<div class="form-grid">
       ${F('Nama', 'full_name', { value: p.full_name })}
       ${F('Telefon', 'phone', { value: p.phone })}
+      ${F('E-mel log masuk', 'email', { type: 'email', value: p.email, full: true })}
       ${F('Peranan', 'role', { value: p.role, opts: [['admin', 'Admin'], ['coach', 'Coach'], ['parent', 'Ibu Bapa']] })}
       <label class="f" style="justify-content:flex-end"><span style="flex-direction:row;display:flex;align-items:center;gap:8px;height:40px"><input type="checkbox" name="active" value="1" ${p.active ? 'checked' : ''} style="width:auto;height:auto"> Akaun aktif</span></label>
     </div>
@@ -78,6 +79,11 @@ ACTIONS['user-edit'] = id => {
       const role = self ? p.role : d.role, active = self ? true : d.active === '1';
       const otherAdmins = T('profiles').filter(x => x.id !== id && x.role === 'admin' && x.active).length;
       if (p.role === 'admin' && (role !== 'admin' || !active) && !otherAdmins) throw new Error('Mesti ada sekurang-kurangnya seorang admin aktif.');
+      const em = (d.email || '').trim().toLowerCase();
+      if (em && em !== (p.email || '').toLowerCase()) {
+        if (S.mode === 'supabase') await rpc('admin_set_login', { p_profile: id, p_email: em, p_name: d.full_name.trim() || null });
+        p.email = em; toast(`E-mel log masuk ditukar ke ${em}`);
+      }
       await update('profiles', id, { full_name: d.full_name.trim(), phone: val(d.phone), role, active });
       if (role === 'parent') {
         const sel = [].concat(d.student_ids || []);

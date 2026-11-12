@@ -10,7 +10,7 @@ const rnd = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 21
 
 export function makeSeed() {
   const today = todayISO();
-  const t = Object.fromEntries(['settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'leads', 'trials', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes', 'parent_tax_info', 'invoice_items', 'expenses', 'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests'].map(k => [k, []]));
+  const t = Object.fromEntries(['settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'leads', 'trials', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes', 'parent_tax_info', 'invoice_items', 'expenses', 'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log'].map(k => [k, []]));
 
   t.settings.push(
     { key: 'academy', value: { name: 'Maxxima Badminton Academy', whatsapp: '60124965324', email: 'maxxima.academy@gmail.com', instagram: '@maxximaba' } },

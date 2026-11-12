@@ -96,7 +96,8 @@ Object.assign(ACTIONS, {
     const [id, mode] = key.split('|'), st = byId('staff', id);
     let r;
     if (S.mode === 'demo') { r = { login: (st.email || (st.phone || '0123456789').replace(/\D/g, '').replace(/^0/, '60') + '@maxxima.app'), password: Math.random().toString(36).slice(2, 10), created: !st.profile_id }; st.profile_id = st.profile_id || 'demo-coach-' + id; }
-    else { r = await rpc('admin_staff_account', { p_staff: id, p_reset: mode === 'reset' }); st.profile_id = st.profile_id || 'x'; await import('../data.js').then(m => m.refresh(['staff', 'profiles'])); }
+    else { r = await rpc('admin_staff_account', { p_staff: id, p_reset: mode === 'reset' });
+      if (r?.password) { const { error: e2 } = await S.client.from('profiles').update({ must_change_pw: true }).eq('email', r.login); if (e2) console.warn(e2); } st.profile_id = st.profile_id || 'x'; await import('../data.js').then(m => m.refresh(['staff', 'profiles'])); }
     const url = location.origin + location.pathname, msg = `Salam Coach ${st.full_name}, akaun Portal Coach Maxxima sudah sedia.\n\nPautan: ${url}\nLog masuk: ${r.login}${r.password ? '\nKata laluan: ' + r.password : ''}\n\nDi portal: jadual sesi anda, tanda kehadiran pelajar dan nota latihan. Sila tukar kata laluan selepas log masuk.`;
     setTimeout(() => openModal({ title: 'Akaun Portal Coach', cancel: 'Tutup', body: `<p>Log masuk: <b>${esc(r.login)}</b>${r.password ? `<br>Kata laluan: <b>${esc(r.password)}</b>` : '<br><span class="muted">Kata laluan tidak berubah.</span>'}</p>
       <textarea style="width:100%;min-height:150px;margin-top:10px" data-noi18n>${esc(msg)}</textarea>
