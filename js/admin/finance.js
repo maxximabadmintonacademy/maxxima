@@ -2,6 +2,8 @@
 import { msgInvoiceReminder, msgPackageLow, msgModal } from './messages.js';
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove, refresh } from '../data.js';
+import { adjHint } from './ops2.js';
+const watchAdj = f => { let last = null; const up = () => { const v = f.elements.student_id?.value || ''; if (v !== last) { last = v; const b = f.querySelector('#adjBox'); if (b) b.innerHTML = v ? adjHint(v) : ''; } }; ['change', 'click', 'input'].forEach(ev => f.addEventListener(ev, () => setTimeout(up, 30))); };
 import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, todayISO, addDays, monthKey, monthLabel, LABEL, waLink, $ } from '../ui.js';
 import { T, byId, venueName, progName, studentName, invStatus, paidOf, creditOf, billing, academy, pkgRemaining, studentPackages, catalogFor, pendingPayments, unallocated, daysLeft, lowPackages, expiringPackages, enrolledIn } from './helpers.js';
 import { openReceipt } from '../receipt.js';
@@ -179,7 +181,7 @@ VIEWS.yuran = () => {
         const st = invStatus(i), part = paidOf(i), receipts = T('payments').filter(p => p.invoice_id === i.id && p.status === 'confirmed');
         const hasPend = T('payments').some(p => p.invoice_id === i.id && p.status === 'pending');
         return `<tr>
-          <td><div class="cell-person">${avatar(studentName(i.student_id))}<div><b>${esc(studentName(i.student_id))}</b>${invoiceStudentIds(i).length > 1 ? ` <span class="badge b-info" title="${esc(invoiceStudentIds(i).map(studentName).join(', '))}">+${invoiceStudentIds(i).length - 1} adik-beradik</span>` : ''}<span>${esc(byId('students', i.student_id)?.guardian_name || '')}</span></div></div></td>
+          <td><div class="cell-person">${avatar(studentName(i.student_id))}<div><b>${esc(invoiceStudentIds(i).length > 1 ? invoiceStudentIds(i).map(studentName).join(' & ') : studentName(i.student_id))}</b>${invoiceStudentIds(i).length > 1 ? ` <span class="badge b-info" title="${esc(invoiceStudentIds(i).map(studentName).join(', '))}">+${invoiceStudentIds(i).length - 1} adik-beradik</span>` : ''}<span>${esc(byId('students', i.student_id)?.guardian_name || '')}</span></div></div></td>
           <td><span class="num">${esc(i.number)}</span><div class="muted" style="font-size:12px">${esc(i.description || LABEL[i.kind])}</div></td>
           <td class="num"><b>${RM(i.amount)}</b>${creditOf(i) > 0 ? `<div class="muted" style="font-size:12px">kredit -${RM(creditOf(i))}</div>` : ''}${part > 0 && i.status === 'issued' ? `<div class="muted" style="font-size:12px">dibayar ${RM(part)}</div>` : ''}</td>
           <td class="num">${fmtShort(i.due_date)}</td>
@@ -372,6 +374,7 @@ Object.assign(ACTIONS, {
       body: `<div class="form-grid">
         ${studentPicker(studs, pre)}
         ${famBoxHtml()}
+        <div class="full" id="adjBox">${pre ? adjHint(pre) : ''}</div>
         ${F('Jenis', 'kind', { opts: [['personal', 'Personal Coaching'], ['jersey', 'Jersi'], ['registration', 'Pendaftaran'], ['tournament', 'Kejohanan'], ['other', 'Lain-lain']] })}
         ${F('Nama pada invois (adik-beradik, pilihan)', 'bill_to', { ph: 'cth. Tia & Zen' })}
         ${F('Tarikh akhir', 'due', { type: 'date', value: dueDefault(), req: true })}
@@ -386,7 +389,7 @@ Object.assign(ACTIONS, {
         await saveItems(inv.id, its); await applyMerges(d, inv.id, inv.number); toast('Invois dikeluarkan'); app.render();
       },
     });
-    bindItems(f); bindFamily(f, pre || null); bindPicker(f, studs, pre, () => { const v = f.elements.student_id.value; if (v !== f._famMain) { f._famMain = v; f._famReset(v); } });
+    bindItems(f); bindFamily(f, pre || null); watchAdj(f); bindPicker(f, studs, pre, () => { const v = f.elements.student_id.value; if (v !== f._famMain) { f._famMain = v; f._famReset(v); } });
   },
 
   /* ---- Jual pakej: Lokasi -> Program -> Pelajar -> Pakej ---- */
@@ -399,6 +402,7 @@ Object.assign(ACTIONS, {
       title: 'Jual Pakej', submit: 'Keluarkan Invois', wide: true,
       body: `<div class="form-grid">
         ${studentPicker(studs, preStudent)}
+        <div class="full" id="adjBox">${preStudent ? adjHint(preStudent) : ''}</div>
         <label class="f full">4. Pakej<select name="package_id" required>${pkgOptions(firstPkg?.id)}</select></label>
         ${F('Cara latihan', 'mode', { value: (firstPkg?.mode_policy || 'choose') === 'choose' ? 'parent' : firstPkg?.schedule_mode || 'fixed', opts: MODE_OPTS })}
         ${F('Harga (RM)', 'price', { type: 'number', step: '0.01', min: 0, value: firstPkg?.price ?? '', req: true })}
@@ -433,7 +437,7 @@ Object.assign(ACTIONS, {
     };
     f.elements.package_id.addEventListener('change', () => { syncPkg(); note(); });
     f.elements.mode.addEventListener('change', note);
-    bindPicker(f, studs, preStudent, pkgFilter);
+    watchAdj(f); bindPicker(f, studs, preStudent, pkgFilter);
   },
 });
 

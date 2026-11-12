@@ -2,7 +2,8 @@
 // Semua teks melalui t() supaya boleh dipaparkan dalam BM / English / 中文.
 import { ACTIONS, INPUTS } from '../registry.js';
 import { annCard, visibleAnns } from '../admin/announce.js';
-import { mediaGrid } from '../media.js';
+import { offerCard } from '../admin/ops2.js';
+import { mediaGrid, publicUrl } from '../media.js';
 import { S, loadParent, insert, update, remove, refresh, markRead, subscribeNotifications, setPassword, rpc } from '../data.js';
 import { $, esc, ic, F, RM, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, fmtDate, fmtShort, hm, todayISO, addDays, DAYS, LABEL, friendlyError } from '../ui.js';
 import { T, byId, venueName, progName, staffName, invStatus, paidOf, creditOf, pkgRemaining } from '../admin/helpers.js';
@@ -51,7 +52,7 @@ function render() {
   if (!$('#view')) return;
   const id = parse(), sy = window.scrollY;
   try { $('#view').innerHTML = PV[id](); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>${t('Ralat memaparkan halaman.')}</b><p class="muted">${esc(e.message)}</p></div>`; }
-  const item = NAV.find(n => n[0] === id) || [id, 'Berita & acara', 'msg'];
+  const item = NAV.find(n => n[0] === id) || [id, id === 'kursus' ? 'Kursus online' : 'Berita & acara', 'msg'];
   $('#crumbTitle').textContent = t(item[1]); document.title = `${t(item[1])} — Maxxima`;
   $('#nav').innerHTML = `<div class="nav-group">${NAV.map(([k, l, i]) => `<a href="#${k}" class="nav-link ${k === id ? 'active' : ''}">${ic(i)}<span>${t(l)}</span>${k === 'yuran' && dueNow().length ? `<span class="nav-count red">${dueNow().length}</span>` : ''}</a>`).join('')}</div>`;
   $('#bottomnav').innerHTML = NAV.map(([k, l, i]) => `<a href="#${k}" class="${k === id ? 'active' : ''}">${ic(i)}${t(l)}</a>`).join('');
@@ -114,6 +115,7 @@ PV.utama = () => {
   const ks = kids(); if (!ks.length) return head(t('Selamat datang'), '') + noKids();
   const due = dueNow(), toConfirm = T('attendance').filter(a => kidSet().has(a.student_id) && ['present', 'late'].includes(a.status) && !a.parent_confirmed);
   return `${head(t('Salam, {name} 👋', { name: esc((S.profile.full_name || '').split(' ').slice(0, 2).join(' ')) }), t('Ringkasan anak anda di Maxxima Badminton Academy'))}
+  ${T('courses').some(c => c.status === 'published') ? `<a class="card card-pad mb" href="#kursus" style="display:flex;gap:10px;align-items:center;text-decoration:none;color:inherit">${ic('award')}<b>${t('Kursus online')}</b><span class="muted" style="font-size:12.5px;margin-left:auto">${t('Belajar peraturan, peralatan, senaman dan lain-lain')} →</span></a>` : ''}
   ${T('tournaments').filter(x => x.public_page && x.slug && x.status === 'open').map(x => `<div class="card card-pad mb" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${ic('trophy')}<div style="flex:1;min-width:180px"><b>${esc(x.name)}</b><div class="muted" style="font-size:12.5px">${x.start_date ? fmtShort(x.start_date) : ''}${x.registration_deadline ? ' · ' + t('tutup pendaftaran') + ' ' + fmtShort(x.registration_deadline) : ''}</div></div><a class="btn sm primary" target="_blank" rel="noopener" href="tournament.html?t=${encodeURIComponent(x.slug)}">${t('Daftar sekarang')}</a></div>`).join('')}
   ${visibleAnns().length ? `<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px"><h3 style="font-size:15px">${t('Berita & acara terkini')}</h3>${visibleAnns().length > 2 ? `<a class="btn sm ghost" href="#berita">${t('Lihat semua')}</a>` : ''}</div>${visibleAnns().slice(0, 2).map(a => annCard(a, t)).join('')}` : ''}
   ${due.length ? `<div class="card mb" style="border-color:var(--warn)"><div class="card-head"><div><h3>${t('Yuran belum dijelaskan')}</h3><div class="sub">${t('Bayar melalui QR atau pindahan bank, kemudian muat naik bukti.')}</div></div><span class="badge b-warn">${due.length}</span></div>
@@ -170,6 +172,11 @@ async function changeSession(args) {
   return { mode: 'done', late };
 }
 
+PV.kursus = () => { const cs = T('courses').filter(c => c.status === 'published').sort((a, b) => a.sort - b.sort), open = UI.pCourse;
+  if (open) { const c = byId('courses', open); if (c) return `${head(esc(c.title), esc(c.summary || ''))}<button class="btn sm ghost mb" data-action="p-course" data-id="">← ${t('Semua kursus')}</button>${T('course_lessons').filter(l => l.course_id === c.id).sort((a, b) => a.sort - b.sort).map((l, i) => lessonCard(l, i)).join('') || `<div class="card empty">${t('Belum ada pelajaran.')}</div>`}`; }
+  return `${head(t('Kursus online'), t('Belajar peraturan, peralatan, senaman dan lain-lain'))}${cs.map(c => `<div class="card mb ann" style="cursor:pointer" data-action="p-course" data-id="${c.id}">${c.cover_path ? `<img class="ann-img" style="max-height:180px" src="${publicUrl(c.cover_path)}" alt="">` : ''}<div class="card-pad"><b>${esc(c.title)}</b><div class="muted" style="font-size:12.5px">${T('course_lessons').filter(l => l.course_id === c.id).length} ${t('pelajaran')}</div>${c.summary ? `<p class="ann-body" style="margin-top:6px">${esc(c.summary)}</p>` : ''}</div></div>`).join('') || `<div class="card empty">${t('Kursus akan datang. Nantikan!')}</div>`}`; };
+const ytEmbed = u => { const m = String(u || '').match(/(?:youtu\.be\/|v=|shorts\/)([\w-]{11})/); return m ? `<div style="position:relative;padding-top:56.25%;margin-top:8px"><iframe src="https://www.youtube-nocookie.com/embed/${m[1]}" style="position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:10px" allowfullscreen loading="lazy"></iframe></div>` : u ? `<a class="btn sm" target="_blank" rel="noopener" href="${esc(u)}">${t('Tonton video')}</a>` : ''; };
+const lessonCard = (l, i) => `<div class="card card-pad mb"><b>${i + 1}. ${esc(l.title)}</b>${l.minutes ? ` <span class="muted" style="font-size:12px">· ${l.minutes} min</span>` : ''}${l.image_path ? `<img src="${publicUrl(l.image_path)}" alt="" style="width:100%;border-radius:10px;margin-top:8px">` : ''}${ytEmbed(l.video_url)}${l.body ? `<p class="ann-body" style="margin-top:8px">${esc(l.body)}</p>` : ''}</div>`;
 PV.berita = () => `${head(t('Berita & acara'), t('Pengumuman daripada Maxxima Badminton Academy'))}${visibleAnns().map(a => annCard(a, t)).join('') || `<div class="card empty">${t('Belum ada berita.')}</div>`}`;
 
 /* ===================================================================== TEMPAH (kumpulan / personal, walaupun belum ada pakej) */
@@ -196,7 +203,7 @@ const myReq = k => T('booking_requests').filter(b => b.student_id === k.id).sort
 const REQ_ST = { new: ['Menunggu pengesahan', 'b-warn'], accepted: ['Diterima', 'b-ok'], rejected: ['Ditolak', 'b-bad'], cancelled: ['Dibatalkan', 'b-muted'] };
 PV.tempah = () => {
   const k = curKid(); if (!k) return head(t('Tempah'), '') + noKids();
-  const tab = UI.pBk || 'group', has = activePkgs(k.id);
+  const tab = UI.pBk || (T('class_offers').some(o => o.status === 'open') ? 'offers' : 'group'), has = activePkgs(k.id);
   let body = '';
   if (tab === 'group') {
     if (!S.pOpen || S.pOpen === 'loading') { loadOpen(); body = `<div class="boot">${t('Memuatkan slot…')}</div>`; }
@@ -236,16 +243,26 @@ PV.tempah = () => {
   }
   const reqs = myReq(k);
   return `${head(t('Tempah'), t('Tempah sesi kumpulan atau minta sesi personal'))}${kidTabs()}
-  <div class="chips">${[['group', 'Sesi kumpulan'], ['personal', 'Sesi personal'], ['mine', 'Permintaan saya']].map(([x, l]) => `<button class="chip ${tab === x ? 'on' : ''}" style="cursor:pointer" data-action="p-bk" data-id="${x}">${t(l)}${x === 'mine' && reqs.filter(r => r.status === 'new').length ? ` <span class="n">${reqs.filter(r => r.status === 'new').length}</span>` : ''}</button>`).join('')}</div>
-  ${tab === 'mine' ? `<div class="card"><ul class="list">${reqs.map(b => { const c = byId('classes', b.class_id), [lbl, tone] = REQ_ST[b.status] || [b.status, 'b-muted']; return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main">
+  <div class="chips">${[['offers', 'Kelas dibuka'], ['group', 'Sesi kumpulan'], ['personal', 'Sesi personal'], ['mine', 'Permintaan saya']].map(([x, l]) => `<button class="chip ${tab === x ? 'on' : ''}" style="cursor:pointer" data-action="p-bk" data-id="${x}">${t(l)}${x === 'mine' && reqs.filter(r => r.status === 'new').length ? ` <span class="n">${reqs.filter(r => r.status === 'new').length}</span>` : ''}</button>`).join('')}</div>
+  ${tab === 'offers' ? offersBody(k) : tab === 'mine' ? `<div class="card"><ul class="list">${reqs.map(b => { const c = byId('classes', b.class_id), [lbl, tone] = REQ_ST[b.status] || [b.status, 'b-muted']; return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main">
       <div class="li-title">${b.kind === 'group' ? t('Sesi kumpulan') : t('Sesi personal')} <span class="badge ${tone}">${t(lbl)}</span></div>
       <div class="li-sub">${b.kind === 'group' ? `${b.session_date ? when(b.session_date, c || { start_time: '', end_time: '' }) : ''}${c ? ' · ' + esc(where(c)) : ''}` : `${(b.pref_days || []).map(d => DAYS[d]).join(', ')}${b.pref_time ? ' · ' + esc(b.pref_time) : ''}`}${b.admin_note ? ' · ' + esc(b.admin_note) : ''}</div></div>
       ${b.status === 'new' ? `<button class="btn sm danger-o" data-action="p-req-x" data-id="${b.id}">${t('Batal')}</button>` : ''}</li>`; }).join('') || `<li class="empty">${t('Belum ada permintaan.')}</li>`}</ul></div>` : body}`;
 };
+function offersBody(k) {
+  const L = T('class_offers').filter(o => o.status !== 'closed');
+  L.filter(o => o.coach_id && o.coach_name === undefined).forEach(o => { o.coach_name = null; if (S.mode === 'supabase') rpc('offer_coach_name', { p: o.coach_id }).then(n => { o.coach_name = n ? 'Coach ' + n : null; render(); }).catch(() => {}); else { const st = byId('staff', o.coach_id); o.coach_name = st ? 'Coach ' + st.full_name : null; } });
+  return L.map(o => { const mine = T('booking_requests').some(b => b.offer_id === o.id && b.student_id === k.id && b.status !== 'cancelled');
+    return `${offerCard(o, t)}<div style="margin:-8px 0 16px">${mine ? `<span class="badge b-info">${t('Minat dihantar — admin akan hubungi anda')}</span>` : o.status === 'full' ? '' : `<button class="btn primary" data-action="p-offer" data-id="${o.id}">${t('Saya berminat')}</button>`}</div>`; }).join('') || `<div class="card empty">${t('Tiada kelas dibuka buat masa ini.')}</div>`;
+}
 INPUTS['p-bkv'] = v => { UI.pBkV = v; render(); };
 INPUTS['p-bkp'] = v => { UI.pBkP = v; render(); };
 Object.assign(ACTIONS, {
   'p-bk': x => { UI.pBk = x; render(); },
+  'p-course': id => { UI.pCourse = id || null; location.hash = 'kursus'; render(); },
+  'p-offer': id => { const o = byId('class_offers', id), k = curKid();
+    openModal({ title: t('Saya berminat'), submit: t('Hantar'), body: `<p><b>${esc(o.title)}</b></p><p class="muted" style="font-size:13px">${esc(k.full_name)}</p>${F(t('Catatan (pilihan)'), 'notes', { type: 'textarea', full: true, ph: t('cth. boleh mula bulan depan / ada kawan nak join sekali') })}`,
+      onSubmit: async d => { await insert('booking_requests', { student_id: k.id, requested_by: S.mode === 'demo' ? null : me(), kind: o.otype === 'share_personal' ? 'personal' : 'group', offer_id: o.id, class_id: o.class_id || null, programme_id: o.programme_id || null, venue_id: o.venue_id || null, notes: ['[' + o.title + ']', d.notes].filter(Boolean).join(' '), status: 'new', pref_days: [] }); toast(t('Terima kasih! Admin akan menghubungi anda.')); render(); } }); },
   'p-req-g': async key => {
     const [cid, d] = key.split('|'), k = curKid(), x = (Array.isArray(S.pOpen) ? S.pOpen : []).find(y => y.class_id === cid && y.session_date === d);
     confirmModal({ title: t('Sahkan tempahan?'), message: `${esc(k.full_name)} — ${DAYS[new Date(d + 'T00:00:00').getDay()]}, ${fmtShort(d)} ${x ? hm(x.start_time) + ' · ' + esc(tr(x.programme)) + ' · ' + esc(x.venue) : ''}`, ok: t('Tempah'), onOk: async () => {

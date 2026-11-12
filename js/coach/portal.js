@@ -1,7 +1,8 @@
 // Portal Coach: sesi hari ini & minggu ini (termasuk kategori umur yang diberi), tanda kehadiran, pelajar, akaun.
 import { ACTIONS } from '../registry.js';
 import { S, loadCoach, markRead, subscribeNotifications, setPassword, insert, rpc } from '../data.js';
-import { uploadMedia, mediaGrid } from '../media.js';
+import { uploadMedia, mediaGrid, publicUrl } from '../media.js';
+import { planCard, planView, openPlanEditor, copyPlan } from '../planner.js';
 import { LANGS_ALL } from '../admin/sessions.js';
 import { $, esc, ic, F, avatar, UI, app, toast, openModal, fmtDate, fmtShort, hm, todayISO, addDays, parseISO, DAYS, LABEL, friendlyError } from '../ui.js';
 import { T, byId, venueName, progName, attRate, studentName } from '../admin/helpers.js';
@@ -14,7 +15,7 @@ import { themeSwitch } from '../theme.js';
 
 const CV = {};
 const SKILLS = [['footwork', 'Footwork'], ['strokes', 'Pukulan'], ['tactics', 'Taktik'], ['fitness', 'Kecergasan'], ['attitude', 'Sikap']];
-const NAV = [['hari', 'Hari Ini', 'home'], ['minggu', 'Minggu Ini', 'calendar'], ['pelajar', 'Pelajar', 'users'], ['akaun', 'Akaun', 'user']];
+const NAV = [['hari', 'Hari Ini', 'home'], ['minggu', 'Minggu Ini', 'calendar'], ['pelajar', 'Pelajar', 'users'], ['pelan', 'Pelan Latihan', 'check'], ['akaun', 'Akaun', 'user']];
 const meStaff = () => T('staff').find(s => s.profile_id === S.profile.id) || (S.mode === 'demo' ? (T('staff').find(s => /alvi/i.test(s.full_name)) || T('staff')[0]) : null);
 const mine = (from, to) => { const st = meStaff(); return st ? calItems(from, to, { mine: st.id }) : []; };
 const unread = () => T('notifications').filter(n => !n.read_at && n.user_id === S.profile.id);
@@ -39,7 +40,7 @@ function render() {
   if (UI.cob) { $('#view').innerHTML = onboard(); $('#crumbTitle').textContent = 'Selamat datang'; $('#nav').innerHTML = ''; $('#bottomnav').innerHTML = ''; return; }
   const id = parse(), sy = window.scrollY;
   try { $('#view').innerHTML = CV[id](); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>Ralat memaparkan halaman.</b><p class="muted">${esc(e.message)}</p></div>`; }
-  const item = NAV.find(n => n[0] === id) || [id, 'Berita & acara', 'msg'];
+  const item = NAV.find(n => n[0] === id) || [id, id === 'kursus' ? 'Kursus' : 'Berita & acara', 'msg'];
   $('#crumbTitle').textContent = item[1]; document.title = `${item[1]} — Maxxima Coach`;
   $('#nav').innerHTML = `<div class="nav-group">${NAV.map(([k, l, i]) => `<a href="#${k}" class="nav-link ${k === id ? 'active' : ''}">${ic(i)}<span>${l}</span></a>`).join('')}</div>`;
   $('#bottomnav').innerHTML = NAV.map(([k, l, i]) => `<a href="#${k}" class="${k === id ? 'active' : ''}">${ic(i)}${l}</a>`).join('');
@@ -99,9 +100,16 @@ CV.hari = () => {
   return `${head(`Hai, ${esc(me.full_name.split(' ')[0])}`, `${DAYS[parseISO(today).getDay()]}, ${fmtDate(today)} · ${list.length} sesi hari ini`)}
   ${list.map(x => card(x)).join('') || '<div class="card empty mb">Tiada sesi hari ini.</div>'}
   ${past.length ? `<h3 style="font-size:14px;margin:18px 0 8px">Belum ditanda (7 hari lepas)</h3>${past.map(x => card(x, true)).join('')}` : ''}
+  ${T('events').filter(e => e.start_date >= today && e.status !== 'cancelled').length ? `<h3 style="font-size:14px;margin:20px 0 8px">Acara akan datang</h3>${T('events').filter(e => e.start_date >= today && e.status !== 'cancelled').sort((a, b) => a.start_date.localeCompare(b.start_date)).slice(0, 3).map(e => `<div class="card card-pad mb"><b>${esc(e.name)}</b><div class="muted" style="font-size:12.5px">${fmtDate(e.start_date)}${e.start_time ? ' · ' + hm(e.start_time) : ''}${e.venue_note ? ' · ' + esc(e.venue_note) : e.venue_id ? ' · ' + esc(venueName(e.venue_id)) : ''}${(e.staff_ids || []).includes(me.id) ? ' · <b>Anda bertugas</b>' : ''}</div></div>`).join('')}` : ''}
+  ${T('courses').some(c => c.status === 'published') ? `<a class="card card-pad mb" href="#kursus" style="display:block;text-decoration:none;color:inherit">${ic('award', 'sm')} <b>Kursus</b> <span class="muted" style="font-size:12.5px">— bahan pembelajaran akademi →</span></a>` : ''}
   ${visibleAnns().length ? `<div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px"><h3 style="font-size:14px">Berita & acara terkini</h3><a class="btn sm ghost" href="#berita">Lihat semua</a></div>${visibleAnns().slice(0, 2).map(a => annCard(a)).join('')}` : ''}`;
 };
 CV.berita = () => `${head('Berita & acara', 'Pengumuman akademi')}${visibleAnns().map(a => annCard(a)).join('') || '<div class="card empty">Belum ada berita.</div>'}`;
+CV.pelan = () => { const me = st(), mine = T('lesson_plans').filter(p => p.coach_id === me?.id && !p.is_template).sort((a, b) => (b.plan_date || '').localeCompare(a.plan_date || '')), tpl = T('lesson_plans').filter(p => p.is_template);
+  return `${head('Pelan Latihan', 'Rancang sesi: warm up, footwork, feeding, fizikal, sparring, pemerhatian & kelas seterusnya')}<button class="btn primary mb" data-action="c-lp-new">${ic('plus', 'sm')} Pelan baharu</button>
+  ${tpl.length ? `<h3 style="font-size:14px;margin:6px 0 8px">Templat</h3>${tpl.map(p => planCard(p, { canEdit: p.coach_id === me?.id })).join('')}` : ''}
+  <h3 style="font-size:14px;margin:12px 0 8px">Pelan saya</h3>${mine.map(p => planCard(p)).join('') || '<div class="card empty">Belum ada pelan. Tekan "Pelan baharu" atau salin templat.</div>'}`; };
+CV.kursus = () => { const cs = T('courses').filter(c => c.status === 'published'); return `${head('Kursus', 'Bahan pembelajaran akademi')}${cs.map(c => `<div class="card card-pad mb"><b>${esc(c.title)}</b>${c.summary ? `<p class="muted" style="font-size:13px">${esc(c.summary)}</p>` : ''}<ol style="margin:8px 0 0 18px;font-size:13.5px">${T('course_lessons').filter(l => l.course_id === c.id).sort((a, b) => a.sort - b.sort).map(l => `<li style="margin-bottom:6px"><b>${esc(l.title)}</b>${l.video_url ? ` · <a target="_blank" rel="noopener" href="${esc(l.video_url)}">video</a>` : ''}${l.body ? `<div style="white-space:pre-line">${esc(l.body)}</div>` : ''}</li>`).join('')}</ol></div>`).join('') || '<div class="card empty">Belum ada kursus.</div>'}`; };
 CV.minggu = () => {
   const today = todayISO(), list = mine(today, addDays(today, 7)), days = [...new Set(list.map(x => x.date))];
   return `${head('Minggu Ini', '7 hari akan datang')}${days.map(d => `<div class="daylist"><div class="dh">${DAYS[parseISO(d).getDay()]}, ${fmtDate(d)}</div>${list.filter(x => x.date === d).map(x => card(x)).join('')}</div>`).join('') || '<div class="card empty">Tiada sesi.</div>'}`;
@@ -153,6 +161,10 @@ Object.assign(ACTIONS, {
         await insert('progress_records', row); toast('Progres disimpan — ibu bapa boleh lihat di portal'); setTimeout(() => ACTIONS['c-student'](id), 60);
       } });
   },
+  'c-lp-new': () => openPlanEditor(null, { coachId: st()?.id || null, onSaved: () => render() }),
+  'lp-edit': id => openPlanEditor(byId('lesson_plans', id), { onSaved: () => render() }),
+  'lp-view': id => { const p = byId('lesson_plans', id); openModal({ title: esc(p.title), wide: true, cancel: 'Tutup', body: planView(p) }); },
+  'lp-copy': async id => { await copyPlan(byId('lesson_plans', id), st()?.id); toast('Pelan disalin'); render(); },
   'c-open': async key => {
     if (!key.includes('|')) return openSession(key);
     const [cid, d] = key.split('|');

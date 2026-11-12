@@ -17,14 +17,14 @@ const kidHtml = (i, v = {}) => `<div class="kid" data-k="${i}">
     <label class="f full">${t('Nama penuh pelajar')}<input name="s_name" required maxlength="120" value="${esc(v.full_name)}"></label>
     <label class="f">${t('Tarikh lahir')}<input name="s_dob" type="date" value="${esc(v.birth_date)}"></label>
     <label class="f">${t('Jantina')}<select name="s_gender">${opt('', '—', v.gender)}${opt('male', t('Lelaki'), v.gender)}${opt('female', t('Perempuan'), v.gender)}</select></label>
-    <label class="f full">${t('Lokasi latihan pilihan')}<select name="s_venue">${opt('', t('— Belum pasti —'), v.venue_id)}${OPT.venues.map(x => opt(x.id, x.name + (x.area && !x.name.includes(x.area) ? ' · ' + x.area : ''), v.venue_id)).join('')}</select></label>
+    <div class="f full">${t('Lokasi latihan pilihan (boleh pilih lebih dari satu)')}<div class="progs">${OPT.venues.map(x => `<label><input type="checkbox" name="s_ven_${i}" value="${x.id}" ${(v.venues || [v.venue_id]).includes(x.id) ? 'checked' : ''}> ${esc(x.name + (x.area && !x.name.includes(x.area) ? ' · ' + x.area : ''))}</label>`).join('')}</div></div>
     <div class="f full">${t('Program yang diminati')}<div class="progs">${OPT.programmes.map(p => `<label><input type="checkbox" name="s_prog_${i}" value="${p.id}" ${(v.programmes || []).includes(p.id) ? 'checked' : ''}> ${esc(p.name)}</label>`).join('')}</div></div>
     <label class="f full">${t('Pengalaman / catatan (pilihan)')}<input name="s_notes" maxlength="300" value="${esc(v.notes)}" placeholder="${t('cth. pernah main 1 tahun, ada kejohanan sekolah')}"></label>
   </div></div>`;
 
 function readKids() {
   return [...document.querySelectorAll('.kid')].map(el => ({ full_name: el.querySelector('[name=s_name]').value.trim(), birth_date: el.querySelector('[name=s_dob]').value, gender: el.querySelector('[name=s_gender]').value,
-    venue_id: el.querySelector('[name=s_venue]').value, programmes: [...el.querySelectorAll('.progs input:checked')].map(x => x.value), notes: el.querySelector('[name=s_notes]').value.trim() }));
+    venues: [...el.querySelectorAll('input[name^=s_ven_]:checked')].map(x => x.value), venue_id: el.querySelector('input[name^=s_ven_]:checked')?.value || '', programmes: [...el.querySelectorAll('input[name^=s_prog_]:checked')].map(x => x.value), notes: el.querySelector('[name=s_notes]').value.trim() }));
 }
 function render(keep) {
   const kids = keep?.kids || [{}], g = keep?.g || {}, self = !!keep?.self;

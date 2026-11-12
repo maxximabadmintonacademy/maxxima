@@ -363,8 +363,10 @@ const studentFormHtml = (s, progIds, guards, mode) => `
     ${F('Status', 'status', { value: s?.status || 'active', opts: [['active', 'Aktif'], ['pending', 'Dalam proses'], ['paused', 'Digantung'], ['left', 'Berhenti']] })}
     <div class="f full">Program (boleh pilih lebih daripada satu: contohnya Group + Personal)
       <div class="checklist" style="margin-top:6px">${T('programmes').filter(p => p.active || progIds.includes(p.id)).map(p => `<label class="check-row"><input type="checkbox" name="prog_ids" value="${p.id}" ${progIds.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}</span><em>${p.kind === 'personal' ? 'Personal' : 'Group'}</em></label>`).join('')}</div></div>
+    <div class="f full">Lokasi tambahan (jika berlatih di lebih satu lokasi, cth. Puchong Sport Centre + Michael's BA)
+      <div class="langchk" style="margin-top:6px">${T('venues').filter(v => v.active).map(v => `<label><input type="checkbox" name="extra_venues" value="${v.id}" ${s && T('student_programmes').some(x => x.student_id === s.id && x.venue_id === v.id && v.id !== s.venue_id) ? 'checked' : ''}> ${esc(v.name)}</label>`).join('')}</div></div>
     ${F('Kod keluarga (adik-beradik)', 'family_ref', { value: s?.family_ref, ph: 'sama untuk adik-beradik' })}
-    <label class="f" style="justify-content:flex-end"><span style="flex-direction:row;display:flex;align-items:center;gap:8px;height:40px"><input type="checkbox" name="fee_exempt" value="1" ${s?.fee_exempt ? 'checked' : ''} style="width:auto;height:auto"> Tiada yuran (anak pemilik / penaja)</span></label>
+    <label class="f" style="justify-content:flex-end"><span style="flex-direction:row;display:flex;align-items:center;gap:8px;height:40px"><input type="checkbox" name="fee_exempt" value="1" ${s?.fee_exempt ? 'checked' : ''} style="width:auto;height:auto"> Tajaan: latihan kumpulan percuma (personal bayar court sahaja)</span></label>
     ${F('Nota bil (cth. penajaan tamat, hanya bayar court)', 'billing_note', { value: s?.billing_note })}
     ${F('Bahasa mesej, invois & resit', 'lang', { value: s?.lang || '', opts: [['', 'Auto (ikut akaun ibu bapa)'], ['ms', 'Bahasa Malaysia'], ['en', 'English'], ['zh', '中文']] })}
     ${F('Catatan', 'notes', { type: 'textarea', value: s?.notes, full: true })}
@@ -454,15 +456,16 @@ async function saveStudent(d, sid) {
   const have = T('guardians').filter(g => g.student_id === id);
   for (const g of have) if (!gs.some(x => x.id === g.id)) await remove('guardians', g.id);
   for (const [i, g] of gs.entries()) { const row = { sort: i + 1, relationship: g.relationship, full_name: g.full_name, phone: g.phone, email: g.email, address: g.address, ic_no: g.ic_no }; if (g.id) await update('guardians', g.id, row); else await insert('guardians', { ...row, student_id: id }); }
-  const hp = T('student_programmes').filter(p => p.student_id === id);
-  for (const p of hp) if (!progs.includes(p.programme_id)) await remove('student_programmes', p.id);
-  for (const pid of progs) if (!hp.some(p => p.programme_id === pid)) await insert('student_programmes', { student_id: id, programme_id: pid, venue_id: patch.venue_id });
+  const hp = T('student_programmes').filter(p => p.student_id === id), vens = [...new Set([patch.venue_id || null, ...arr('extra_venues').filter(Boolean)])];
+  const want = progs.flatMap(pid => vens.map(v => [pid, v]));
+  for (const p of hp) if (!want.some(([pid, v]) => pid === p.programme_id && v === (p.venue_id || null))) await remove('student_programmes', p.id);
+  for (const [pid, v] of want) if (!hp.some(p => p.programme_id === pid && (p.venue_id || null) === v)) await insert('student_programmes', { student_id: id, programme_id: pid, venue_id: v });
   if (patch.family_ref) for (const x of sibs) if (!x.family_ref) await update('students', x.id, { family_ref: patch.family_ref });
   if (S.mode === 'supabase') await refresh(['students', 'guardians', 'student_programmes']);
   return id;
 }
 const guardiansOf = id => T('guardians').filter(g => g.student_id === id).sort((a, b) => a.sort - b.sort);
-const progIdsOf = s => { const x = T('student_programmes').filter(p => p.student_id === s.id).map(p => p.programme_id); return x.length ? x : (s.programme_id ? [s.programme_id] : []); };
+const progIdsOf = s => { const x = [...new Set(T('student_programmes').filter(p => p.student_id === s.id).map(p => p.programme_id))]; return x.length ? x : (s.programme_id ? [s.programme_id] : []); };
 const progNamesOf = s => progIdsOf(s).map(progName).join(' + ') || '—';
 
 /* =====================================================================
@@ -567,6 +570,7 @@ Object.assign(ACTIONS, {
         <button type="button" class="btn" data-action="student-edit" data-id="${id}">${ic('edit', 'sm')} Edit</button>
         ${['active', 'paused'].includes(s.status) ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|${s.status === 'active' ? 'paused' : 'active'}">${s.status === 'active' ? 'Gantung' : 'Aktifkan semula'}</button>` : ''}
         ${s.status !== 'left' ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|left">Berhenti</button>` : `<button type="button" class="btn" data-action="student-status" data-id="${id}|active">Aktifkan semula</button>`}
+        <button type="button" class="btn" data-action="adj-add" data-id="${id}" title="Rekod kredit / caj untuk invois akan datang">${ic('wallet', 'sm')} Pelarasan bil</button>
         <button type="button" class="btn" data-action="student-merge" data-id="${id}" title="Gabungkan profil berganda (cth. nama pendek) ke profil sebenar">${ic('users', 'sm')} Gabung profil</button>
         <button type="button" class="btn danger-o" data-action="student-del" data-id="${id}">${ic('trash', 'sm')} Padam</button>
       </div>`,

@@ -21,6 +21,7 @@ import './admin/sessions.js';
 import './admin/calendar.js';
 import './admin/ops.js';
 import './admin/announce.js';
+import './admin/ops2.js';
 
 const root = () => $('#root');
 const logoSvg = `<img src="assets/logo.png" alt="MBA" class="brand-img">`;

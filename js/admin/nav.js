@@ -16,8 +16,15 @@ export const NAV = [
     { id: 'trial', label: 'Kelas Percubaan', icon: 'flag', count: () => T('trials').filter(t => t.status === 'scheduled').length },
     { id: 'kemasukan', label: 'Pendaftaran', icon: 'userplus', count: () => T('students').filter(s => ['pending', 'awaiting_payment'].includes(s.status)).length },
     { id: 'pelajar', label: 'Senarai Pelajar', icon: 'users' },
-    { id: 'berita', label: 'Pengumuman', icon: 'msg' },
     { id: 'tempahan', label: 'Tempahan', icon: 'calendar', count: () => T('booking_requests').filter(b => b.status === 'new').length, red: true },
+  ] },
+  { group: 'Pemasaran & Acara', items: [
+    { id: 'berita', label: 'Pengumuman', icon: 'msg' },
+    { id: 'tawaran', label: 'Kelas & Slot Terbuka', icon: 'target' },
+    { id: 'kandungan', label: 'Perancang Kandungan', icon: 'grid' },
+    { id: 'acara', label: 'Perancang Acara', icon: 'flag' },
+    { id: 'jersi', label: 'Pesanan Jersi', icon: 'tag', count: () => T('jersey_orders').filter(o => o.status === 'new').length },
+    { id: 'kursus', label: 'Kursus Online', icon: 'award' },
   ] },
   { group: 'Operasi', items: [
     { id: 'kalendar', label: 'Kalendar Sesi', icon: 'calendar', count: () => sessionGaps().length, red: true },
@@ -28,11 +35,13 @@ export const NAV = [
   { group: 'Kewangan', items: [
     { id: 'yuran', label: 'Invois & Bayaran', icon: 'wallet', count: () => T('invoices').filter(i => invStatus(i) === 'overdue').length + pendingPayments().length, red: true },
     { id: 'bilpersonal', label: 'Bil Personal & Walk-in', icon: 'wallet' },
+    { id: 'pelarasan', label: 'Pelarasan Bil', icon: 'wallet', count: () => T('billing_adjustments').filter(a => a.status === 'pending').length },
     { id: 'perbelanjaan', label: 'Perbelanjaan', icon: 'trend' },
     { id: 'pakej', label: 'Pakej', icon: 'tag', count: () => lowPackages().length + unallocated().length },
   ] },
   { group: 'Pasukan', items: [
     { id: 'coach', label: 'Coach', icon: 'award' },
+    { id: 'pelanlatihan', label: 'Pelan Latihan', icon: 'check' },
     { id: 'hr', label: 'HR & Staf', icon: 'briefcase', count: () => T('leave_requests').filter(l => l.status === 'pending').length },
   ] },
   { group: 'Sistem', items: [
