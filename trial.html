@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B2545">
+<title>Trial — Maxxima Badminton Academy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try{var m=localStorage.getItem('mx_theme');if(m==='dark'||(m==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.dataset.theme='dark'}catch(e){}</script>
+<link rel="stylesheet" href="css/app.css">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+.reg{min-height:100vh;padding:22px 14px 40px;background:linear-gradient(160deg,#0B2545 0%,#13315C 55%,#1D4173 100%)}
+.reg-card{max-width:680px;margin:0 auto;background:var(--surface);border-radius:20px;padding:24px 22px;box-shadow:0 30px 80px rgba(0,0,0,.35)}
+.reg-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.reg h1{font-size:22px;font-weight:800;margin:14px 0 4px}.reg h3{font-size:15px;margin:22px 0 10px}
+.kid{border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;background:var(--bg)}
+.kid-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.progs{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}.progs label{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;background:var(--surface)}
+.progs input{width:auto;height:auto}.self{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:12px;background:var(--brand-soft,#eef2ff);margin-bottom:12px;font-size:13.5px;cursor:pointer}
+.self input{width:auto;height:auto;margin-top:3px}.hp{position:absolute;left:-9999px}.done{text-align:center;padding:30px 10px}.done .big{font-size:46px}
+.consent{display:flex;gap:10px;align-items:flex-start;font-size:13px;margin-top:14px}.consent input{width:auto;height:auto;margin-top:3px}
+.slots{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow:auto;padding:2px}.slot-r{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;background:var(--surface)}
+.slot-r input{width:auto;height:auto;margin-top:3px}.slot-r.full{opacity:.45;cursor:not-allowed}.slot-r b{display:block}.slot-r small{color:var(--muted)}.slot-r .cat{color:var(--ok);font-weight:700}
+</style>
+</head>
+<body>
+<div class="reg"><div class="reg-card" id="reg"><div class="boot">Memuatkan…</div></div></div>
+<div class="toast" id="toast" role="status"></div>
+<script type="module" src="js/trial.js"></script>
+</body>
+</html>

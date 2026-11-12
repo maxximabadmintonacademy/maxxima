@@ -9,26 +9,67 @@ import { ensureSession, sTime, sHours, isPersonal, openSession } from './session
    TEMPAHAN (daripada portal ibu bapa)
    ===================================================================== */
 export const newBookings = () => T('booking_requests').filter(b => b.status === 'new');
-const bkWhen = b => b.kind === 'group'
+const ACT = { book: ['Tempahan', 'b-info'], reschedule: ['Reschedule', 'b-purple'], cancel: ['Batal', 'b-muted'], emergency: ['Kecemasan / MC', 'b-bad'] };
+const slotTxt = (cid, d) => { const c = byId('classes', cid); return d ? `${DAYS[parseISO(d).getDay()]} ${fmtShort(d)}${c ? ' ' + hm(c.start_time) + ' · ' + progName(c.programme_id) + ' · ' + venueName(c.venue_id) : ''}` : ''; };
+const bkWhen = b => (b.action && b.action !== 'book')
+  ? `Sesi asal: ${slotTxt(b.from_class_id, b.from_date)}${b.session_date ? ' → ' + slotTxt(b.class_id, b.session_date) : ''}${b.pref_time ? ' · pilihan: ' + b.pref_time : ''}${b.reason ? ' · sebab: ' + b.reason : ''}`
+  : b.kind === 'group'
   ? (() => { const c = byId('classes', b.class_id); return `${b.session_date ? DAYS[parseISO(b.session_date).getDay()] + ', ' + fmtDate(b.session_date) : ''}${c ? ' · ' + hm(c.start_time) + '–' + hm(c.end_time) + ' · ' + progName(c.programme_id) + ' · ' + venueName(c.venue_id) : ''}`; })()
   : `Hari pilihan: ${(b.pref_days || []).map(d => DAYS[d]).join(', ') || '—'}${b.pref_time ? ' · ' + b.pref_time : ''}${b.venue_id ? ' · ' + venueName(b.venue_id) : ''}${b.sessions ? ' · ' + b.sessions + ' sesi' : ''}`;
 
 VIEWS.tempahan = () => {
   const tab = UI.bkTab || 'new', list = T('booking_requests').filter(b => tab === 'all' || b.status === tab).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   const cnt = k => T('booking_requests').filter(b => b.status === k).length;
-  return `${pageHead('Tempahan Ibu Bapa', 'Tempahan sesi kumpulan (slot terbuka) dan permintaan sesi personal daripada portal ibu bapa — termasuk yang belum beli pakej.')}
+  return `${pageHead('Tempahan Ibu Bapa', 'Tempahan sesi kumpulan (slot terbuka) dan permintaan sesi personal daripada portal ibu bapa — termasuk yang belum beli pakej.',
+    `<button class="btn" data-action="cal-personal">${ic('plus', 'sm')} Sesi Personal</button><button class="btn primary" data-action="bk-manual">${ic('plus', 'sm')} Tempahan Manual / Bulk</button>`)}
   <div class="chips">${[['new', 'Baharu'], ['accepted', 'Diterima'], ['rejected', 'Ditolak'], ['cancelled', 'Dibatalkan'], ['all', 'Semua']].map(([k, l]) => `<button class="chip ${tab === k ? 'on' : ''}" data-action="bk-tab" data-id="${k}" style="cursor:pointer">${l}${k !== 'all' ? ` <span class="n">${cnt(k)}</span>` : ''}</button>`).join('')}</div>
   <div class="card"><ul class="list">${list.map(b => { const st = byId('students', b.student_id), pk = livePackages(b.student_id); return `<li class="list-item" style="flex-wrap:wrap">${avatar(st?.full_name || '?')}
-    <div class="li-main"><div class="li-title">${esc(st?.full_name || '—')} <span class="badge ${b.kind === 'group' ? 'b-info' : 'b-purple'}">${b.kind === 'group' ? 'Kumpulan' : 'Personal'}</span> ${badge(b.status === 'new' ? 'new' : b.status, { new: 'Baharu', accepted: 'Diterima', rejected: 'Ditolak', cancelled: 'Dibatalkan' }[b.status])}</div>
+    <div class="li-main"><div class="li-title">${esc(st?.full_name || '—')} <span class="badge ${b.kind === 'group' ? 'b-info' : 'b-purple'}">${b.kind === 'group' ? 'Kumpulan' : 'Personal'}</span> <span class="badge ${ACT[b.action || 'book'][1]}">${ACT[b.action || 'book'][0]}</span>${b.late ? ' <span class="badge b-bad">&lt;48 jam</span>' : ''} ${badge(b.status === 'new' ? 'new' : b.status, { new: 'Baharu', accepted: 'Diterima', rejected: 'Ditolak', cancelled: 'Dibatalkan' }[b.status])}</div>
       <div class="li-sub">${esc(bkWhen(b))}</div>
       <div class="li-sub">${pk.length ? 'Pakej aktif: ' + esc(pk.map(p => p.name).join(', ')) : '<span style="color:var(--warn)">Tiada pakej aktif — akan dibil walk-in / bulanan</span>'}${b.notes ? ' · “' + esc(b.notes) + '”' : ''}${b.admin_note ? ' · Admin: ' + esc(b.admin_note) : ''}</div>
       <div class="li-sub">Dihantar ${b.created_at ? fmtShort(b.created_at) : ''}${st?.guardian_phone ? ` · <a target="_blank" rel="noopener" href="https://wa.me/${String(st.guardian_phone).replace(/\D/g, '').replace(/^0/, '60')}">WhatsApp penjaga</a>` : ''}</div></div>
-    ${b.status === 'new' ? `<div class="actions"><button class="btn sm primary" data-action="bk-accept" data-id="${b.id}">${ic('tick', 'sm')} Terima</button><button class="btn sm danger-o" data-action="bk-reject" data-id="${b.id}">Tolak</button></div>` : b.session_id ? `<button class="btn sm" data-action="sess-open" data-id="${b.session_id}">Buka sesi</button>` : ''}</li>`; }).join('') || '<li class="empty">Tiada tempahan.</li>'}</ul></div>`;
+    ${b.status === 'new' ? `<div class="actions">${b.proof_path ? `<button class="btn sm" data-action="bk-proof" data-id="${b.id}">${ic('file', 'sm')} Bukti</button>` : ''}<button class="btn sm primary" data-action="bk-accept" data-id="${b.id}">${ic('tick', 'sm')} ${b.action && b.action !== 'book' ? 'Lulus' : 'Terima'}</button><button class="btn sm danger-o" data-action="bk-reject" data-id="${b.id}">Tolak</button></div>` : b.session_id ? `<button class="btn sm" data-action="sess-open" data-id="${b.session_id}">Buka sesi</button>` : ''}</li>`; }).join('') || '<li class="empty">Tiada tempahan.</li>'}</ul></div>`;
 };
 Object.assign(ACTIONS, {
   'bk-tab': k => { UI.bkTab = k; app.render(); },
+  /* Admin masukkan tempahan sendiri (cth. dari WhatsApp) — ramai pelajar & beberapa tarikh sekali gus */
+  'bk-manual': () => {
+    const cls = T('classes').filter(c => c.active && !isPersonal(c)).sort((a, b) => a.weekday - b.weekday || hm(a.start_time).localeCompare(hm(b.start_time)));
+    const nextOf = c => { for (let i = 0; i < 7; i++) { const d = addDays(todayISO(), i); if (parseISO(d).getDay() === c.weekday) return d; } return todayISO(); };
+    const sts = T('students').filter(x => x.status === 'active' || x.status === 'pending' || x.status === 'awaiting_payment').sort((a, b) => a.full_name.localeCompare(b.full_name));
+    const f = openModal({ title: 'Tempahan Manual / Bulk', submit: 'Simpan', wide: true, body: `<div class="form-grid">
+      <label class="f full">Kelas / slot<select name="class_id" required>${cls.map(c => `<option value="${c.id}">${DAYS[c.weekday]} ${hm(c.start_time)}–${hm(c.end_time)} · ${esc(progName(c.programme_id))} · ${esc(venueName(c.venue_id))}</option>`).join('')}</select></label>
+      ${F('Tarikh pertama', 'date', { type: 'date', value: cls[0] ? nextOf(cls[0]) : todayISO(), req: true })}
+      ${F('Ulang setiap minggu (bil. minggu)', 'repeat', { type: 'number', value: 1, min: 1, max: 12 })}
+      ${F('Rekod sebagai', 'status', { value: 'booked', opts: [['booked', 'Tempahan (akan datang)'], ['present', 'Hadir (rekod sesi lepas)'], ['absent', 'Tidak hadir'], ['excused', 'Dimaafkan']] })}
+      <label class="f full">Pelajar (Ctrl/⌘ untuk pilih ramai)<select name="students" multiple size="8">${sts.map(x => `<option value="${x.id}">${esc(x.full_name)}</option>`).join('')}</select></label>
+      ${F('Atau tampal senarai nama dari WhatsApp (satu nama setiap baris)', 'paste', { type: 'textarea', full: true, ph: 'Aiman\nTia\nSanvir' })}
+    </div><div id="bkPrev" class="muted" style="font-size:12.5px;margin-top:8px"></div>`,
+      onSubmit: async d => {
+        const c = byId('classes', d.class_id), ids = new Set([].concat(d.students || []).filter(Boolean)), miss = [];
+        String(d.paste || '').split(/\n+/).map(x => x.replace(/^[\s\d.)\-•*]+/, '').trim()).filter(Boolean).forEach(n => { const m = pasteMatch(n); if (m) ids.add(m.id); else miss.push(n); });
+        if (!ids.size) throw new Error('Pilih atau tampal sekurang-kurangnya seorang pelajar.' + (miss.length ? ' Tidak dijumpai: ' + miss.join(', ') : ''));
+        if (parseISO(d.date).getDay() !== c.weekday) throw new Error(`Tarikh pertama mesti hari ${DAYS[c.weekday]}.`);
+        let n = 0;
+        for (let i = 0; i < Math.max(1, Number(d.repeat) || 1); i++) {
+          const s = await ensureSession(c.id, addDays(d.date, 7 * i));
+          for (const id of ids) if (!T('attendance').some(a => a.session_id === s.id && a.student_id === id)) { await insert('attendance', { session_id: s.id, student_id: id, status: d.status, note: 'Dimasukkan oleh admin' }); n++; }
+        }
+        toast(`${n} rekod disimpan untuk ${ids.size} pelajar${miss.length ? ` · tidak dijumpai: ${miss.join(', ')}` : ''}`, !!miss.length); app.render();
+      } });
+    const prev = () => { const names = String(f.elements.paste.value || '').split(/\n+/).map(x => x.replace(/^[\s\d.)\-•*]+/, '').trim()).filter(Boolean);
+      f.querySelector('#bkPrev').innerHTML = names.map(n => { const m = pasteMatch(n); return m ? `✓ ${esc(n)} → <b>${esc(m.full_name)}</b>` : `<span style="color:var(--bad)">✗ ${esc(n)} — tidak pasti / tiada</span>`; }).join('<br>'); };
+    f.elements.paste.addEventListener('input', prev);
+    f.elements.class_id.addEventListener('change', () => { f.elements.date.value = nextOf(byId('classes', f.elements.class_id.value)); });
+  },
+  'bk-proof': async id => {
+    const b = byId('booking_requests', id); if (S.mode !== 'supabase') return toast('Demo: tiada fail');
+    const { data, error } = await S.client.storage.from('payment-proofs').createSignedUrl(b.proof_path, 300); if (error) return toast(error.message, true);
+    window.open(data.signedUrl, '_blank', 'noopener');
+  },
   'bk-accept': async id => {
     const b = byId('booking_requests', id);
+    if (b.action && b.action !== 'book') return approveChange(b);
     if (b.kind === 'group') {
       if (!b.class_id || !b.session_date) return toast('Tempahan tiada slot', true);
       const s = await ensureSession(b.class_id, b.session_date);
@@ -44,9 +85,48 @@ Object.assign(ACTIONS, {
         onDone: async cls => { const s = T('class_sessions').filter(x => x.class_id === cls.id).sort((a, b2) => a.session_date.localeCompare(b2.session_date))[0]; await update('booking_requests', id, { status: 'accepted', session_id: s?.id || null, handled_at: new Date().toISOString() }); } });
     }
   },
-  'bk-reject': id => openModal({ title: 'Tolak tempahan', submit: 'Tolak', body: F('Sebab / cadangan slot lain (dipaparkan kepada ibu bapa)', 'note', { type: 'textarea', full: true }),
-    onSubmit: async d => { await update('booking_requests', id, { status: 'rejected', admin_note: val(d.note), handled_at: new Date().toISOString() }); toast('Tempahan ditolak'); app.render(); } }),
+  'bk-reject': id => { const b = byId('booking_requests', id); openModal({ title: 'Tolak permintaan', submit: 'Tolak', body: `${b.action === 'emergency' && b.kind === 'group' ? '<p class="muted" style="font-size:13px;margin-bottom:10px">Kecemasan ditolak: sesi dikira batal lewat (ditolak daripada pakej).</p>' : b.action === 'emergency' ? '<p class="muted" style="font-size:13px;margin-bottom:10px">Kecemasan ditolak: court hangus + 50% yuran coach (batal lewat).</p>' : ''}${F('Sebab / cadangan slot lain (dipaparkan kepada ibu bapa)', 'note', { type: 'textarea', full: true })}`,
+    onSubmit: async d => {
+      if (b.action === 'emergency') await setFromStatus(b, 'late_cancel', 'Kecemasan ditolak');
+      await update('booking_requests', id, { status: 'rejected', admin_note: val(d.note), handled_at: new Date().toISOString() }); toast('Permintaan ditolak'); app.render(); } }); },
 });
+
+/* Kelulusan reschedule / batal / kecemasan (ikut Terma & Syarat). */
+async function setFromStatus(b, status, note) {
+  const s = await ensureSession(b.from_class_id, b.from_date), a = T('attendance').find(x => x.session_id === s.id && x.student_id === b.student_id);
+  if (status === null) {           // batal >=48 jam tanpa caj
+    const others = T('attendance').filter(x => x.session_id === s.id && x.student_id !== b.student_id && x.status !== 'excused');
+    if (a) await update('attendance', a.id, { status: 'excused', note: note });
+    else await insert('attendance', { session_id: s.id, student_id: b.student_id, status: 'excused', note });
+    if (byId('programmes', byId('classes', b.from_class_id)?.programme_id)?.kind === 'personal' && !others.length) await update('class_sessions', s.id, { status: 'cancelled', cancel_reason: note });
+    return s;
+  }
+  if (a) await update('attendance', a.id, { status, note: [a.note, note].filter(Boolean).join(' · ') });
+  else await insert('attendance', { session_id: s.id, student_id: b.student_id, status, note });
+  return s;
+}
+async function approveChange(b) {
+  const pol = { replacement_days: 30, ...(setting('policy', {}) || {}) }, now = new Date().toISOString(), personal = b.kind === 'personal';
+  const done = async (note, extra = {}) => { await update('booking_requests', b.id, { status: 'accepted', handled_at: now, admin_note: note, ...extra }); toast('Permintaan diluluskan'); app.render(); };
+  if (b.action === 'emergency') {
+    await setFromStatus(b, 'excused', personal ? 'Kecemasan diluluskan — court sahaja dikenakan' : 'Kecemasan diluluskan — sesi tidak ditolak');
+    if (!personal) {   // kredit ganti: sah sekurang-kurangnya 30 hari dari tarikh asal (fasal 08)
+      const until = addDays(b.from_date, Number(pol.replacement_days) || 30), c = byId('classes', b.from_class_id);
+      for (const p of T('student_packages').filter(p => p.student_id === b.student_id && p.programme_id === c?.programme_id && p.status === 'active' && p.expires_on && p.expires_on < until)) await update('student_packages', p.id, { expires_on: until });
+      return done(`Kecemasan diluluskan. Kredit ganti sah hingga ${fmtDate(until)}.`);
+    }
+    return done('Kecemasan diluluskan. Court sahaja dikenakan; sesi coaching boleh diganti.');
+  }
+  if (b.late) await setFromStatus(b, 'late_cancel', b.action === 'reschedule' ? 'Reschedule lewat (<48 jam)' : 'Batal lewat (<48 jam)');
+  else await setFromStatus(b, null, b.action === 'reschedule' ? 'Reschedule (notis cukup)' : 'Batal (notis cukup)');
+  if (b.action === 'reschedule') {
+    if (!personal && b.class_id && b.session_date) { const s2 = await ensureSession(b.class_id, b.session_date); if (!T('attendance').some(a => a.session_id === s2.id && a.student_id === b.student_id)) await insert('attendance', { session_id: s2.id, student_id: b.student_id, status: 'booked', note: 'Reschedule dari ' + fmtShort(b.from_date) }); return done('Reschedule diluluskan', { session_id: s2.id }); }
+    const c = byId('classes', b.from_class_id);
+    return ACTIONS['cal-personal']({ students: [b.student_id], venue_id: c?.venue_id, programme_id: c?.programme_id, coach_id: c?.coach_id, date: b.session_date || todayISO(), start: hm(c?.start_time) || '18:00', end: hm(c?.end_time) || '19:00',
+      onDone: async cls => done('Reschedule diluluskan — sesi ganti ditetapkan') });
+  }
+  return done(b.late ? 'Batal lewat: dikira mengikut terma' : 'Batal diluluskan tanpa caj');
+}
 
 /* =====================================================================
    PADANKAN NAMA (baki kehadiran import WhatsApp)
@@ -63,6 +143,14 @@ function suggest(raw) {
   const w = words(raw); if (!w.length) return [];
   return T('students').filter(s => !s.merged_into).map(s => { const sw = words(s.full_name); let sc = 0; w.forEach(x => { if (sw.includes(x)) sc += 3; else if (sw.some(y => y.startsWith(x) || x.startsWith(y))) sc += 1; }); return { s, sc: sc + (s.status === 'active' ? 0.5 : 0) }; })
     .filter(x => x.sc >= 1).sort((a, b) => b.sc - a.sc).slice(0, 5).map(x => x.s);
+}
+/* Padanan nama tampal: tepat satu pelajar dengan skor tertinggi */
+function pasteMatch(n) {
+  const low = n.toLowerCase(), exact = T('students').filter(s => !s.merged_into && s.full_name.toLowerCase() === low);
+  if (exact.length === 1) return exact[0];
+  const w = words(n); if (!w.length) return null;
+  const sc = T('students').filter(s => !s.merged_into && s.status !== 'left').map(s => { const sw = words(s.full_name); return { s, k: w.filter(x => sw.includes(x)).length }; }).filter(x => x.k === w.length);
+  return sc.length === 1 ? sc[0].s : null;
 }
 VIEWS.padanan = () => {
   if (M() === null) { loadMatches().then(() => app.render()).catch(e => { S.t.import_matches = []; toast(e.message, true); app.render(); }); return `${pageHead('Padankan Nama', '')}<div class="boot">Memuatkan…</div>`; }

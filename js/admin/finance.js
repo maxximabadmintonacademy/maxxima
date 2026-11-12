@@ -1,7 +1,7 @@
 // Invois & Bayaran, Pakej (katalog + pakej pelajar).
 import { msgInvoiceReminder, msgPackageLow, msgModal } from './messages.js';
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
-import { S, insert, update, remove } from '../data.js';
+import { S, insert, update, remove, refresh } from '../data.js';
 import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, todayISO, addDays, monthKey, monthLabel, LABEL, waLink, $ } from '../ui.js';
 import { T, byId, venueName, progName, studentName, invStatus, paidOf, creditOf, billing, academy, pkgRemaining, studentPackages, catalogFor, pendingPayments, unallocated, daysLeft, lowPackages, expiringPackages, enrolledIn } from './helpers.js';
 import { openReceipt } from '../receipt.js';
@@ -20,7 +20,9 @@ function remindText(inv) {
    JUAL PAKEJ = satu invois + pakej "menunggu bayaran" (digunakan juga oleh Pendaftaran)
    Pakej aktif secara automatik apabila bayaran disahkan.
    ===================================================================== */
+const MODE_OPTS = [['parent', 'Ibu bapa pilih di portal (tetap / fleksibel)'], ['fixed', 'Jadual tetap (didaftar ke kelas)'], ['flexible', 'Fleksibel (ibu bapa tempah sendiri)']];
 export async function sellPackage({ studentId, pkg, price, mode, due, reg, jersey, discount, pending }) {
+  const modeSet = mode === 'parent' ? null : new Date().toISOString(); if (mode === 'parent') mode = pkg.schedule_mode || 'flexible';
   const disc = Number(discount) || 0, items = [{ kind: 'package', description: pkg.name, unit: 'unit', qty: 1, unit_price: Number(price), discount: 0 }];
   if (num(reg)) items.push({ kind: 'registration', description: 'Yuran pendaftaran', unit: 'unit', qty: 1, unit_price: Number(reg), discount: 0 });
   if (num(jersey)) items.push({ kind: 'jersey', description: 'Jersi akademi', unit: 'unit', qty: 1, unit_price: Number(jersey), discount: 0 });
@@ -30,8 +32,8 @@ export async function sellPackage({ studentId, pkg, price, mode, due, reg, jerse
   const pkgPrice = Math.max(Number(price) - disc, 0);
   const inv = await insert('invoices', { student_id: studentId, issued_on: todayISO(), due_date: due, status: 'issued', kind: 'package', amount: total, description: pkg.name });
   await saveItems(inv.id, items);
-  if (pending) await update('student_packages', pending.id, { invoice_id: inv.id, package_id: pkg.id, programme_id: pkg.programme_id, name: pkg.name, sessions_total: pkg.sessions, unit: pkg.unit || 'sesi', price: pkgPrice, valid_days: pkg.valid_days, schedule_mode: mode });
-  else await insert('student_packages', { student_id: studentId, package_id: pkg.id, programme_id: pkg.programme_id, name: pkg.name, sessions_total: pkg.sessions, unit: pkg.unit || 'sesi', price: pkgPrice, valid_days: pkg.valid_days, schedule_mode: mode, status: 'pending', invoice_id: inv.id });
+  if (pending) await update('student_packages', pending.id, { invoice_id: inv.id, package_id: pkg.id, programme_id: pkg.programme_id, name: pkg.name, sessions_total: pkg.sessions, unit: pkg.unit || 'sesi', price: pkgPrice, valid_days: pkg.valid_days, schedule_mode: mode, mode_set_at: modeSet });
+  else await insert('student_packages', { student_id: studentId, package_id: pkg.id, programme_id: pkg.programme_id, name: pkg.name, sessions_total: pkg.sessions, unit: pkg.unit || 'sesi', price: pkgPrice, valid_days: pkg.valid_days, schedule_mode: mode, mode_set_at: modeSet, status: 'pending', invoice_id: inv.id });
   return inv;
 }
 export const dueDefault = () => addDays(todayISO(), billing().due_days ?? 7);
@@ -141,7 +143,7 @@ VIEWS.yuran = () => {
   const f = UI.invFilter || 'all', q = (UI.invQ || '').toLowerCase();
   const inMonth = invsAll.filter(i => !mk || monthOf(i) === mk);
   const live = inMonth.filter(i => i.status !== 'void');
-  const rows = inMonth.filter(i => {
+  const rows = (q ? invsAll : inMonth).filter(i => {   // carian: semua bulan
     const st = invStatus(i);
     return (f === 'all' ? i.status !== 'void' : f === 'issued' ? st === 'issued' : st === f)
       && (!q || (invoiceStudentIds(i).map(studentName).join(' ') + ' ' + (i.bill_to || '') + ' ' + i.number).toLowerCase().includes(q));
@@ -167,7 +169,7 @@ VIEWS.yuran = () => {
   </div>
   <div class="card">
     <div class="toolbar">
-      <label class="field grow">${ic('search', 'sm')}<input id="invSearch" data-on-input="inv-q" placeholder="Cari pelajar atau no. invois…" value="${esc(UI.invQ || '')}"></label>
+      <label class="field grow">${ic('search', 'sm')}<input id="invSearch" data-on-input="inv-q" placeholder="Cari pelajar atau no. invois (semua bulan)…" value="${esc(UI.invQ || '')}"></label>
       <label class="field"><select data-on-change="inv-month"><option value="">Semua bulan</option>${monthOpts.map(m => `<option value="${m}" ${mk === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select></label>
     </div>
     <div class="chips" style="padding:12px 20px 0;margin:0">${[['all', 'Semua'], ['issued', 'Belum Bayar'], ['overdue', 'Lewat'], ['paid', 'Dibayar'], ['void', 'Dibatalkan']].map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-action="inv-filter" data-id="${k}">${l}<span class="n">${cnt(k)}</span></button>`).join('')}</div>
@@ -398,7 +400,7 @@ Object.assign(ACTIONS, {
       body: `<div class="form-grid">
         ${studentPicker(studs, preStudent)}
         <label class="f full">4. Pakej<select name="package_id" required>${pkgOptions(firstPkg?.id)}</select></label>
-        ${F('Cara latihan', 'mode', { value: firstPkg?.schedule_mode || 'fixed', opts: [['fixed', 'Jadual tetap (didaftar ke kelas)'], ['flexible', 'Fleksibel (ibu bapa tempah sendiri)']] })}
+        ${F('Cara latihan', 'mode', { value: (firstPkg?.mode_policy || 'choose') === 'choose' ? 'parent' : firstPkg?.schedule_mode || 'fixed', opts: MODE_OPTS })}
         ${F('Harga (RM)', 'price', { type: 'number', step: '0.01', min: 0, value: firstPkg?.price ?? '', req: true })}
         ${F('Yuran pendaftaran (RM)', 'reg', { type: 'number', step: '0.01', min: 0, ph: 'Kosongkan jika tiada' })}
         ${F('Jersi (RM)', 'jersey', { type: 'number', step: '0.01', min: 0, ph: 'Kosongkan jika tiada' })}
@@ -416,7 +418,8 @@ Object.assign(ACTIONS, {
       const enrolled = sid ? T('class_enrolments').some(e => e.student_id === sid) : true, prev = sid && pkg ? studentPackages(sid).find(p => p.programme_id === pkg.programme_id && p.status === 'active') : null;
       f.querySelector('#sellNote').innerHTML = `${prev ? `<div class="hint warn">Pelajar masih ada pakej aktif ${esc(prev.name)} (baki ${pkgRemaining(prev)}). Pakej baharu akan aktif selepas bayaran dan dipakai selepas yang lama habis.</div>` : ''}${fd.get('mode') === 'fixed' && sid && !enrolled ? `<div class="hint warn">Pelajar belum ditempatkan dalam kelas tetap. Tetapkan di <a href="#jadual" data-action="close-modal">Jadual Kelas</a>.</div>` : ''}Pakej aktif secara automatik apabila bayaran disahkan; tempoh sah bermula dari tarikh bayaran. Kadar boleh diubah untuk pelajar lama yang kekal harga lama.`;
     };
-    const syncPkg = () => { const pkg = byId('packages', f.elements.package_id.value); if (pkg) { f.elements.price.value = pkg.price; f.elements.mode.value = pkg.schedule_mode; } };
+    const syncPkg = () => { const pkg = byId('packages', f.elements.package_id.value); if (pkg) { f.elements.price.value = pkg.price; const pol = pkg.mode_policy || 'choose';
+      [...f.elements.mode.options].forEach(o => { o.disabled = pol !== 'choose' && o.value !== pol; }); f.elements.mode.value = pol === 'choose' ? 'parent' : pol; } };
     /* Senarai pakej ikut program yang ditapis; jika tiada tapisan, ikut program pelajar yang dipilih */
     const pkgFilter = () => {
       const E = f.elements, st = byId('students', E.student_id.value), fp = E.f_prog.value;
@@ -453,10 +456,19 @@ VIEWS.pakej = () => {
     ${[['Aktif', all.filter(p => spMatch(p, 'active')).length, 't-ok', 'tag'], ['Hampir habis', lowPackages().length, 't-info', 'alert'], ['Tamat ≤ 7 hari', expiringPackages().length, 't-warn', 'clock'], ['Menunggu bayaran', all.filter(p => p.status === 'pending').length, 't-purple', 'wallet']].map(([l, v, tone, icon]) => `<div class="card kpi"><div class="kpi-top"><span class="kpi-label">${l}</span><span class="kpi-ico ${tone}">${ic(icon)}</span></div><div class="kpi-val">${v}</div></div>`).join('')}
   </div>
   ${un.length ? `<div class="card mb" style="border-color:var(--bad)"><div class="card-head"><div><h3>Kehadiran belum dipadankan dengan pakej</h3><div class="sub">Sesi dihadiri tetapi pelajar tiada pakej aktif. Jual pakej — kehadiran ini akan dipadankan secara automatik selepas bayaran.</div></div><span class="badge b-bad">${un.length}</span></div>
-    <ul class="list">${[...new Set(un.map(a => a.student_id))].map(sid => `<li class="list-item">${avatar(studentName(sid))}<div class="li-main"><div class="li-title">${esc(studentName(sid))}</div><div class="li-sub">${un.filter(a => a.student_id === sid).length} sesi belum dipadankan</div></div><button class="btn sm primary" data-action="sell" data-id="${sid}">Jual Pakej</button></li>`).join('')}</ul></div>` : ''}
+    <ul class="list">${[...new Set(un.map(a => a.student_id))].map(sid => `<li class="list-item">${avatar(studentName(sid))}<div class="li-main"><div class="li-title">${esc(studentName(sid))}</div><div class="li-sub">${un.filter(a => a.student_id === sid).length} sesi belum dipadankan</div></div>${T('student_packages').some(p => p.student_id === sid && ['active', 'pending'].includes(p.status)) ? `<button class="btn sm" data-action="att-link" data-id="${sid}">Pautkan ke pakej</button> ` : ''}<button class="btn sm primary" data-action="sell" data-id="${sid}">Jual Pakej</button></li>`).join('')}</ul></div>` : ''}
   ${studentView()}`}`;
 };
 
+/* Hadir terakhir / sesi seterusnya pelajar */
+const lastSeen = sid => {
+  const t0 = todayISO(), att = T('attendance').filter(a => a.student_id === sid);
+  const last = att.filter(a => ['present', 'late'].includes(a.status) && (a.session_date || '') <= t0).map(a => a.session_date).sort().pop();
+  const next = att.filter(a => a.status === 'booked' && (a.session_date || '') >= t0).map(a => a.session_date).sort()[0];
+  return `${last ? 'Hadir terakhir ' + fmtShort(last) : 'Belum hadir'}${next ? ' · seterusnya ' + fmtShort(next) : ''}`;
+};
+/* Sesi yang sudah digunakan sedangkan invois pakej belum dibayar penuh */
+const unpaidUsed = p => { const inv = byId('invoices', p.invoice_id); if (!inv || inv.status === 'paid' || inv.status === 'cancelled') return 0; return T('attendance').filter(a => a.student_package_id === p.id && ['present', 'late', 'absent', 'late_cancel'].includes(a.status)).length; };
 function studentView() {
   const f = UI.spFilter || 'active', q = (UI.spQ || '').toLowerCase();
   const rows = T('student_packages').filter(p => spMatch(p, f) && (!q || studentName(p.student_id).toLowerCase().includes(q)))
@@ -469,11 +481,11 @@ function studentView() {
       <tbody>${rows.map(p => {
         const rem = pkgRemaining(p), used = Number(p.sessions_used || 0), pct = Math.round(used / p.sessions_total * 100), dl = daysLeft(p), inv = byId('invoices', p.invoice_id), s = byId('students', p.student_id);
         return `<tr>
-          <td><div class="cell-person">${avatar(studentName(p.student_id))}<div><b>${esc(studentName(p.student_id))}</b><span>${esc(s?.guardian_name || '')}</span></div></div></td>
+          <td><div class="cell-person">${avatar(studentName(p.student_id))}<div><b><a href="javascript:void 0" data-action="student-view" data-id="${p.student_id}">${esc(studentName(p.student_id))}</a></b><span>${esc(s?.guardian_name || '')}</span><span style="font-size:11.5px">${lastSeen(p.student_id)}</span></div></div></td>
           <td>${esc(p.name)}<div class="muted" style="font-size:12px">${LABEL[p.schedule_mode]} · ${RM(p.price)}</div></td>
           <td style="min-width:140px">${p.status === 'pending' ? '<span class="muted">—</span>' : `<div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><span style="width:${pct}%;background:${rem <= 1 ? 'var(--bad)' : 'var(--brand)'}"></span></div><b class="num" style="font-size:12.5px;color:${rem <= 1 ? 'var(--bad)' : 'var(--ink)'}">${rem}</b></div><div class="muted" style="font-size:11.5px">${used}/${p.sessions_total} digunakan</div>`}</td>
           <td class="num">${p.expires_on ? fmtShort(p.expires_on) + `<div class="muted" style="font-size:11.5px;color:${dl != null && dl <= 7 && p.status === 'active' ? 'var(--bad)' : ''}">${p.status === 'active' ? (dl < 0 ? 'lewat ' + -dl + ' hari' : dl + ' hari lagi') : ''}</div>` : '—'}</td>
-          <td>${badge(p.status === 'pending' ? 'pending' : p.status, p.status === 'pending' ? 'Menunggu bayaran' : p.status === 'completed' ? 'Sesi habis' : undefined)}${inv && inv.status === 'issued' ? `<div class="muted" style="font-size:11.5px">${esc(inv.number)}${invStatus(inv) === 'overdue' ? ' · lewat' : ''}</div>${p.status === 'active' ? `<span class="badge b-warn" style="margin-top:3px">Bayaran separa · baki ${RM(Number(inv.amount) - creditOf(inv) - paidOf(inv))}</span>` : ''}` : ''}</td>
+          <td>${unpaidUsed(p) ? `<span class="badge b-bad" title="Sesi sudah dihadiri tetapi invois pakej belum dijelaskan">${unpaidUsed(p)} sesi hadir · belum bayar</span><br>` : ''}${badge(p.status === 'pending' ? 'pending' : p.status, p.status === 'pending' ? 'Menunggu bayaran' : p.status === 'completed' ? 'Sesi habis' : undefined)}${inv && inv.status === 'issued' ? `<div class="muted" style="font-size:11.5px">${esc(inv.number)}${invStatus(inv) === 'overdue' ? ' · lewat' : ''}</div>${p.status === 'active' ? `<span class="badge b-warn" style="margin-top:3px">Bayaran separa · baki ${RM(Number(inv.amount) - creditOf(inv) - paidOf(inv))}</span>` : ''}` : ''}</td>
           <td style="white-space:nowrap">${p.status === 'active' && rem <= 1 && s?.guardian_phone ? `<button class="btn sm" data-action="sp-remind" data-id="${p.id}" title="Peringatan WhatsApp">${ic('msg', 'sm')}</button> ` : ''}${(p.status !== 'active' || rem <= 3) && ['active', 'completed', 'expired'].includes(p.status) && !T('student_packages').some(x => x.renewal_of === p.id) && !T('student_packages').some(x => x.student_id === p.student_id && x.status === 'pending') ? `<button class="btn sm" data-action="sell" data-id="${p.student_id}">Perbaharui</button> ` : ''}<button class="btn sm" data-action="sp-edit" data-id="${p.id}" title="Laras pakej">${ic('edit', 'sm')}</button> ${['pending', 'active'].includes(p.status) ? `<button class="btn sm" data-action="sp-cancel" data-id="${p.id}" title="Batalkan pakej">${ic('x', 'sm')}</button>` : ''}</td></tr>`;
       }).join('') || `<tr><td colspan="6" class="empty">Tiada pakej dalam paparan ini.</td></tr>`}</tbody>
     </table></div></div>`;
@@ -486,13 +498,14 @@ function catalogView() {
     const hasClass = T('classes').some(c => c.programme_id === pr.id && c.active);
     return `<div class="card mb"><div class="card-head"><div><h3>${esc(pr.name)}</h3><div class="sub">${T('classes').filter(c => c.programme_id === pr.id && c.active).length} kelas · ${list.filter(p => p.active).length} pakej aktif</div></div><button class="btn sm" data-action="pkg-add" data-id="${pr.id}">${ic('plus', 'sm')} Pakej</button></div>
       ${list.length ? `<div class="table-wrap"><table><thead><tr><th>Pakej</th><th>Sesi</th><th>Harga</th><th>Per sesi</th><th>Sah</th><th>Cara</th><th></th></tr></thead><tbody>${list.map(p => `<tr>
-        <td><b>${esc(p.name)}</b>${p.active ? '' : ' ' + badge('paused', 'Tidak aktif')}</td><td class="num">${p.sessions}</td><td class="num"><b>${RM(p.price)}</b></td><td class="num muted">${RM(p.price / p.sessions)}</td><td class="num">${p.valid_days} hari</td><td>${LABEL[p.schedule_mode]}</td>
+        <td><b>${esc(p.name)}</b>${p.active ? '' : ' ' + badge('paused', 'Tidak aktif')}</td><td class="num">${p.sessions}</td><td class="num"><b>${RM(p.price)}</b></td><td class="num muted">${RM(p.price / p.sessions)}</td><td class="num">${p.valid_days} hari</td><td>${MODE_POL[p.mode_policy || 'choose']}</td>
         <td><button class="btn sm" data-action="pkg-edit" data-id="${p.id}">${ic('edit', 'sm')}</button></td></tr>`).join('')}</tbody></table></div>`
       : `<div class="empty" style="padding:18px">${hasClass ? '<b style="color:var(--bad)">Program ini ada kelas tetapi belum ada pakej</b> — pelajar tidak boleh didaftarkan.' : 'Belum ada pakej.'}</div>`}</div>`;
   }).join('');
 }
 
 Object.assign(INPUTS, { 'sp-q': v => { UI.spQ = v; app.render(); } });
+const MODE_POL = { fixed: 'Tetap sahaja', flexible: 'Fleksibel sahaja', choose: 'Ibu bapa pilih' };
 
 const pkgForm = (p, progId) => `<div class="form-grid">
   ${F('Program', 'programme_id', { value: p?.programme_id || progId, req: true, opts: [['', '— Pilih —'], ...T('programmes').filter(x => x.active).map(x => [x.id, x.name])] })}
@@ -501,13 +514,34 @@ const pkgForm = (p, progId) => `<div class="form-grid">
   ${F('Unit', 'unit', { value: p?.unit || 'sesi', opts: [['sesi', 'Sesi'], ['jam', 'Jam (pakej jam, cth. personal 30 jam)']] })}
   ${F('Harga (RM)', 'price', { type: 'number', step: '0.01', min: 0, value: p?.price, req: true })}
   ${F('Sah (hari)', 'valid_days', { type: 'number', min: 1, value: p?.valid_days ?? 62, req: true })}
-  ${F('Cara latihan lalai', 'schedule_mode', { value: p?.schedule_mode || 'fixed', opts: [['fixed', 'Jadual tetap'], ['flexible', 'Fleksibel (tempah sendiri)']] })}
+  ${F('Cara latihan', 'mode_policy', { value: p?.mode_policy || 'choose', opts: [['choose', 'Ibu bapa pilih (tetap atau fleksibel)'], ['fixed', 'Jadual tetap sahaja'], ['flexible', 'Fleksibel sahaja (tempah sendiri)']] })}
+  ${F('Lalai jika admin yang tetapkan', 'schedule_mode', { value: p?.schedule_mode || 'fixed', opts: [['fixed', 'Jadual tetap'], ['flexible', 'Fleksibel (tempah sendiri)']] })}
   ${p ? `<label class="f full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="active" value="1" ${p.active ? 'checked' : ''} style="width:auto;height:auto"> Pakej aktif (boleh dijual)</label>` : ''}
 </div><p class="muted" style="font-size:12.5px;margin-top:10px">Pakej terpakai kepada semua kelas dalam program yang sama. Menukar harga tidak mengubah pakej yang sudah dijual.</p>`;
-const pkgPatch = (d, edit) => ({ programme_id: d.programme_id, name: (d.name || '').trim() || `${progName(d.programme_id)} · ${d.sessions} ${d.unit || 'sesi'}`, sessions: Number(d.sessions), unit: d.unit || 'sesi', price: Number(d.price), valid_days: Number(d.valid_days), schedule_mode: d.schedule_mode, active: edit ? d.active === '1' : true });
+const pkgPatch = (d, edit) => ({ programme_id: d.programme_id, name: (d.name || '').trim() || `${progName(d.programme_id)} · ${d.sessions} ${d.unit || 'sesi'}`, sessions: Number(d.sessions), unit: d.unit || 'sesi', mode_policy: d.mode_policy || 'choose', schedule_mode: d.mode_policy === 'fixed' || d.mode_policy === 'flexible' ? d.mode_policy : (d.schedule_mode || 'fixed'), price: Number(d.price), valid_days: Number(d.valid_days), schedule_mode: d.schedule_mode, active: edit ? d.active === '1' : true });
 
 Object.assign(ACTIONS, {
   'pkg-tab': id => { UI.pkgTab = id; app.render(); },
+  /* Pautkan sesi yang sudah dihadiri (tiada pakej) ke pakej pilihan — untuk invois yang lambat dikeluarkan */
+  'att-link': sid => {
+    const un = unallocated().filter(a => a.student_id === sid).sort((a, b) => (a.session_date || '').localeCompare(b.session_date || ''));
+    const pk = T('student_packages').filter(p => p.student_id === sid && ['active', 'pending'].includes(p.status));
+    if (!pk.length) return ACTIONS.sell(sid);
+    const lbl = a => { const ses = byId('class_sessions', a.session_id), c = ses && byId('classes', ses.class_id); return `${fmtShort(a.session_date)} · ${c ? progName(c.programme_id) : ''} · ${LABEL[a.status]}`; };
+    openModal({ title: `Pautkan sesi — ${esc(studentName(sid))}`, submit: 'Pautkan', body: `<p class="muted" style="font-size:13px;margin-bottom:10px">Sesi yang sudah dihadiri tanpa pakej. Tandakan sesi yang patut ditolak daripada pakej (contoh: invois dikeluarkan lambat). Tarikh sesi akan tertera dalam butiran invois pakej.</p>
+      <label class="f full">Pakej<select name="sp">${pk.map(p => `<option value="${p.id}">${esc(p.name)} · ${p.status === 'pending' ? 'menunggu bayaran' : 'baki ' + pkgRemaining(p)}</option>`).join('')}</select></label>
+      <div class="langchk" style="flex-direction:column;gap:6px;margin-top:10px;max-height:300px;overflow:auto">${un.map(a => `<label><input type="checkbox" name="att" value="${a.id}" checked> ${esc(lbl(a))}</label>`).join('')}</div>`,
+      onSubmit: async d => {
+        const ids = [].concat(d.att || []).filter(Boolean); if (!ids.length) throw new Error('Tandakan sekurang-kurangnya satu sesi.');
+        const sp = byId('student_packages', d.sp);
+        if (Number(sp.sessions_total) - Number(sp.sessions_used || 0) < ids.length) throw new Error(`Baki pakej hanya ${Number(sp.sessions_total) - Number(sp.sessions_used || 0)} sesi. Kurangkan sesi yang ditanda.`);
+        for (const id of ids) await update('attendance', id, { student_package_id: sp.id });
+        const inv = byId('invoices', sp.invoice_id), dates = ids.map(id => byId('attendance', id)).map(a => fmtShort(a.session_date)).join(', ');
+        if (inv) { const it = itemsOf(inv.id).find(i => i.kind === 'package'); if (it) await update('invoice_items', it.id, { details: [it.details, 'Termasuk sesi yang telah dihadiri: ' + dates].filter(Boolean).join('\n') }); }
+        if (S.mode === 'supabase') await refresh(['student_packages', 'attendance']);
+        toast(`${ids.length} sesi dipautkan ke ${sp.name}`); app.render();
+      } });
+  },
   'sp-filter': id => { UI.spFilter = id; app.render(); },
   'pkg-add': progId => openModal({ title: 'Pakej Baharu', submit: 'Tambah', body: pkgForm(null, progId), onSubmit: async d => { await insert('packages', { ...pkgPatch(d), sort: T('packages').filter(p => p.programme_id === d.programme_id).length + 1 }); toast('Pakej ditambah'); app.render(); } }),
   'pkg-edit': id => openModal({

@@ -12,19 +12,29 @@ const WEEK = [1, 2, 3, 4, 5, 6, 0];
    ===================================================================== */
 VIEWS.jadual = () => {
   const vf = UI.schedVenue || '', today = new Date().getDay();
-  const classes = T('classes').filter(c => c.active && (!vf || c.venue_id === vf));
+  const t0 = todayISO(), t14 = addDays(t0, 14);
+  const persNames = c => { const ids = new Set(enrolledIn(c.id).map(e => e.student_id)); T('class_sessions').filter(s => s.class_id === c.id && s.session_date >= t0 && s.session_date <= t14).forEach(s => T('attendance').filter(a => a.session_id === s.id).forEach(a => ids.add(a.student_id))); return [...ids].map(studentName); };
+  const persActive = c => !c.active && byId('programmes', c.programme_id)?.kind === 'personal' && T('class_sessions').some(s => s.class_id === c.id && s.status !== 'cancelled' && s.session_date >= t0 && s.session_date <= t14);
+  const classes = T('classes').filter(c => (c.active || (UI.showPers !== false && persActive(c))) && (!vf || c.venue_id === vf));
   const seats = classes.reduce((t, c) => t + enrolledIn(c.id).length, 0), cap = classes.reduce((t, c) => t + c.capacity, 0);
   return `
   ${pageHead('Jadual Kelas', `${classes.length} kelas seminggu · penggunaan kapasiti ${cap ? Math.round(seats / cap * 100) : 0}%`, `<a class="btn" href="#kalendar">${ic('calendar', 'sm')} Kalendar Sesi</a><button class="btn primary" data-action="class-add">${ic('plus', 'sm')} Tambah Kelas</button>`)}
   <div class="toolbar card" style="margin-bottom:14px;border-radius:var(--radius)">
     <label class="field">${ic('pin', 'sm')}<select data-on-change="sched-venue"><option value="">Semua lokasi</option>${T('venues').filter(v => v.active).map(v => `<option value="${v.id}" ${vf === v.id ? 'selected' : ''}>${esc(v.name)} — ${esc(v.area || '')}</option>`).join('')}</select></label>
+    <button class="chip ${UI.showPers !== false ? 'on' : ''}" style="cursor:pointer" data-action="sched-pers">Slot personal (14 hari)</button>
     ${T('programmes').filter(p => p.active).map(p => `<span class="chip"><span style="width:10px;height:10px;border-radius:3px;background:${progColor(p.id)}"></span>${esc(p.name)}</span>`).join('')}
   </div>
   <div class="week">${WEEK.map(d => {
     const cs = classes.filter(c => c.weekday === d).sort((a, b) => a.start_time.localeCompare(b.start_time));
     return `<div class="day-col ${d === today ? 'today' : ''}">
       <div class="day-head"><b>${DAYS[d]}</b>${d === today ? '<span class="tag">Hari ini</span>' : `<span class="muted" style="font-size:11.5px">${cs.length} kelas</span>`}</div>
-      <div class="day-body">${cs.map(c => { const n = enrolledIn(c.id).length; return `
+      <div class="day-body">${cs.map(c => { const n = enrolledIn(c.id).length; if (!c.active) return `
+        <button class="slot" data-action="class-view" data-id="${c.id}" style="border-left-color:${progColor(c.programme_id)};border-left-style:dashed">
+          <b>${hm(c.start_time)}–${hm(c.end_time)}</b>
+          <div style="font-weight:600">${esc(persNames(c).join(', ') || progName(c.programme_id))}</div>
+          <div class="meta">${esc(progName(c.programme_id))} · ${esc(staffName(c.coach_id))}</div>
+          <div class="meta">${vf ? '' : esc(venueName(c.venue_id))}</div>
+        </button>`; return `
         <button class="slot" data-action="class-view" data-id="${c.id}" style="border-left-color:${progColor(c.programme_id)}">
           <b>${hm(c.start_time)}–${hm(c.end_time)}</b>
           <div style="font-weight:600">${esc(progName(c.programme_id))}</div>
@@ -36,6 +46,7 @@ VIEWS.jadual = () => {
     </div>`; }).join('')}</div>`;
 };
 INPUTS['sched-venue'] = v => { UI.schedVenue = v; app.render(); };
+ACTIONS['sched-pers'] = () => { UI.showPers = UI.showPers === false; app.render(); };
 
 const classForm = c => `<div class="form-grid">
   ${F('Lokasi', 'venue_id', { value: c?.venue_id || UI.schedVenue, req: true, opts: [['', '— Pilih —'], ...T('venues').filter(v => v.active).map(v => [v.id, v.name])] })}

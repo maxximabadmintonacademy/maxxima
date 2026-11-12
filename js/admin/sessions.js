@@ -50,6 +50,7 @@ export function byCategory(s, c) {
   return out;
 }
 
+export const trialsOf = (s, c) => T('trials').filter(t => t.status === 'scheduled' && t.trial_date === s?.session_date && (t.class_id ? t.class_id === c?.id : t.venue_id === c?.venue_id && hm(t.trial_time) === hm(c?.start_time)));
 /** Amaran sesi kumpulan: coach / court belum ditetapkan. */
 export function sessionAlerts(s, c) {
   if (!c || isPersonal(c) || s?.status === 'cancelled') return [];
@@ -118,7 +119,7 @@ export function openSession(sid) {
   const multi = !personal && ((c.categories || []).length > 0 || gs.length > 0);
   const stRow = st => {
     const a = T('attendance').find(x => x.session_id === s.id && x.student_id === st.id);
-    return `<li class="list-item" style="padding:8px 4px;flex-wrap:wrap">${avatar(st.full_name)}<div class="li-main"><div class="li-title">${esc(st.full_name)} ${a?.status === 'booked' ? '<span class="badge b-info">ditempah</span>' : ''}${st.birth_date ? ` <span class="muted" style="font-size:11.5px">${ageOn(st.birth_date, s.session_date)} thn</span>` : ''}</div>${pkgLine(st.id, a)}</div>
+    return `<li class="list-item" style="padding:8px 4px;flex-wrap:wrap">${avatar(st.full_name)}<div class="li-main"><div class="li-title">${esc(st.full_name)} ${a?.status === 'booked' ? '<span class="badge b-info">ditempah</span>' : ''}${st.birth_date ? ` <span class="muted" style="font-size:11.5px">${ageOn(st.birth_date, s.session_date)} thn</span>` : ''}</div>${st.medical_notes ? `<div class="li-sub" style="color:var(--bad)">⚕ ${esc(st.medical_notes)}</div>` : ''}${pkgLine(st.id, a)}</div>
       ${personal && !isCoach() ? `<input class="date-input" style="width:70px" type="number" step="0.25" min="0" title="Jam" placeholder="${sHours(s, c)}" value="${a?.hours ?? ''}" data-on-change="sp-hours" data-key="${s.id}|${st.id}">` : ''}
       ${multi && !isCoach() ? `<select class="att-select" title="Kategori" data-on-change="sp-cat" data-key="${s.id}|${st.id}">${[...new Set([...(c.categories || []), ...ageGroups().map(g => g.code)])].map(k => `<option ${catFor(st, s, c) === k ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select>` : ''}
       <select class="att-select ${a ? 'a-' + a.status : ''}" data-on-change="sp-att" data-key="${s.id}|${st.id}"><option value="">${a?.status === 'booked' ? 'ditempah — belum direkod' : '— belum direkod —'}</option>${ATT_OPTS.map(o => `<option value="${o}" ${a?.status === o ? 'selected' : ''}>${LABEL[o]}</option>`).join('')}</select></li>`;
@@ -130,6 +131,7 @@ export function openSession(sid) {
     </div>${g?.coach_id ? langWarn(g.coach_id, c.venue_id) : ''}`;
   const body = `
     <div class="muted" style="margin-bottom:10px">${DAYS[parseISO(s.session_date).getDay()]}, ${fmtDate(s.session_date)} · ${t1}–${t2} · ${esc(venueName(c.venue_id))}</div>
+    ${trialsOf(s, c).length ? `<div class="hint" style="margin-bottom:10px;background:var(--surface-2);border-radius:10px;padding:9px 12px">${ic('flag', 'sm')} <b>Trial:</b> ${trialsOf(s, c).map(t => `${esc(t.child_name || '')}${t.child_age ? ' (' + t.child_age + ' thn)' : ''}${t.notes ? ' — ' + esc(t.notes) : ''}`).join(' · ')}</div>` : ''}
     ${alerts.length ? `<div class="hint bad" style="margin-bottom:10px">${ic('alert', 'sm')} Belum lengkap: ${alerts.map(esc).join(' · ')}</div>` : ''}
     ${isCoach() ? '' : `<div class="form-grid" style="margin-bottom:8px">
       <label class="f">Coach sesi<select data-on-change="sp-coach" data-key="${s.id}">${coachOpts().map(([v, l]) => `<option value="${v}" ${sCoach(s, c) === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>

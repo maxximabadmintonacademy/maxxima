@@ -23,8 +23,8 @@ VIEWS.leads = () => {
   const leads = T('leads');
   const rows = leads.filter(l => f === 'all' || l.status === f).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   const next = l => ({
-    new: `<button class="btn sm" data-action="lead-contacted" data-id="${l.id}">Tandakan Dihubungi</button>`,
-    contacted: `<button class="btn sm primary" data-action="lead-trial" data-id="${l.id}">Jadual Trial</button> <button class="btn sm" data-action="lead-enrol" data-id="${l.id}">Mohon Daftar</button>`,
+    new: `<button class="btn sm primary" data-action="lead-form" data-id="${l.id}">${ic('msg', 'sm')} Hantar borang trial</button> <button class="btn sm" data-action="lead-contacted" data-id="${l.id}">Tandakan Dihubungi</button>`,
+    contacted: `<button class="btn sm primary" data-action="lead-form" data-id="${l.id}">${ic('msg', 'sm')} Hantar borang trial</button> <button class="btn sm" data-action="lead-trial" data-id="${l.id}">Jadual Trial</button> <button class="btn sm" data-action="lead-enrol" data-id="${l.id}">Mohon Daftar</button>`,
     trial_scheduled: `<a class="btn sm" href="#trial">Lihat Trial</a>`,
     trial_done: `<button class="btn sm accent" data-action="lead-enrol" data-id="${l.id}">Mohon Daftar</button>`,
     requested: `<a class="btn sm" href="#kemasukan">Lihat Pendaftaran</a>`,
@@ -72,6 +72,19 @@ Object.assign(ACTIONS, {
   'lead-lost': async id => { await update('leads', id, { status: 'lost' }); closeModal(); toast('Ditandakan: tidak berminat'); app.render(); },
   'lead-del': id => confirmModal({ title: 'Padam lead?', message: `Padam <b>${esc(byId('leads', id).child_name)}</b>? Tindakan ini tidak boleh dibatalkan.`, ok: 'Padam', danger: true, onOk: async () => { await remove('leads', id); toast('Lead dipadam'); app.render(); } }),
 
+  /* Link borang trial peribadi (WhatsApp) — ibu bapa isi butiran anak & pilih slot sesi kumpulan */
+  'lead-form': async id => {
+    const l = byId('leads', id);
+    let tok = l.trial_token;
+    if (!tok) { tok = Array.from(crypto.getRandomValues(new Uint8Array(18)), b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join(''); await update('leads', id, { trial_token: tok, status: l.status === 'new' ? 'contacted' : l.status }); }
+    const url = location.origin + location.pathname.replace(/[^/]*$/, '') + 'trial.html?t=' + tok;
+    const msg = `Salam ${l.guardian_name || ''}, terima kasih kerana berminat dengan Maxxima Badminton Academy 🏸\n\nSila isi borang ringkas ini dan pilih slot trial untuk ${l.child_name}:\n${url}\n\nSlot akan disahkan terus selepas borang dihantar. Terima kasih!`;
+    openModal({ title: `Borang trial — ${esc(l.child_name)}`, cancel: 'Tutup', body: `<p class="muted" style="font-size:13px">Link ini khas untuk lead ini sahaja. Bila ibu bapa hantar, lead bertukar ke Trial Dijadual dan muncul di Kelas Percubaan & panel sesi coach.</p>
+      <textarea style="width:100%;min-height:140px;margin-top:10px" data-noi18n>${esc(msg)}</textarea>
+      <div class="actions" style="margin-top:10px">${l.phone ? `<a class="btn primary" target="_blank" rel="noopener" href="${waLink(l.phone, msg)}">${ic('msg', 'sm')} Hantar WhatsApp</a>` : ''}<button type="button" class="btn" data-action="copy-text" data-id="${esc(url)}">Salin link</button></div>` });
+    app.render();
+  },
+  'copy-text': async v => { try { await navigator.clipboard.writeText(v); toast('Disalin'); } catch { toast('Tidak dapat menyalin', true); } },
   'lead-trial': id => {
     const l = byId('leads', id);
     openModal({
@@ -533,6 +546,9 @@ Object.assign(ACTIONS, {
       <dl class="kv">
         <dt>Program</dt><dd>${esc(progNamesOf(s))}</dd>
         <dt>Lokasi</dt><dd>${esc(venueName(s.venue_id))}</dd>
+        ${s.medical_notes ? `<dt>Kesihatan</dt><dd style="color:var(--bad)">${esc(s.medical_notes)}</dd>` : ''}
+        ${s.emergency_contact ? `<dt>Kecemasan</dt><dd>${esc(s.emergency_contact)}</dd>` : ''}
+        ${s.guardian_id && byId('profiles', s.guardian_id) ? `<dt>T&amp;C</dt><dd>${byId('profiles', s.guardian_id).tc_accepted_at ? 'Dipersetujui ' + fmtShort(byId('profiles', s.guardian_id).tc_accepted_at.slice(0, 10)) : '<span class="muted">Belum log masuk / belum setuju</span>'}</dd>` : ''}
         ${guardiansOf(id).length ? guardiansOf(id).map((g, i) => `<dt>Penjaga ${i + 1}</dt><dd>${esc(g.full_name)}${g.relationship ? ' (' + esc((RELS.find(r => r[0] === g.relationship) || [0, g.relationship])[1]) + ')' : ''}<div class="muted" style="font-weight:400;font-size:12.5px">${esc(g.phone || '')}${g.email ? ' · ' + esc(g.email) : ''}${g.address ? '<br>' + esc(g.address) : ''}${g.ic_no ? '<br>No. KP: ' + esc(g.ic_no) : ''}</div>${g.phone ? `<a class="btn sm" href="${waLink(g.phone)}" target="_blank" rel="noopener">${ic('msg', 'sm')} WhatsApp</a>` : ''}</dd>`).join('') : `<dt>Ibu bapa</dt><dd>${esc(s.guardian_name || '—')} · ${esc(s.guardian_phone || '')}</dd>`}
         <dt>Akaun ibu bapa</dt><dd>${s.guardian_id ? `${esc(byId('profiles', s.guardian_id)?.email || 'dipautkan')} <button class="btn sm" data-action="parent-acct" data-id="${s.id}" data-reset="1" style="margin-left:6px">Set semula kata laluan</button>` : `<span class="muted">belum ada akaun</span> <button class="btn sm primary" data-action="parent-acct" data-id="${s.id}" style="margin-left:6px">Cipta akaun ibu bapa</button>`}</dd>
         <dt>Tarikh masuk</dt><dd>${fmtDate(s.joined_on)}</dd>
@@ -596,6 +612,7 @@ ACTIONS['parent-acct'] = (id, el) => {
         r = { login, password: 'demo1234', name: s.guardian_name, children: T('students').filter(x => x.guardian_id === pr.id).length };
       } else {
         const { data, error } = await S.client.rpc('admin_parent_account', { p_student: id, p_reset: reset }); if (error) throw error; r = data;
+        if (r?.password) { const { error: e2 } = await S.client.from('profiles').update({ must_change_pw: true }).eq('email', r.login); if (e2) console.warn(e2); }   // wajib tukar kata laluan pada log masuk pertama
         await refresh(['students', 'profiles']);
       }
       app.render();

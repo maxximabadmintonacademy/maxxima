@@ -111,7 +111,7 @@ const regCard = () => `<div class="card card-pad mb" style="display:flex;gap:16p
 ACTIONS['reg-copy'] = async () => { try { await navigator.clipboard.writeText(regUrl()); toast('Pautan disalin'); } catch { toast(regUrl()); } };
 
 /* ---- Notifikasi admin boleh diubah (setiap admin sendiri) ---- */
-export const NOTIF_KINDS = [['booking', 'Tempahan baharu daripada ibu bapa'], ['enrolment', 'Pendaftaran online baharu'], ['payment', 'Bayaran / bukti bayaran baharu'], ['payment_ok', 'Bayaran disahkan'],
+export const NOTIF_KINDS = [['booking', 'Tempahan / reschedule / batal daripada ibu bapa'], ['trial', 'Trial baharu (borang lead)'], ['enrolment', 'Pendaftaran online baharu'], ['payment', 'Bayaran / bukti bayaran baharu'], ['payment_ok', 'Bayaran disahkan'],
   ['renewal', 'Invois pembaharuan pakej dijana'], ['student', 'Pelajar baharu ditambah'], ['leave', 'Permohonan cuti staf']];
 const myProfile = () => T('profiles').find(p => p.id === S.profile.id) || S.profile;
 const notifCard = () => { const off = new Set(myProfile().notify_off || []); return `<div class="card card-pad mb"><h3 style="font-size:14.5px;margin-bottom:4px">${ic('bell', 'sm')} Notifikasi saya</h3>
@@ -120,6 +120,14 @@ const notifCard = () => { const off = new Set(myProfile().notify_off || []); ret
 const ageCard = () => `<div class="card card-pad mb"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="font-size:14.5px">Kategori umur (sesi kumpulan)</h3><button class="btn sm" data-action="age-edit">${ic('edit', 'sm')} Ubah</button></div>
   <p class="muted" style="font-size:12.5px;margin:4px 0 10px">Pelajar yang menempah / hadir sesi kumpulan diletakkan automatik ke kategori ikut umur pada tarikh sesi. Admin hanya tetapkan coach & court setiap kategori.</p>
   <div class="chips" style="margin:0">${ageGroups().map(g => `<span class="chip">${esc(g.code)} · ${g.min}–${g.max} thn</span>`).join('')}</div></div>`;
+const POL = () => ({ notice_hours: 48, replacement_days: 30, auto_group: true, ...(T('settings').find(x => x.key === 'policy')?.value || {}) });
+const policyCard = () => { const p = POL(); return `<div class="card card-pad mb"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="font-size:14.5px">Peraturan reschedule & batal (portal ibu bapa)</h3><button class="btn sm" data-action="pol-edit">${ic('edit', 'sm')} Ubah</button></div>
+  <ul class="muted" style="font-size:12.5px;margin:8px 0 0 18px;line-height:1.7">
+    <li>${p.auto_group ? `Kumpulan (Foundation / Performance / Elite): ≥ ${p.notice_hours} jam → disahkan terus oleh sistem; sesi tidak ditolak.` : `Kumpulan (Foundation / Performance / Elite): ≥ ${p.notice_hours} jam → perlu kelulusan admin; sesi tidak ditolak.`}</li>
+    <li>Kurang ${p.notice_hours} jam / tidak hadir → sesi ditolak. Kecemasan + bukti → admin semak; jika lulus, kredit ganti sah ${p.replacement_days} hari.</li>
+    <li>Personal: semua permintaan kepada admin. Lewat → court hangus + 50% yuran coach; kecemasan lulus → court sahaja.</li></ul></div>`; };
+ACTIONS['pol-edit'] = () => { const p = POL(); openModal({ title: 'Peraturan reschedule & batal', body: `<div class="form-grid">${F('Tempoh notis (jam)', 'notice_hours', { type: 'number', min: 0, value: p.notice_hours })}${F('Tempoh kredit ganti kecemasan (hari)', 'replacement_days', { type: 'number', min: 1, value: p.replacement_days })}${F('Reschedule / batal kumpulan ≥ notis', 'auto_group', { value: p.auto_group ? '1' : '0', opts: [['1', 'Sistem sahkan terus'], ['0', 'Perlu kelulusan admin']], full: true })}</div>`,
+  onSubmit: async d => { await saveSetting('policy', { notice_hours: Number(d.notice_hours) || 48, replacement_days: Number(d.replacement_days) || 30, auto_group: d.auto_group === '1' }); toast('Peraturan disimpan'); app.render(); } }); };
 INPUTS['notif-tog'] = async (v, el) => {
   const p = myProfile(), off = new Set(p.notify_off || []), k = el.dataset.key;
   if (el.checked) off.delete(k); else off.add(k);
@@ -142,6 +150,7 @@ VIEWS.tetapan = () => {
   ${regCard()}
   ${notifCard()}
   ${ageCard()}
+  ${policyCard()}
   <div class="grid g-2 mb">
     <div class="card card-pad"><h3 style="font-size:14.5px;margin-bottom:14px">Profil Akademi</h3>
       <div class="form-grid">
