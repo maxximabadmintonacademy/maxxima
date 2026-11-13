@@ -244,3 +244,12 @@ export function friendlyError(e) {
 export async function run(fn) {
   try { return await fn(); } catch (e) { console.error(e); toast(friendlyError(e), true); }
 }
+
+/* Lukis semula selepas kemas kini langsung — ditangguhkan jika pengguna sedang menaip dalam borang halaman. */
+export function liveRender(fn) {
+  const a = document.activeElement, view = document.getElementById('view');
+  if (a && view && view.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox' && a.type !== 'radio') {
+    a.addEventListener('blur', () => setTimeout(() => liveRender(fn), 50), { once: true }); return;
+  }
+  const y = window.scrollY; fn(); window.scrollTo(0, y);
+}

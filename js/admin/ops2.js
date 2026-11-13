@@ -72,7 +72,7 @@ Object.assign(ACTIONS, {
   'jo-import': () => {
     const have = new Set(T('jersey_orders').map(o => o.tournament_entry_id).filter(Boolean));
     const es = T('tournament_entries').filter(e => e.shirt_size && e.status !== 'withdrawn' && !have.has(e.id));
-    const eligible = e => { const t = byId('tournaments', byId('tournament_categories', e.category_id)?.tournament_id); const paidOk = e.pay_status === 'paid' || e.pay_status === 'waived'; return paidOk && (!t?.early_deadline || !e.paid_at || e.paid_at.slice(0, 10) <= t.early_deadline); };
+    const eligible = e => { if (e.jersey_eligible != null) return e.jersey_eligible; const t = byId('tournaments', byId('tournament_categories', e.category_id)?.tournament_id); const paidOk = e.pay_status === 'paid' || e.pay_status === 'waived'; return paidOk && (!t?.early_deadline || !e.paid_at || e.paid_at.slice(0, 10) <= t.early_deadline); };
     if (!es.length) return toast('Tiada peserta kejohanan dengan saiz jersi yang belum diimport');
     confirmModal({ title: 'Import jersi kejohanan?', message: `${es.length} peserta mempunyai saiz jersi. ${es.filter(eligible).length} layak jersi percuma (dibayar sebelum akhir daftar awal); selebihnya direkod sebagai pesanan berbayar (belum bayar).`, ok: 'Import', onOk: async () => {
       for (const e of es) { const t = byId('tournaments', byId('tournament_categories', e.category_id)?.tournament_id); const fr = t?.shirt_free && eligible(e);

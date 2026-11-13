@@ -54,6 +54,13 @@ const tnForm = t => `<div class="form-grid">
   <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="public_page" value="1" ${t?.public_page ? 'checked' : ''} style="width:auto;height:auto"> Terbitkan halaman awam (borang daftar, peraturan, keputusan langsung)</label>
   ${F('Pautan pendek (slug)', 'slug', { value: t?.slug, ph: 'cth. brbc2026 — huruf kecil/nombor sahaja' })}
   <label class="f">Poster (gambar)<input type="file" name="poster" accept="image/*"></label>
+  ${F('Notis (banner kuning di atas halaman, cth. tukar tarikh)', 'notice', { type: 'textarea', value: t?.notice, full: true })}
+  ${F('Nota kelayakan (cth. pemain negeri tidak layak)', 'eligibility_note', { type: 'textarea', value: t?.eligibility_note, full: true })}
+  ${F('Nota pemarkahan', 'scoring_note', { value: t?.scoring_note, full: true, ph: 'cth. Satu game hingga 20 mata, tanpa deuce — pada 19–19, mata seterusnya menang.' })}
+  ${F('Pautan kumpulan WhatsApp peserta', 'group_link', { value: t?.group_link, full: true, ph: 'https://chat.whatsapp.com/...' })}
+  <label class="f">QR bayaran (DuitNow)${t?.pay_qr_path ? ' — ada' : ''}<input type="file" name="pay_qr" accept="image/*"></label>
+  <label class="f">Carta saiz jersi${t?.size_chart_path ? ' — ada' : ''}<input type="file" name="size_chart" accept="image/*"></label>
+  <label class="f full">Gambar jersi (depan / belakang — pilih semula untuk ganti)${(t?.jersey_images || []).length ? ` — ${t.jersey_images.length} gambar` : ''}<input type="file" name="jersey_imgs" accept="image/*" multiple></label>
   <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="shirt_free" value="1" ${t?.shirt_free ? 'checked' : ''} style="width:auto;height:auto"> Jersi percuma (jika daftar & bayar sebelum akhir daftar awal)</label>
   ${F('Saiz jersi (pisah koma)', 'shirt_sizes', { value: (t?.shirt_sizes || []).join(', '), full: true, ph: '4XS, 3XS, 2XS, XS, S, M, L, XL, 2XL, 3XL' })}
   ${F('Hadiah', 'prizes', { type: 'textarea', value: t?.prizes, full: true, ph: 'Johan: raket + pingat + sijil\nNaib johan: beg + pingat + sijil' })}
@@ -66,8 +73,15 @@ const tnForm = t => `<div class="form-grid">
 const tnPatch = d => ({ name: d.name.trim(), venue_id: val(d.venue_id), venue_note: val(d.venue_note), start_date: val(d.start_date), end_date: val(d.end_date), start_time: val(d.start_time), end_time: val(d.end_time),
   registration_deadline: val(d.registration_deadline), entry_fee: num(d.entry_fee) || 0, status: d.status, description: val(d.description), format: d.format || 'knockout', group_size: num(d.group_size) || 4, points_to: num(d.points_to) || 21,
   early_deadline: val(d.early_deadline), list_date: val(d.list_date), protest_end: val(d.protest_end), public_page: d.public_page === '1', slug: val(String(d.slug || '').toLowerCase().replace(/[^a-z0-9-]/g, '')),
-  shirt_free: d.shirt_free === '1', shirt_sizes: String(d.shirt_sizes || '').split(',').map(x => x.trim()).filter(Boolean), prizes: val(d.prizes), rules: val(d.rules), pay_note: val(d.pay_note), contact_phone: val(d.contact_phone), contact_email: val(d.contact_email) });
-const withPoster = async (d, row) => { if (d.poster && d.poster.size) row.poster_path = await uploadMedia('public-media', 'tournament', d.poster, { maxMB: 10 }); return row; };
+  shirt_free: d.shirt_free === '1', shirt_sizes: String(d.shirt_sizes || '').split(',').map(x => x.trim()).filter(Boolean), prizes: val(d.prizes), rules: val(d.rules), pay_note: val(d.pay_note), contact_phone: val(d.contact_phone), contact_email: val(d.contact_email),
+  notice: val(d.notice), eligibility_note: val(d.eligibility_note), scoring_note: val(d.scoring_note), group_link: val(d.group_link) });
+const withPoster = async (d, row) => {
+  if (d.poster && d.poster.size) row.poster_path = await uploadMedia('public-media', 'tournament', d.poster, { maxMB: 10 });
+  if (d.pay_qr && d.pay_qr.size) row.pay_qr_path = await uploadMedia('public-media', 'tournament', d.pay_qr, { maxMB: 5 });
+  if (d.size_chart && d.size_chart.size) row.size_chart_path = await uploadMedia('public-media', 'tournament', d.size_chart, { maxMB: 10 });
+  const js = [].concat(d.jersey_imgs || []).filter(f => f && f.size);
+  if (js.length) { row.jersey_images = []; for (const f of js) row.jersey_images.push(await uploadMedia('public-media', 'tournament', f, { maxMB: 10 })); }
+  return row; };
 const publicLink = t => t?.slug ? location.origin + location.pathname.replace(/[^/]*$/, '') + 'tournament.html?t=' + t.slug : '';
 
 /* ---------------------------------------------------------------------
@@ -117,7 +131,7 @@ function tabEntries(t, cat) {
     <label class="field"><select data-on-change="tn-pay"><option value="">Semua bayaran</option>${Object.entries(PAY).map(([k, [l]]) => `<option value="${k}" ${pf === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
   <div class="table-wrap"><table><thead><tr><th>Pemain</th><th>Penjaga</th><th>Seed</th><th>Status</th><th>Bayaran</th><th></th></tr></thead>
   <tbody>${es.map(e => { const inv = byId('invoices', e.invoice_id), s = byId('students', e.student_id), [pl, pt] = PAY[e.pay_status] || PAY.unpaid; return `<tr>
-    <td><div class="cell-person">${avatar(entryLabel(e))}<div><b>${esc(entryLabel(e))}</b><span>${e.birth_year ? 'Lahir ' + e.birth_year : s?.birth_date ? ageOf(s.birth_date) + ' thn' : ''}${e.club ? ' · ' + esc(e.club) : s ? ' · pelajar akademi' : ''}${e.shirt_size ? ' · jersi ' + esc(e.shirt_size) : ''}</span>${e.ref_code ? `<span style="font-size:11px">${esc(e.ref_code)} · ${fmtShort((e.created_at || '').slice(0, 10))}</span>` : ''}</div></div></td>
+    <td><div class="cell-person">${avatar(entryLabel(e))}<div><b>${esc(entryLabel(e))}</b><span>${e.birth_year ? 'Lahir ' + e.birth_year : s?.birth_date ? ageOf(s.birth_date) + ' thn' : ''}${e.club ? ' · ' + esc(e.club) : s ? ' · pelajar akademi' : ''}${e.shirt_size ? ' · jersi ' + esc(e.shirt_size) + (e.jersey_eligible ? ' 🎁' : '') : ''}${e.ic_masked ? ' · IC ' + esc(e.ic_masked.slice(-4)) : ''}</span>${e.notes ? `<span style="font-size:11px;color:var(--warn)">${esc(e.notes)}</span>` : ''}${e.ref_code ? `<span style="font-size:11px">${esc(e.ref_code)} · ${fmtShort((e.created_at || '').slice(0, 10))}</span>` : ''}</div></div></td>
     <td style="font-size:12.5px">${esc(e.guardian_name || s?.guardian_name || '')}${e.guardian_phone || s?.guardian_phone ? `<br><a target="_blank" rel="noopener" href="https://wa.me/${String(e.guardian_phone || s?.guardian_phone).replace(/\D/g, '').replace(/^0/, '60')}">${esc(e.guardian_phone || s?.guardian_phone)}</a>` : ''}${e.guardian_email ? '<br>' + esc(e.guardian_email) : ''}</td>
     <td><input class="seed-in" type="number" min="1" value="${e.seed ?? ''}" placeholder="—" data-on-change="ent-seed" data-key="${e.id}" ${locked ? 'disabled' : ''}></td>
     <td><select class="att-select" data-on-change="ent-status" data-key="${e.id}">${['registered', 'confirmed', 'withdrawn'].map(x => `<option value="${x}" ${e.status === x ? 'selected' : ''}>${LABEL[x]}</option>`).join('')}</select></td>
@@ -259,8 +273,8 @@ Object.assign(ACTIONS, {
   'ent-paid': id => { const e = byId('tournament_entries', id); confirmModal({ title: 'Sahkan bayaran?', message: `${esc(entryLabel(e))} · ${RM(e.amount || 0)}${e.ref_code ? ' · ' + esc(e.ref_code) : ''}`, ok: 'Sahkan dibayar', onOk: async () => { await update('tournament_entries', id, { pay_status: 'paid', paid_at: new Date().toISOString(), status: e.status === 'withdrawn' ? e.status : 'confirmed' }); toast('Bayaran disahkan'); app.render(); } }); },
   'ent-proof': async id => { const e = byId('tournament_entries', id); if (S.mode !== 'supabase') return toast('Demo: tiada fail'); const { data, error } = await S.client.storage.from('payment-proofs').createSignedUrl(e.proof_path, 300); if (error) return toast(error.message, true); window.open(data.signedUrl, '_blank', 'noopener'); },
   'tn-export': tid => {
-    const t = byId('tournaments', tid), rows = [['Kategori', 'No. rujukan', 'Pemain', 'Tahun lahir', 'Jantina', 'Kelab/sekolah', 'Penjaga', 'Telefon', 'E-mel', 'Jersi', 'Status', 'Bayaran', 'Amaun', 'Kumpulan', 'Tarikh daftar']];
-    catsOf(tid).forEach(c => entriesOf(c.id).forEach(e => { const s = byId('students', e.student_id); rows.push([c.name, e.ref_code || '', entryLabel(e), e.birth_year || (s?.birth_date || '').slice(0, 4), e.gender || s?.gender || '', e.club || (s ? 'Maxxima' : ''), e.guardian_name || s?.guardian_name || '', e.guardian_phone || s?.guardian_phone || '', e.guardian_email || '', e.shirt_size || '', e.status, e.pay_status, e.amount ?? '', e.group_no ? GROUP_NAMES[e.group_no - 1] : '', (e.created_at || '').slice(0, 10)]); }));
+    const t = byId('tournaments', tid), rows = [['Kategori', 'No. rujukan', 'Pemain', 'Tahun lahir', 'Jantina', 'Kelab/sekolah', 'Penjaga', 'Telefon', 'E-mel', 'Jersi', 'Layak jersi percuma', 'IC (4 digit akhir)', 'Status', 'Bayaran', 'Amaun', 'Tarikh bayar', 'Kumpulan', 'Tarikh daftar', 'Catatan']];
+    catsOf(tid).forEach(c => entriesOf(c.id).forEach(e => { const s = byId('students', e.student_id); rows.push([c.name, e.ref_code || '', entryLabel(e), e.birth_year || (s?.birth_date || '').slice(0, 4), e.gender || s?.gender || '', e.club || (s ? 'Maxxima' : ''), e.guardian_name || s?.guardian_name || '', e.guardian_phone || s?.guardian_phone || '', e.guardian_email || '', e.shirt_size || '', e.jersey_eligible ? 'Ya' : 'Tidak', e.ic_masked || '', e.status, e.pay_status, e.amount ?? '', (e.paid_at || '').slice(0, 10), e.group_no ? GROUP_NAMES[e.group_no - 1] : '', (e.created_at || '').slice(0, 10), e.notes || '']); }));
     const csv = '\ufeff' + rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })), download: `${(t.slug || t.name).replace(/\W+/g, '_')}_peserta.csv` }); a.click();
   },
@@ -334,11 +348,12 @@ const catForm = c => `<div class="form-grid">
   ${F('Kumpulan umur', 'age_group', { value: c?.age_group, ph: 'cth. B12 / B14 / Terbuka' })}
   ${F('Maks. peserta', 'max_entries', { type: 'number', min: 2, value: c?.max_entries ?? '', ph: 'tanpa had' })}
   ${F('Tahun lahir dari (paling tua)', 'birth_from', { type: 'number', value: c?.birth_from ?? '', ph: 'cth. 2015' })}
+  ${F('Perempuan: tahun lahir dari (kelonggaran)', 'girls_from', { type: 'number', value: c?.girls_from ?? '', ph: 'cth. 2017 untuk U8' })}
   ${F('Tahun lahir hingga', 'birth_to', { type: 'number', value: c?.birth_to ?? '', ph: 'cth. 2016' })}
   ${F('Yuran khas kategori (RM, kosong = yuran kejohanan)', 'fee', { type: 'number', step: '0.01', value: c?.fee ?? '' })}
   ${F('Susunan', 'sort', { type: 'number', value: c?.sort ?? 0 })}
 </div><p class="muted" style="font-size:12px;margin-top:8px">Kelayakan ikut tahun lahir (bukan hari jadi). Borang awam menyekat pemain di luar julat tahun dan jantina.</p>`;
-const catPatch = d => ({ name: d.name.trim(), kind: d.kind, gender: d.gender, age_group: val(d.age_group), max_entries: num(d.max_entries), birth_from: num(d.birth_from), birth_to: num(d.birth_to), fee: num(d.fee), sort: num(d.sort) || 0 });
+const catPatch = d => ({ name: d.name.trim(), kind: d.kind, gender: d.gender, age_group: val(d.age_group), max_entries: num(d.max_entries), birth_from: num(d.birth_from), girls_from: num(d.girls_from), birth_to: num(d.birth_to), fee: num(d.fee), sort: num(d.sort) || 0 });
 
 import { openCertificates } from '../docs2.js';
 ACTIONS['tn-cert'] = catId => { const cat = byId('tournament_categories', catId), tn = byId('tournaments', cat.tournament_id);

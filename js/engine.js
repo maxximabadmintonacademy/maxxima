@@ -47,6 +47,10 @@ export function createEngine(t, newId) {
       const p = t.student_packages.find(x => x.id === id); if (!p) return;
       const used = t.attendance.filter(a => a.student_package_id === id && consumes(a.status));
       p.sessions_used = p.unit === 'jam' ? Math.round(used.reduce((n, a) => n + attHours(a), 0) * 100) / 100 : used.length;
+      if (p.auto_start && ['active', 'completed', 'expired'].includes(p.status)) {   // tempoh sah bermula pada sesi pertama dihadiri
+        const d = used.map(a => a.session_date).filter(Boolean).sort()[0] || null;
+        p.starts_on = d; p.expires_on = d ? addDays(d, Number(p.valid_days) + Number(p.extended_days || 0)) : null;
+      }
       if (p.status === 'active' && p.sessions_used >= p.sessions_total) p.status = 'completed';
       else if (p.status === 'completed' && p.sessions_used < p.sessions_total) p.status = 'active';
     },
@@ -90,7 +94,7 @@ export function createEngine(t, newId) {
       if (total >= Number(inv.amount) && inv.status === 'issued') { inv.status = 'paid'; inv.paid_on = p.paid_on; }
       if ((total >= Number(inv.amount) || (fam && p.status === 'confirmed' && total > 0)) && inv.status !== 'void') {
         t.student_packages.filter(sp => sp.invoice_id === inv.id && sp.status === 'pending').forEach(sp => {
-          sp.status = 'active'; sp.starts_on = p.paid_on; sp.expires_on = addDays(p.paid_on, sp.valid_days);
+          sp.status = 'active'; if (sp.auto_start === undefined) sp.auto_start = true; if (sp.auto_start) { sp.starts_on = null; sp.expires_on = null; } else { sp.starts_on = sp.starts_on || p.paid_on; sp.expires_on = sp.expires_on || addDays(p.paid_on, sp.valid_days); }
           E.allocateOrphans(sp.student_id); E.recount(sp.id);
         });
       }

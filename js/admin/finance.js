@@ -329,12 +329,13 @@ Object.assign(ACTIONS, {
       <label class="f">Sesi telah digunakan<input value="${esc(sp.sessions_used)}" disabled></label>
       ${F('Tarikh mula', 'starts_on', { type: 'date', value: sp.starts_on || '' })}
       ${F('Tarikh tamat', 'expires_on', { type: 'date', value: sp.expires_on || '' })}
+      <p class="muted full" style="font-size:12px">${sp.auto_start !== false ? 'Tempoh sah dikira automatik dari sesi pertama yang dihadiri. Isi tarikh tamat untuk tetapkan secara manual.' : 'Tarikh ditetapkan manual.'}</p>
       ${F('Status', 'status', { value: sp.status, opts: [['pending', 'Menunggu bayaran'], ['active', 'Aktif'], ['completed', 'Sesi habis'], ['expired', 'Tamat tempoh'], ['cancelled', 'Dibatalkan']] })}
     </div><p class="muted" style="margin-top:10px;font-size:12.5px">Baki = jumlah sesi − sesi digunakan. "Sesi digunakan" dikira automatik daripada kehadiran; ubah <b>jumlah sesi</b> atau <b>tarikh tamat</b> untuk menambah baki atau melanjutkan tempoh.</p>`,
       onSubmit: async d => {
         const total = Number(d.sessions_total), used = Number(sp.sessions_used || 0); let st = d.status;
         if (st === 'active' && used >= total) st = 'completed'; if (st === 'completed' && used < total) st = 'active';
-        const patch = { name: d.name, sessions_total: total, starts_on: val(d.starts_on), expires_on: val(d.expires_on), status: st };
+        const patch = { name: d.name, sessions_total: total, starts_on: val(d.starts_on), expires_on: val(d.expires_on), status: st }; if (val(d.expires_on) && val(d.expires_on) !== sp.expires_on) patch.auto_start = false;   // tarikh ditetapkan admin — tidak dikira semula
         if (total - used > 1) patch.renewal_sent = false;
         await update('student_packages', id, patch); toast('Pakej dikemas kini'); app.render();
       } });

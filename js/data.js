@@ -16,7 +16,7 @@ export const S = {
 export const ADMIN_TABLES = [
   'settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'parent_tax_info', 'invoice_items', 'expenses', 'leads', 'trials', 'students',
   'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes',
-  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills',
+  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills', 'feedback', 'package_requests',
 ];
 const WINDOWED = new Set(['class_sessions', 'attendance']);   // hanya 90 hari terakhir + akan datang
 const WINDOW_DAYS = 90;
@@ -112,7 +112,7 @@ async function fetchAll(table, sinceISO) {
 }
 
 const PARENT_TABLES = ['settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'students', 'classes', 'class_enrolments',
-  'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'parent_tax_info', 'invoice_items', 'booking_requests', 'session_groups', 'announcements', 'tournaments', 'class_offers', 'courses', 'course_lessons', 'waitlist', 'gateway_bills', 'lesson_plans', 'tournament_entries', 'tournament_categories', 'tournament_matches'];
+  'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'parent_tax_info', 'invoice_items', 'booking_requests', 'session_groups', 'announcements', 'tournaments', 'class_offers', 'courses', 'course_lessons', 'waitlist', 'gateway_bills', 'lesson_plans', 'tournament_entries', 'tournament_categories', 'tournament_matches', 'feedback', 'package_requests'];
 /* Portal ibu bapa: RLS hanya memulangkan data anak sendiri. */
 export async function loadParent() {
   if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
@@ -124,7 +124,7 @@ export async function loadParent() {
 }
 
 /* Portal coach: RLS hanya memulangkan kelas, sesi dan pelajar yang coach itu ajar. */
-const COACH_TABLES = ['courses', 'course_lessons', 'lesson_plans', 'events', 'announcements', 'trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests'];
+const COACH_TABLES = ['courses', 'course_lessons', 'lesson_plans', 'events', 'announcements', 'trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests', 'feedback'];
 export async function loadCoach() {
   if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
   const since = addDays(todayISO(), -WINDOW_DAYS), next = {};
@@ -315,8 +315,42 @@ export function subscribeNotifications(onNew) {
   if (S.mode !== 'supabase' || S.notifChannel) return;
   S.notifChannel = S.client.channel('notif-' + S.session.user.id)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${S.session.user.id}` },
-      p => { if (!S.t.notifications.some(n => n.id === p.new.id)) S.t.notifications.unshift(p.new); onNew?.(p.new); })
+      p => { if (!S.t.notifications.some(n => n.id === p.new.id)) S.t.notifications.unshift(p.new); browserNotify(p.new); onNew?.(p.new); })
     .subscribe();
+}
+
+/* ---- Kemas kini langsung (Supabase Realtime): perubahan jadual terus masuk ke cache tanpa muat semula ----
+   onChange(tables) dipanggil (debounce) selepas perubahan. Bila app kembali dibuka selepas lama di latar belakang,
+   jadual dimuat semula (sambungan realtime telefon biasanya terputus semasa tidur). */
+export function subscribeTables(tables, onChange) {
+  if (S.mode !== 'supabase' || S.syncChannel) return;
+  const pend = new Set(); let tm = null;
+  const flush = () => { tm = null; const list = [...pend]; pend.clear(); try { onChange?.(list); } catch (e) { console.warn(e); } };
+  const bump = t => { pend.add(t); clearTimeout(tm); tm = setTimeout(flush, 350); };
+  let ch = S.client.channel('sync-' + S.session.user.id);
+  for (const t of tables) ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, p => {
+    const arr = S.t[t] ||= [];
+    if (p.eventType === 'DELETE') { const id = p.old?.id; const i = arr.findIndex(r => r.id === id); if (i >= 0) arr.splice(i, 1); }
+    else if (p.new?.id) { const i = arr.findIndex(r => r.id === p.new.id); if (i >= 0) arr[i] = { ...arr[i], ...p.new }; else arr.unshift(p.new); }
+    bump(t);
+  });
+  S.syncChannel = ch.subscribe();
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 45000) {
+      try { await refresh([...tables, 'notifications'].filter(t => S.t[t])); onChange?.(tables); } catch (e) { console.warn('refresh', e); }
+    }
+  });
+}
+/* Notifikasi telefon (semasa app dibuka / di latar belakang tab) */
+export function browserNotify(n) {
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted' || !n) return;
+    const go = () => { window.focus(); if (n.link) location.hash = n.link; };
+    if (navigator.serviceWorker?.controller) navigator.serviceWorker.ready.then(r => r.showNotification(n.title || 'Maxxima', { body: n.body || '', icon: 'assets/icon-192.png', badge: 'assets/icon-192.png', tag: n.id, data: { link: n.link || '' } })).catch(() => { const x = new Notification(n.title || 'Maxxima', { body: n.body || '', icon: 'assets/icon-192.png' }); x.onclick = go; });
+    else { const x = new Notification(n.title || 'Maxxima', { body: n.body || '', icon: 'assets/icon-192.png' }); x.onclick = go; }
+  } catch (e) { console.warn(e); }
 }
 
 /* Simpan tetapan JSON (jadual settings: key -> value) */
@@ -336,16 +370,12 @@ export async function inviteUser(payload) {
     S.t.profiles.push({ id, full_name: payload.full_name || '', email: payload.email, role: payload.role, active: true, created_at: new Date().toISOString() });
     (payload.student_ids || []).forEach(sid => { const st = S.t.students.find(s => s.id === sid); if (st) st.guardian_id = id; });
     if (payload.staff_id) { const sf = S.t.staff.find(s => s.id === payload.staff_id); if (sf) sf.profile_id = id; }
-    return { ok: true };
+    return { ok: true, login: payload.email, password: 'demo1234', created: true };
   }
-  const { data, error } = await S.client.functions.invoke('invite-user', { body: { ...payload, redirect_to: location.origin + location.pathname } });
-  if (error) {
-    let msg = error.message;
-    try { const j = await error.context?.json?.(); if (j?.error) msg = j.error; } catch { /* abaikan */ }
-    throw new Error(msg);
-  }
-  if (data?.error) throw new Error(data.error);
-  // muat semula profil, pelajar & staf yang terjejas
+  // Tanpa Edge Function: akaun dicipta terus (e-mel disahkan) dengan kata laluan sementara
+  const { data, error } = await S.client.rpc('admin_create_user', { p_email: payload.email, p_name: payload.full_name || '', p_role: payload.role,
+    p_students: payload.student_ids || [], p_staff: payload.staff_id || null, p_reset: !!payload.reset });
+  if (error) throw new Error(error.message);
   for (const t of ['profiles', 'students', 'staff']) S.t[t] = await fetchAll(t, '');
   return data;
 }

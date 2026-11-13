@@ -22,8 +22,26 @@ function read() {
   const f = $('#tf'); if (!f) return;
   VAL = { child: f.child.value, birth: f.birth.value, gender: f.gender.value, guardian: f.guardian.value, medical: f.medical.value, notes: f.notes.value, slot: f.querySelector('[name=slot]:checked')?.value || VAL.slot || '', prog: f.prog.value };
 }
+const FB = new URLSearchParams(location.search).get('fb') === '1';
+let FBV = { r: 0, c: '', sent: false };
+function renderFb() {
+  if (FBV.sent) { $('#reg').innerHTML = head() + `<div class="done"><div class="big">🙏</div><h1>${t('Terima kasih!')}</h1><p class="muted">${t('Maklum balas anda membantu kami memperbaiki latihan.')}</p></div>`; return bindLang(); }
+  $('#reg').innerHTML = head() + `<h1>${t('Maklum balas trial')}</h1><p class="muted">${esc(INFO?.lead?.child_name || '')} · ${t('Bagaimana pengalaman sesi trial di Maxxima?')}</p>
+    <div class="stars" style="display:flex;gap:6px;font-size:38px;cursor:pointer;margin:14px 0">${[1, 2, 3, 4, 5].map(n => `<span data-n="${n}" style="color:${n <= FBV.r ? '#f5b301' : '#d1d5db'}">★</span>`).join('')}</div>
+    <label class="f">${t('Komen (pilihan) — apa yang anda suka, apa yang boleh diperbaiki')}<textarea id="fbc" rows="4">${esc(FBV.c)}</textarea></label>
+    <button class="btn primary" style="width:100%;height:46px;margin-top:14px" id="fbgo">${t('Hantar')}</button>`;
+  bindLang();
+  document.querySelectorAll('[data-n]').forEach(x => x.addEventListener('click', () => { FBV.c = $('#fbc').value; FBV.r = Number(x.dataset.n); renderFb(); }));
+  $('#fbgo').addEventListener('click', async e => {
+    FBV.c = $('#fbc').value; if (!FBV.r) return toast(t('Pilih bilangan bintang.'), true);
+    e.target.disabled = true;
+    try { if (!demo) { const { error } = await client.rpc('public_trial_feedback', { p_token: token, p_rating: FBV.r, p_comment: FBV.c }); if (error) throw error; } FBV.sent = true; renderFb(); }
+    catch (err) { toast(err.message || String(err), true); e.target.disabled = false; }
+  });
+}
 function render() {
   if (!INFO) return;
+  if (FB && INFO.ok) return renderFb();
   if (!INFO.ok) { $('#reg').innerHTML = head() + `<div class="done"><div class="big">🔗</div><h1>${t('Pautan tidak sah')}</h1><p class="muted">${t('Sila hubungi admin Maxxima melalui WhatsApp untuk mendapatkan pautan baharu.')}</p></div>`; return bindLang(); }
   if (INFO.done) { $('#reg').innerHTML = head() + `<div class="done"><div class="big">✅</div><h1>${t('Trial sudah dijadualkan')}</h1><p class="muted">${t('Terima kasih! Admin akan menghubungi anda jika ada perubahan. Jumpa di gelanggang!')}</p></div>`; return bindLang(); }
   const L = INFO.lead, v = { child: L.child_name, birth: L.birth_date || '', gender: L.gender || '', guardian: L.guardian_name || '', medical: '', notes: '', slot: '', prog: L.programme_id || '', ...VAL };
@@ -67,7 +85,7 @@ function render() {
     } catch (err) { console.error(err); toast(err.message || String(err), true); btn.disabled = false; }
   });
 }
-function bindLang() { document.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => { read(); setLang(b.dataset.lang); render(); })); }
+function bindLang() { document.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => { if (!FB) read(); setLang(b.dataset.lang); render(); })); }
 
 (async () => {
   try {

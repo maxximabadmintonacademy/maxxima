@@ -13,6 +13,7 @@ export const NAV = [
   ] },
   { group: 'Pengurusan Pelajar', items: [
     { id: 'leads', label: 'Leads', icon: 'target', count: () => T('leads').filter(l => l.status === 'new').length },
+    { id: 'maklumbalas', label: 'Maklum Balas', icon: 'msg', count: () => T('feedback').filter(f => f.status === 'new').length },
     { id: 'trial', label: 'Kelas Percubaan', icon: 'flag', count: () => T('trials').filter(t => t.status === 'scheduled').length },
     { id: 'kemasukan', label: 'Pendaftaran', icon: 'userplus', count: () => T('students').filter(s => ['pending', 'awaiting_payment'].includes(s.status)).length },
     { id: 'pelajar', label: 'Senarai Pelajar', icon: 'users' },

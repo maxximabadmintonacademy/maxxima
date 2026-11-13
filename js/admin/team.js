@@ -1,3 +1,4 @@
+import { uploadMedia, photoAvatar } from '../media.js';
 // Coach dan HR & Staf.
 import { VIEWS, ACTIONS } from '../registry.js';
 import { S, insert, update, remove, rpc } from '../data.js';
@@ -27,7 +28,7 @@ VIEWS.coach = () => {
     const venues = [...new Set(cls.map(k => venueName(k.venue_id)))];
     const acct = c.profile_id ? byId('profiles', c.profile_id) : null;
     return `<div class="card coach-card">
-      <div class="coach-top">${avatar(c.full_name, 'lg')}<div style="flex:1;min-width:0"><h4>${esc(c.full_name)}</h4><div class="muted" style="font-size:12.5px">${esc(c.position)}${c.certification ? ' · ' + esc(c.certification) : ''}</div></div><button class="btn sm" data-action="staff-edit" data-id="${c.id}">${ic('edit', 'sm')}</button></div>
+      <div class="coach-top">${photoAvatar(c.full_name, c.photo_path, { cls: 'lg' })}<div style="flex:1;min-width:0"><h4>${esc(c.full_name)}</h4><div class="muted" style="font-size:12.5px">${esc(c.position)}${c.certification ? ' · ' + esc(c.certification) : ''}</div></div><button class="btn sm" data-action="staff-edit" data-id="${c.id}">${ic('edit', 'sm')}</button></div>
       <div class="stats3"><div><b>${cls.length}</b><small>Kelas/minggu</small></div><div><b>${Math.round(hrs * 10) / 10}</b><small>Jam/minggu</small></div><div><b>${studs.size}</b><small>Pelajar</small></div></div>
       ${(c.languages || []).length ? `<div class="chips" style="margin:0">${c.languages.map(l => `<span class="chip">${esc(langName(l))}</span>`).join('')}</div>` : '<div class="muted" style="font-size:12px;color:var(--warn)">Bahasa belum diisi</div>'}
       ${c.qualifications ? `<div class="muted" style="font-size:12.5px;white-space:pre-line">${ic('award', 'sm')} ${esc(c.qualifications)}</div>` : ''}
@@ -73,7 +74,8 @@ VIEWS.hr = () => {
 
 const staffForm = s => `<div class="form-grid">
   ${F('Nama penuh', 'full_name', { value: s?.full_name, req: true, full: true })}
-  ${F('Jawatan', 'position', { value: s?.position || 'Jurulatih', req: true })}
+  <label class="f">Jawatan *<input name="position" list="posList" required value="${esc(s?.position || 'Coach')}"><datalist id="posList">${['Head Coach', 'Senior Coach', 'Coach', 'Junior Coach', 'Assistant Coach', 'Admin', 'Pengurus'].map(x => `<option value="${x}">`).join('')}</datalist></label>
+  <label class="f">Gambar profil (dipaparkan kepada ibu bapa)${s?.photo_path ? ' — ada' : ''}<input type="file" name="photo" accept="image/*"></label>
   ${F('Telefon', 'phone', { value: s?.phone })}
   ${F('Jenis pekerjaan', 'employment_type', { value: s?.employment_type || '', opts: [['', '—'], ['full_time', 'Sepenuh masa'], ['part_time', 'Sambilan']] })}
   ${F('Asas bayaran', 'pay_basis', { value: s?.pay_basis || '', opts: [['', '—'], ['monthly', 'Bulanan'], ['hourly', 'Per jam']] })}
@@ -88,10 +90,10 @@ const staffForm = s => `<div class="form-grid">
 const staffPatch = (d, edit) => ({ full_name: d.full_name.trim(), position: d.position, phone: val(d.phone), employment_type: val(d.employment_type), pay_basis: val(d.pay_basis), pay_rate: num(d.pay_rate), rate_personal: num(d.rate_personal), certification: val(d.certification), email: val((d.email || '').trim()), languages: [].concat(d.languages || []).filter(Boolean), qualifications: val(d.qualifications), active: edit ? d.active === '1' : true });
 
 Object.assign(ACTIONS, {
-  'staff-add': () => openModal({ title: 'Tambah Staf', submit: 'Tambah', body: staffForm(), onSubmit: async d => { await insert('staff', staffPatch(d)); toast('Staf ditambah'); app.render(); } }),
+  'staff-add': () => openModal({ title: 'Tambah Staf', submit: 'Tambah', body: staffForm(), onSubmit: async d => { const r = await insert('staff', staffPatch(d)); if (d.photo?.size) await update('staff', r.id, { photo_path: await uploadMedia('public-media', 'staff/' + r.id, d.photo, { maxMB: 5 }) }); toast('Staf ditambah'); app.render(); } }),
   'staff-edit': id => openModal({
     title: 'Edit Staf', body: staffForm(byId('staff', id)) + `<div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="staff-del" data-id="${id}">${ic('trash', 'sm')} Padam staf</button></div>`,
-    onSubmit: async d => { await update('staff', id, staffPatch(d, true)); toast('Staf dikemas kini'); app.render(); },
+    onSubmit: async d => { const patch = staffPatch(d, true); if (d.photo?.size) patch.photo_path = await uploadMedia('public-media', 'staff/' + id, d.photo, { maxMB: 5 }); await update('staff', id, patch); toast('Staf dikemas kini'); app.render(); },
   }),
   'staff-acct': async key => {
     const [id, mode] = key.split('|'), st = byId('staff', id);

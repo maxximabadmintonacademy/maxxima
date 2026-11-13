@@ -4,8 +4,8 @@ import { ACTIONS, INPUTS } from '../registry.js';
 import { annCard, visibleAnns } from '../admin/announce.js';
 import { offerCard } from '../admin/ops2.js';
 import { mediaGrid, publicUrl } from '../media.js';
-import { S, loadParent, insert, update, remove, refresh, markRead, subscribeNotifications, setPassword, rpc } from '../data.js';
-import { $, esc, ic, F, RM, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, fmtDate, fmtShort, hm, todayISO, addDays, DAYS, LABEL, friendlyError } from '../ui.js';
+import { S, loadParent, insert, update, remove, refresh, markRead, subscribeNotifications, subscribeTables, setPassword, rpc } from '../data.js';
+import { $, esc, ic, F, RM, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, fmtDate, fmtShort, hm, todayISO, addDays, DAYS, LABEL, friendlyError, liveRender } from '../ui.js';
 import { T, byId, venueName, progName, staffName, invStatus, paidOf, creditOf, pkgRemaining } from '../admin/helpers.js';
 import { openReceipt } from '../receipt.js';
 import { openInvoice, openCreditNote } from '../invoice.js';
@@ -13,6 +13,7 @@ import { t, langSwitch, setI18nActive } from '../i18n.js';
 import { themeSwitch } from '../theme.js';
 import { tr } from '../i18n-dom.js';
 import { openMonthlyReport, openCertificates } from '../docs2.js';
+import { photoAvatar, uploadMedia } from '../media.js';
 
 const PV = {};
 const NAV = [['utama', 'Utama', 'home'], ['jadual', 'Jadual', 'calendar'], ['tempah', 'Tempah', 'plus'], ['yuran', 'Yuran', 'wallet'], ['progres', 'Progres', 'trend'], ['akaun', 'Akaun', 'user']];
@@ -67,7 +68,9 @@ export async function enterParent() {
   renderShell(); app.render = render; app.relang = () => { renderShell(); render(); };
   $('#view').innerHTML = `<div class="boot">${t('Memuatkan data anak anda…')}</div>`;
   try { await loadParent(); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>${t('Gagal memuatkan data.')}</b><p class="muted">${esc(friendlyError(e))}</p></div>`; return; }
-  subscribeNotifications(() => render());
+  subscribeNotifications(n => { if (n?.title) toast('🔔 ' + n.title); liveRender(render); });
+  subscribeTables(['announcements', 'invoices', 'payments', 'booking_requests', 'attendance', 'class_sessions', 'student_packages', 'progress_records', 'class_offers',
+    'courses', 'course_lessons', 'events', 'waitlist', 'package_requests', 'feedback', 'students'], () => liveRender(render));
   window.addEventListener('hashchange', () => { document.body.classList.remove('nav-open'); render(); window.scrollTo(0, 0); });
   if (needsOnboard()) { UI.ob = S.profile.must_change_pw ? 1 : 2; }
   render(); gwReturn();
@@ -122,14 +125,17 @@ PV.utama = () => {
   ${due.length ? `<div class="card mb" style="border-color:var(--warn)"><div class="card-head"><div><h3>${t('Yuran belum dijelaskan')}</h3><div class="sub">${t('Bayar melalui QR atau pindahan bank, kemudian muat naik bukti.')}</div></div><span class="badge b-warn">${due.length}</span></div>
     <ul class="list">${due.map(i => `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${esc(kidName(i.student_id))} · <span class="num">${RM(balanceOf(i) - pendingOf(i))}</span></div><div class="li-sub">${kindLabel(i)} · ${esc(i.number)} · ${t('akhir {d}', { d: fmtShort(i.due_date) })}</div></div>
     <div class="actions"><button class="btn sm primary" data-action="p-pay" data-id="${i.id}">${t('Bayar')}</button></div></li>`).join('')}</ul></div>` : ''}
+  ${fbPrompt()}
   ${toConfirm.length ? `<div class="card card-pad mb" style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div><b>${t('{n} kehadiran menunggu pengesahan anda', { n: toConfirm.length })}</b><div class="muted" style="font-size:13px">${t('Sahkan anak benar-benar hadir.')}</div></div><a class="btn sm primary" href="#jadual">${t('Semak')}</a></div>` : ''}
   ${ks.map(k => { const ps = activePkgs(k.id), ses = nextSessions(k.id).find(u => !u.off); return `<div class="card card-pad mb">
     <div class="cell-person" style="margin-bottom:12px">${avatar(k.full_name)}<div><b>${esc(k.full_name)}</b><span>${esc([progName(k.programme_id), venueName(k.venue_id)].filter(x => x && x !== '—').join(' · '))}</span></div></div>
     ${T('student_packages').filter(p => p.student_id === k.id && ['active', 'pending'].includes(p.status) && !p.mode_set_at && (byId('packages', p.package_id)?.mode_policy || 'choose') !== 'flexible' && byId('programmes', p.programme_id)?.kind !== 'personal').map(p => `<div class="hint warn" style="margin-bottom:10px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span>${t('Pilih cara latihan untuk {p}: jadual tetap atau fleksibel.', { p: esc(tr(p.name)) })}</span><button class="btn sm primary" data-action="p-mode" data-id="${p.id}">${t('Pilih')}</button></div>`).join('')}
     ${ps.length ? ps.map(p => { const rem = pkgRemaining(p), pct = Math.round(rem / p.sessions_total * 100); return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px"><b>${esc(tr(p.name))}</b><span class="num"><b>${rem}</b> / ${p.sessions_total} ${t('sesi')}</span></div>
       <div class="bar lg" style="margin-top:6px"><span style="width:${pct}%;background:${rem <= 1 ? 'var(--bad)' : 'var(--ok)'}"></span></div>
-      <div class="muted" style="font-size:12px;margin-top:4px">${p.expires_on ? t('Sah hingga {d}', { d: fmtDate(p.expires_on) }) : ''}${rem <= 1 ? ` · <b style="color:var(--bad)">${t('hampir habis')}</b>, ${t('invois pembaharuan akan dikeluarkan')}` : ''}</div></div>`; }).join('')
+      <div class="muted" style="font-size:12px;margin-top:4px">${p.expires_on ? t('Sah hingga {d}', { d: fmtDate(p.expires_on) }) : t('Tempoh sah bermula dari sesi pertama yang dihadiri')}${Number(p.extended_days) ? ' · ' + t('dilanjutkan {n} hari', { n: p.extended_days }) : ''}${rem <= 1 ? ` · <b style="color:var(--bad)">${t('hampir habis')}</b>, ${t('invois pembaharuan akan dikeluarkan')}` : ''}</div>
+      ${pkgReqLine(p)}</div>`; }).join('')
       : `<div class="muted" style="font-size:13px;margin-bottom:10px">${t('Tiada pakej aktif')}${T('student_packages').some(p => p.student_id === k.id && p.status === 'pending') ? ' · ' + t('menunggu bayaran') : ''}.</div>`}
+    ${T('student_packages').filter(p => p.student_id === k.id && p.status === 'pending' && T('attendance').some(a => a.student_id === k.id && !a.student_package_id && ['present', 'late', 'absent', 'late_cancel'].includes(a.status))).map(p => `<div class="hint" style="margin-bottom:10px;font-size:12.5px">${t('{p} belum dibayar tetapi anak sudah hadir sesi.', { p: esc(tr(p.name)) })} ${pkgReqLine(p, true)}</div>`).join('')}
     <div style="font-size:13px;display:flex;gap:8px;align-items:center">${ic('calendar', 'sm')}${ses ? `<span><b>${t('Sesi seterusnya:')}</b> ${when(ses.date, ses.c)}</span>` : `<span class="muted">${t('Tiada sesi akan datang dijadualkan.')}</span>`}</div></div>`; }).join('')}`;
 };
 
@@ -152,7 +158,7 @@ function nextSessions(kidId, days = 30) {
 }
 
 /* ---- Reschedule / batal / kecemasan (ikut Terma & Syarat) ---- */
-const policy = () => ({ notice_hours: Number(S.t.settings?.find(s => s.key === 'billing')?.value?.cancel_notice_hours ?? 48), replacement_days: 30, auto_group: true, ...(S.t.settings?.find(s => s.key === 'policy')?.value || {}) });
+const policy = () => ({ notice_hours: Number(S.t.settings?.find(s => s.key === 'billing')?.value?.cancel_notice_hours ?? 48), replacement_days: 30, auto_group: true, extend_max_days: 14, extend_max_times: 1, ...(S.t.settings?.find(s => s.key === 'policy')?.value || {}) });
 const startTs = (c, date, s) => new Date(`${date}T${hm(s?.start_time || c.start_time)}:00+08:00`);
 const hoursLeft = (c, date, s) => (startTs(c, date, s) - Date.now()) / 3600000;
 const isPersonalC = c => byId('programmes', c?.programme_id)?.kind === 'personal';
@@ -231,8 +237,9 @@ PV.tempah = () => {
     body = `<form class="card card-pad mb" id="pReqForm" novalidate><div class="form-grid">
       ${F(t('Program'), 'programme_id', { req: true, opts: progs.map(p => [p.id, tr(p.name)]) })}
       ${F(t('Lokasi pilihan'), 'venue_id', { opts: [['', t('Mana-mana')], ...T('venues').filter(v => v.active).map(v => [v.id, v.name])] })}
-      <label class="f full">${t('Coach pilihan')}<select name="coach_id"><option value="">${t('Mana-mana coach')}</option>${(S.pCoaches || []).map(c => `<option value="${c.id}">${esc(c.full_name)}${(c.languages || []).length ? ' · ' + c.languages.map(l => ({ ms: 'BM', en: 'EN', zh: '中文', ta: 'TA' })[l] || l).join('/') : ''}</option>`).join('')}</select>
-        ${(S.pCoaches || []).filter(c => c.qualifications).length ? `<span class="hint">${(S.pCoaches || []).filter(c => c.qualifications).map(c => `<b>${esc(c.full_name.split(' ')[0])}</b>: ${esc(c.qualifications)}`).join('<br>')}</span>` : ''}</label>
+      <div class="f full">${t('Coach pilihan')}<div class="coach-pick">
+        <label class="cp"><input type="radio" name="coach_id" value="" checked><div class="avatar">?</div><div><b>${t('Mana-mana coach')}</b><span>${t('Admin akan padankan')}</span></div></label>
+        ${(S.pCoaches || []).map(c => `<label class="cp"><input type="radio" name="coach_id" value="${c.id}">${photoAvatar(c.full_name, c.photo_path, { size: 52 })}<div><b>${esc(c.full_name)}</b><span class="pos">${esc(c.position || 'Coach')}</span>${(c.languages || []).length ? `<span>${c.languages.map(l => ({ ms: 'BM', en: 'EN', zh: '中文', ta: 'TA' })[l] || l).join(' · ')}</span>` : ''}${c.qualifications ? `<span class="q">${esc(c.qualifications)}</span>` : ''}</div></label>`).join('')}</div></div>
       <div class="f full">${t('Hari pilihan')}<div class="langchk">${[1, 2, 3, 4, 5, 6, 0].map(d => `<label><input type="checkbox" name="days" value="${d}"> ${DAYS[d]}</label>`).join('')}</div></div>
       ${F(t('Masa pilihan (cth. 6pm–8pm)'), 'pref_time', {})}
       ${F(t('Bilangan sesi'), 'sessions', { type: 'number', min: 1, value: 4 })}
@@ -323,7 +330,7 @@ PV.jadual = () => {
      <div class="actions"><button class="btn sm primary" data-action="p-book" data-id="${s.id}" data-kid="${k.id}" ${seats === 0 ? 'disabled' : ''}>${t('Tempah')}</button></div></li>`; }).join('')}</ul>` : `<div class="empty">${t('Tiada sesi tersedia untuk ditempah dalam 21 hari.')}</div>`}</div>` : ''}
   <div class="card"><div class="card-head"><div><h3>${t('Sejarah kehadiran')}</h3><div class="sub">${t('Sahkan kehadiran anak selepas setiap sesi')}</div></div></div>
    ${hist.length ? `<ul class="list">${hist.map(a => { const { c } = classOf(a.session_id); return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${a.session_date ? when(a.session_date, c) : ''}</div><div class="li-sub">${esc(where(c))}</div></div>
-     <div class="actions">${badge(a.status)}${['present', 'late'].includes(a.status) ? (a.parent_confirmed ? `<span class="badge b-ok">${t('Disahkan')}</span>` : `<button class="btn sm primary" data-action="p-confirm" data-id="${a.id}">${t('Sahkan')}</button>`) : ''}</div></li>`; }).join('')}</ul>` : `<div class="empty">${t('Belum ada rekod kehadiran.')}</div>`}</div>`;
+     <div class="actions">${badge(a.status)}${['present', 'late'].includes(a.status) ? (a.parent_confirmed ? `<span class="badge b-ok">${t('Disahkan')}</span>` : `<button class="btn sm primary" data-action="p-confirm" data-id="${a.id}">${t('Sahkan')}</button>`) : ''}${fbBtn(a)}</div></li>`; }).join('')}</ul>` : `<div class="empty">${t('Belum ada rekod kehadiran.')}</div>`}</div>`;
 };
 
 Object.assign(ACTIONS, {
@@ -549,12 +556,13 @@ const taxCard = () => {
   ${x ? `<div style="margin-top:12px;font-size:13.5px;line-height:1.7"><div>${esc(x.legal_name || '—')}</div><div class="muted">${esc(idLbl(x.id_type))}: ${esc(x.id_no || '—')}</div><div class="muted">TIN: ${esc(x.tin || '—')}</div>${x.address ? `<div class="muted">${esc(x.address)}</div>` : ''}</div>` : `<div class="muted" style="margin-top:10px;font-size:13px">${t('Belum diisi. Anda boleh isi sekarang supaya invois terus memaparkan maklumat anda.')}</div>`}</div>`;
 };
 PV.akaun = () => `${head(t('Akaun'), '')}<div class="card card-pad mb"><div class="cell-person">${avatar(S.profile.full_name || S.profile.email)}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
-  <div class="actions" style="margin-top:14px">${window.__installPrompt ? `<button class="btn primary" data-action="pwa-install">📱 ${t('Pasang app')}</button>` : ''}<button class="btn" data-action="p-pw">${t('Tukar kata laluan')}</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} ${t('Log keluar')}</button></div></div>
+  <div class="actions" style="margin-top:14px">${window.__installPrompt ? `<button class="btn primary" data-action="pwa-install">📱 ${t('Pasang app')}</button>` : ''}${'Notification' in window && Notification.permission === 'default' ? `<button class="btn" data-action="notif-perm">🔔 ${t('Hidupkan notifikasi')}</button>` : ''}<button class="btn" data-action="p-pw">${t('Tukar kata laluan')}</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} ${t('Log keluar')}</button></div></div>
   <div class="card card-pad mb"><b>${t('Tetapan paparan')}</b>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><span>${t('Bahasa')}</span>${langSwitch()}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px"><span>${t('Tema')}</span>${themeSwitch()}</div></div>
   ${taxCard()}
-  <div class="card card-pad"><b>${t('Anak anda')}</b>${kids().map(k => `<div style="margin-top:8px">${esc(k.full_name)} <span class="muted">· ${esc(progName(k.programme_id))}</span></div>`).join('') || `<div class="muted">${t('Belum ada anak dipautkan.')}</div>`}
+  <div class="card card-pad"><b>${t('Anak anda')}</b>${kids().map(k => `<div style="margin-top:10px;display:flex;gap:12px;align-items:center">${photoAvatar(k.full_name, k.photo_path, { priv: true, size: 48 })}<div style="flex:1"><b>${esc(k.full_name)}</b><div class="muted" style="font-size:12.5px">${esc(progName(k.programme_id))}</div></div>
+    <label class="btn sm" style="cursor:pointer">📷 ${k.photo_path ? t('Tukar gambar') : t('Tambah gambar')}<input type="file" accept="image/*" style="display:none" data-on-change="p-kid-photo" data-key="${k.id}"></label></div>`).join('') || `<div class="muted">${t('Belum ada anak dipautkan.')}</div>`}
   <p class="muted" style="margin-top:12px;font-size:12.5px">${t('Untuk menukar maklumat anak atau nombor telefon, hubungi admin akademi.')}</p></div>`;
 Object.assign(ACTIONS, {
   'p-tax': () => {
@@ -585,3 +593,60 @@ Object.assign(ACTIONS, {
     if (ids.length) { try { await markRead(ids); render(); } catch (e) { console.warn(e); } }
   },
 });
+
+INPUTS['p-kid-photo'] = async (v, el) => {
+  const f = el.files?.[0]; if (!f) return;
+  try { const path = await uploadMedia('progress-media', el.dataset.key, f, { maxMB: 5 });
+    if (S.mode === 'supabase') await rpc('parent_set_child_photo', { p_student: el.dataset.key, p_path: path });
+    const k = byId('students', el.dataset.key); if (k) k.photo_path = path; toast(t('Gambar profil disimpan')); render(); }
+  catch (e) { toast(friendlyError(e), true); }
+};
+
+/* ---- Pakej: lanjut tempoh / sahkan tarikh tamat ---- */
+function pkgReqLine(p, confirmOnly = false) {
+  const rq = T('package_requests').filter(r => r.student_package_id === p.id).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  const open = rq.find(r => r.status === 'new');
+  if (open) return `<div style="margin-top:6px"><span class="badge b-warn">${open.kind === 'extend' ? t('Permintaan lanjutan disemak admin') : t('Permintaan sahkan tarikh tamat disemak admin')}</span></div>`;
+  const last = rq[0], lastTxt = last ? `<span class="badge ${last.status === 'approved' ? 'b-ok' : 'b-muted'}">${last.status === 'approved' ? t('Diluluskan') : t('Tidak diluluskan')}${last.admin_note ? ': ' + esc(last.admin_note) : ''}</span> ` : '';
+  if (confirmOnly) return `${lastTxt}<button class="btn sm" data-action="p-pkg-conf" data-id="${p.id}">${t('Minta admin sahkan tarikh tamat')}</button>`;
+  return p.expires_on ? `<div style="margin-top:6px">${lastTxt}<button class="btn sm ghost" data-action="p-pkg-ext" data-id="${p.id}">${t('Minta lanjut tempoh')}</button></div>` : (lastTxt ? `<div style="margin-top:6px">${lastTxt}</div>` : '');
+}
+Object.assign(ACTIONS, {
+  'p-pkg-ext': id => { const p = byId('student_packages', id), pol = policy();
+    openModal({ title: t('Minta lanjut tempoh pakej'), submit: t('Hantar permintaan'), body: `<p class="muted" style="font-size:13px;margin-bottom:10px">${esc(tr(p.name))} · ${t('Sah hingga {d}', { d: fmtDate(p.expires_on) })}<br>${t('Untuk hal yang tidak dapat dielakkan (cth. sakit, peperiksaan, urusan keluarga). Maksimum {n} hari, {m} kali bagi setiap pakej. Tertakluk kepada kelulusan admin.', { n: pol.extend_max_days, m: pol.extend_max_times })}</p>
+      <div class="form-grid">${F(t('Bilangan hari'), 'days', { type: 'number', min: 1, max: pol.extend_max_days, value: Math.min(7, pol.extend_max_days), req: true })}${F(t('Sebab'), 'reason', { type: 'textarea', req: true, full: true })}</div>`,
+      onSubmit: async d => { await insert('package_requests', { student_package_id: id, student_id: p.student_id, kind: 'extend', days: Number(d.days), reason: d.reason, status: 'new' }); toast(t('Permintaan dihantar kepada admin.')); render(); } }); },
+  'p-pkg-conf': id => { const p = byId('student_packages', id);
+    openModal({ title: t('Minta sahkan tarikh tamat'), submit: t('Hantar permintaan'), body: `<p class="muted" style="font-size:13px;margin-bottom:10px">${esc(tr(p.name))}. ${t('Anak sudah hadir sebelum pakej ini dibayar. Admin akan menyemak dan mengesahkan tarikh tamat pakej.')}</p>${F(t('Catatan (pilihan)'), 'reason', { type: 'textarea', full: true })}`,
+      onSubmit: async d => { await insert('package_requests', { student_package_id: id, student_id: p.student_id, kind: 'confirm_expiry', reason: d.reason || null, status: 'new' }); toast(t('Permintaan dihantar kepada admin.')); render(); } }); },
+});
+
+/* ---- Maklum balas sesi ---- */
+const fbOf = a => T('feedback').some(f => f.session_id === a.session_id && f.student_id === a.student_id);
+function fbBtn(a) {
+  if (!['present', 'late'].includes(a.status) || !a.session_date || a.session_date < addDays(todayISO(), -14)) return '';
+  return fbOf(a) ? `<span class="badge b-ok">★ ${t('Maklum balas dihantar')}</span>` : `<button class="btn sm" data-action="p-fb" data-id="${a.id}">★ ${t('Maklum balas')}</button>`;
+}
+function fbPrompt() {
+  const a = T('attendance').filter(x => kidSet().has(x.student_id) && ['present', 'late'].includes(x.status) && x.session_date && x.session_date >= addDays(todayISO(), -3) && x.session_date <= todayISO() && !fbOf(x))
+    .sort((x, y) => (y.session_date || '').localeCompare(x.session_date || ''))[0];
+  if (!a) return '';
+  const { c } = classOf(a.session_id);
+  return `<div class="card card-pad mb"><b>${t('Bagaimana sesi {name} pada {d}?', { name: esc(kidName(a.student_id).split(' ')[0]), d: fmtShort(a.session_date) })}</b><div class="muted" style="font-size:12.5px">${c ? esc(where(c)) : ''}</div>
+    <div class="stars" style="margin-top:8px">${[1, 2, 3, 4, 5].map(n => `<span data-action="p-fb" data-id="${a.id}|${n}">★</span>`).join('')}</div></div>`;
+}
+const starsInput = v => `<div class="stars" id="fbStars">${[1, 2, 3, 4, 5].map(n => `<span data-n="${n}" class="${n <= v ? 'on' : ''}">★</span>`).join('')}</div><input type="hidden" name="rating" value="${v || ''}">`;
+ACTIONS['p-fb'] = key => {
+  const [id, pre] = String(key).split('|'), a = byId('attendance', id), { c } = classOf(a.session_id);
+  const f = openModal({ title: t('Maklum balas sesi'), submit: t('Hantar'), body: `<p class="muted" style="font-size:13px;margin-bottom:10px">${esc(kidName(a.student_id))} · ${a.session_date ? fmtDate(a.session_date) : ''}${c ? ' · ' + esc(where(c)) : ''}</p>
+    ${starsInput(Number(pre) || 0)}<label class="f" style="margin-top:12px">${t('Komen (pilihan) — apa yang baik, apa yang boleh diperbaiki')}<textarea name="comment" rows="3"></textarea></label>
+    <p class="muted" style="font-size:12px;margin-top:6px">${t('Maklum balas dihantar kepada admin dan coach sesi.')}</p>`,
+    onSubmit: async d => { const r = Number(d.rating); if (!r) throw new Error(t('Pilih bilangan bintang.'));
+      await insert('feedback', { kind: 'session', student_id: a.student_id, session_id: a.session_id, rating: r, comment: d.comment || null, created_by: S.mode === 'demo' ? null : me() });
+      toast(t('Terima kasih atas maklum balas anda!')); render(); } });
+  bindStars(f);
+};
+export function bindStars(f) {
+  const box = f.querySelector('#fbStars'); if (!box) return;
+  box.addEventListener('click', e => { const n = Number(e.target.dataset.n); if (!n) return; f.querySelector('[name=rating]').value = n; box.querySelectorAll('span').forEach(s => s.classList.toggle('on', Number(s.dataset.n) <= n)); });
+}

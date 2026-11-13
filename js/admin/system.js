@@ -14,7 +14,7 @@ import { LANGS_ALL, ageGroups } from './sessions.js';
 VIEWS.pengguna = () => {
   const ps = T('profiles').slice().sort((a, b) => ['admin', 'coach', 'parent'].indexOf(a.role) - ['admin', 'coach', 'parent'].indexOf(b.role) || (a.full_name || a.email || '').localeCompare(b.full_name || b.email || ''));
   return `
-  ${pageHead('Pengguna & Akses', 'Setiap peranan hanya melihat data yang dibenarkan — dikuatkuasakan oleh pangkalan data, bukan hanya paparan.', `<button class="btn primary" data-action="user-invite">${ic('plus', 'sm')} Jemput Pengguna</button>`)}
+  ${pageHead('Pengguna & Akses', 'Setiap peranan hanya melihat data yang dibenarkan — dikuatkuasakan oleh pangkalan data, bukan hanya paparan.', `<button class="btn primary" data-action="user-invite">${ic('plus', 'sm')} Tambah Pengguna</button>`)}
   <div class="grid g-3 mb">
     <div class="card card-pad"><div class="badge b-purple">Admin</div><p style="margin-top:8px;font-size:13px">Akses penuh: pelajar, yuran, jadual, HR, kejohanan dan pengguna.</p></div>
     <div class="card card-pad"><div class="badge b-info">Coach</div><p style="margin-top:8px;font-size:13px">Hanya kelas dan pelajar sendiri: kehadiran, prestasi, pelan kelas. Tiada akses yuran atau gaji.</p></div>
@@ -39,19 +39,29 @@ const studentChecklist = (selected = [], pid = null) => {
 };
 const staffOpts = (pid = null) => [['', '— Tiada —'], ...T('staff').filter(s => s.active && (!s.profile_id || s.profile_id === pid)).map(s => [s.id, s.full_name])];
 
+const credModal = (r, name, phone) => {
+  const url = location.href.split('#')[0].replace(/index\.html$/, '');
+  const msg = `Salam ${name || ''}, akaun portal Maxxima Badminton Academy anda sudah sedia.\n\nPautan: ${url}\nLog masuk: ${r.login}\nKata laluan: ${r.password}\n\nSila tukar kata laluan selepas log masuk. Terima kasih! 🏸`;
+  openModal({ title: 'Akaun sedia', cancel: 'Tutup', body: `<div class="hint" style="margin-bottom:12px">Log masuk: <b>${esc(r.login)}</b><br>Kata laluan: <b style="font-size:16px;letter-spacing:.05em">${esc(r.password)}</b><br><span class="muted" style="font-size:12.5px">Kata laluan sementara ini hanya dipaparkan sekali. Pengguna wajib menukarnya semasa log masuk pertama.</span></div>
+    <pre class="copybox" id="remindText">${esc(msg)}</pre><div class="actions" style="margin-top:12px">${phone ? `<a class="btn primary" target="_blank" rel="noopener" href="https://wa.me/${String(phone).replace(/\D/g, '').replace(/^0/, '60')}?text=${encodeURIComponent(msg)}">${ic('msg', 'sm')} Hantar melalui WhatsApp</a>` : ''}<button type="button" class="btn" data-action="copy-remind">Salin mesej</button></div>` });
+};
 ACTIONS['user-invite'] = () => {
   const f = openModal({
-    title: 'Jemput Pengguna', submit: 'Hantar Jemputan', wide: true,
-    body: `<p class="muted" style="margin-bottom:12px">Pengguna akan menerima e-mel untuk menetapkan kata laluan sendiri.</p>
+    title: 'Tambah Pengguna', submit: 'Cipta Akaun', wide: true,
+    body: `<p class="muted" style="margin-bottom:12px">Akaun dicipta terus dengan kata laluan sementara — anda hantar kepada pengguna melalui WhatsApp. Tiada e-mel pengesahan diperlukan. Jika akaun sudah wujud, ia hanya dipautkan (tanda "Set semula kata laluan" untuk kata laluan baharu).</p>
     <div class="form-grid">
-      ${F('E-mel', 'email', { type: 'email', req: true })}
+      ${F('E-mel atau no. telefon (untuk log masuk)', 'email', { req: true })}
       ${F('Nama', 'full_name')}
-      ${F('Peranan', 'role', { value: 'parent', opts: [['parent', 'Ibu Bapa'], ['coach', 'Coach'], ['admin', 'Admin']], full: true })}
+      ${F('No. WhatsApp (untuk hantar maklumat log masuk)', 'phone', { type: 'tel' })}
+      ${F('Peranan', 'role', { value: 'parent', opts: [['parent', 'Ibu Bapa'], ['coach', 'Coach'], ['admin', 'Admin']] })}
+      <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="reset" value="1" style="width:auto;height:auto"> Set semula kata laluan jika akaun sudah wujud</label>
     </div>
     <div id="roleExtra" style="margin-top:14px"><div class="f"><span>Pautkan anak</span>${studentChecklist()}</div></div>`,
     onSubmit: async d => {
-      await inviteUser({ email: d.email.trim(), full_name: val(d.full_name), role: d.role, student_ids: d.role === 'parent' ? [].concat(d.student_ids || []) : [], staff_id: d.role === 'coach' ? val(d.staff_id) : null });
-      toast(S.mode === 'demo' ? 'Pengguna ditambah (demo)' : 'Jemputan dihantar'); app.render();
+      const r = await inviteUser({ email: d.email.trim(), full_name: val(d.full_name), role: d.role, student_ids: d.role === 'parent' ? [].concat(d.student_ids || []) : [], staff_id: d.role === 'coach' ? val(d.staff_id) : null, reset: d.reset === '1' });
+      app.render();
+      if (r?.password) setTimeout(() => credModal(r, val(d.full_name), val(d.phone)), 60);
+      else toast('Akaun sudah wujud — peranan & pautan dikemas kini. Tanda "Set semula kata laluan" untuk kata laluan baharu.');
     },
   });
   f.elements.role.addEventListener('change', e => {
@@ -138,8 +148,9 @@ const gatewayCard = () => { const g = GW(); return `<div class="card card-pad mb
   <p class="muted" style="font-size:12px;margin-top:6px">Perlu: akaun ToyyibPay + Edge Function <code>toyyibpay</code> dengan rahsia TOYYIBPAY_SECRET & TOYYIBPAY_CATEGORY (lihat BACA_DULU). Kunci rahsia TIDAK disimpan di sini.</p></div>`; };
 ACTIONS['gw-edit'] = () => { const g = GW(); openModal({ title: 'Bayaran online (ToyyibPay)', submit: 'Simpan', body: `<div class="form-grid">${F('Status', 'enabled', { value: g.enabled ? '1' : '0', opts: [['0', 'Tidak aktif'], ['1', 'Aktif — papar butang bayar online']], full: true })}${F('Caj transaksi', 'fee_note', { value: g.fee_note || '', full: true, ph: 'cth. Caj FPX RM1.00 ditanggung pembayar' })}</div>`,
   onSubmit: async d => { await saveSetting('gateway', { ...g, enabled: d.enabled === '1', fee_note: d.fee_note || '' }); toast('Tetapan bayaran online disimpan'); app.render(); } }); };
-ACTIONS['pol-edit'] = () => { const p = POL(); openModal({ title: 'Peraturan reschedule & batal', body: `<div class="form-grid">${F('Tempoh notis (jam)', 'notice_hours', { type: 'number', min: 0, value: p.notice_hours })}${F('Tempoh kredit ganti kecemasan (hari)', 'replacement_days', { type: 'number', min: 1, value: p.replacement_days })}${F('Reschedule / batal kumpulan ≥ notis', 'auto_group', { value: p.auto_group ? '1' : '0', opts: [['1', 'Sistem sahkan terus'], ['0', 'Perlu kelulusan admin']], full: true })}</div>`,
-  onSubmit: async d => { await saveSetting('policy', { notice_hours: Number(d.notice_hours) || 48, replacement_days: Number(d.replacement_days) || 30, auto_group: d.auto_group === '1' }); toast('Peraturan disimpan'); app.render(); } }); };
+ACTIONS['pol-edit'] = () => { const p = POL(); openModal({ title: 'Peraturan reschedule & batal', body: `<div class="form-grid">${F('Tempoh notis (jam)', 'notice_hours', { type: 'number', min: 0, value: p.notice_hours })}${F('Tempoh kredit ganti kecemasan (hari)', 'replacement_days', { type: 'number', min: 1, value: p.replacement_days })}${F('Reschedule / batal kumpulan ≥ notis', 'auto_group', { value: p.auto_group ? '1' : '0', opts: [['1', 'Sistem sahkan terus'], ['0', 'Perlu kelulusan admin']], full: true })}
+  ${F('Lanjutan pakej maksimum (hari)', 'extend_max_days', { type: 'number', min: 0, value: p.extend_max_days ?? 14 })}${F('Lanjutan setiap pakej (kali)', 'extend_max_times', { type: 'number', min: 0, value: p.extend_max_times ?? 1 })}</div>`,
+  onSubmit: async d => { await saveSetting('policy', { ...p, notice_hours: Number(d.notice_hours) || 48, replacement_days: Number(d.replacement_days) || 30, auto_group: d.auto_group === '1', extend_max_days: Number(d.extend_max_days) || 0, extend_max_times: Number(d.extend_max_times) || 0 }); toast('Peraturan disimpan'); app.render(); } }); };
 INPUTS['notif-tog'] = async (v, el) => {
   const p = myProfile(), off = new Set(p.notify_off || []), k = el.dataset.key;
   if (el.checked) off.delete(k); else off.add(k);

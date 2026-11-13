@@ -1,3 +1,4 @@
+import { photoAvatar } from '../media.js';
 // Sesi bertarikh: kategori umur, coach & court setiap kategori, amaran, panel kehadiran.
 // Dikongsi oleh Kalendar (admin) dan Portal Coach.
 import { ACTIONS, INPUTS } from '../registry.js';
@@ -120,7 +121,7 @@ export function openSession(sid) {
   const multi = !personal && ((c.categories || []).length > 0 || gs.length > 0);
   const stRow = st => {
     const a = T('attendance').find(x => x.session_id === s.id && x.student_id === st.id);
-    return `<li class="list-item" style="padding:8px 4px;flex-wrap:wrap">${avatar(st.full_name)}<div class="li-main"><div class="li-title">${esc(st.full_name)} ${a?.status === 'booked' ? '<span class="badge b-info">ditempah</span>' : ''}${st.birth_date ? ` <span class="muted" style="font-size:11.5px">${ageOn(st.birth_date, s.session_date)} thn</span>` : ''}</div>${st.medical_notes ? `<div class="li-sub" style="color:var(--bad)">⚕ ${esc(st.medical_notes)}</div>` : ''}${pkgLine(st.id, a)}</div>
+    return `<li class="list-item" style="padding:8px 4px;flex-wrap:wrap">${photoAvatar(st.full_name, st.photo_path, { priv: true })}<div class="li-main"><div class="li-title">${esc(st.full_name)} ${a?.status === 'booked' ? '<span class="badge b-info">ditempah</span>' : ''}${st.birth_date ? ` <span class="muted" style="font-size:11.5px">${ageOn(st.birth_date, s.session_date)} thn</span>` : ''}</div>${st.medical_notes ? `<div class="li-sub" style="color:var(--bad)">⚕ ${esc(st.medical_notes)}</div>` : ''}${pkgLine(st.id, a)}</div>
       ${personal && !isCoach() ? `<input class="date-input" style="width:70px" type="number" step="0.25" min="0" title="Jam" placeholder="${sHours(s, c)}" value="${a?.hours ?? ''}" data-on-change="sp-hours" data-key="${s.id}|${st.id}">` : ''}
       ${multi && !isCoach() ? `<select class="att-select" title="Kategori" data-on-change="sp-cat" data-key="${s.id}|${st.id}">${[...new Set([...(c.categories || []), ...ageGroups().map(g => g.code)])].map(k => `<option ${catFor(st, s, c) === k ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select>` : ''}
       <select class="att-select ${a ? 'a-' + a.status : ''}" data-on-change="sp-att" data-key="${s.id}|${st.id}"><option value="">${a?.status === 'booked' ? 'ditempah — belum direkod' : '— belum direkod —'}</option>${ATT_OPTS.map(o => `<option value="${o}" ${a?.status === o ? 'selected' : ''}>${LABEL[o]}</option>`).join('')}</select></li>`;

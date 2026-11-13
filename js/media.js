@@ -61,3 +61,12 @@ export function mediaGrid(list) {
   const m = Array.isArray(list) ? list : []; if (!m.length) return '';
   return `<div class="media-grid">${m.map(x => isVideo(x) ? `<video controls playsinline preload="metadata" data-pmedia="${escA(x.path)}"></video>` : `<a href="javascript:void 0" onclick="this.querySelector('img').src&&window.open(this.querySelector('img').src,'_blank')"><img loading="lazy" alt="" data-pmedia="${escA(x.path)}"></a>`).join('')}</div>`;
 }
+
+/* Avatar bergambar: staf (public-media) atau pelajar (progress-media, persendirian). */
+const escP = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const ini = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+export function photoAvatar(name, path, { priv = false, cls = '', size } = {}) {
+  const st = size ? `width:${size}px;height:${size}px;` : '';
+  if (!path) return `<div class="avatar ${cls}" style="${st}">${escP(ini(name))}</div>`;
+  return `<div class="avatar ${cls}" style="${st}padding:0;overflow:hidden"><img alt="" style="width:100%;height:100%;object-fit:cover" ${priv ? `data-pmedia="${escP(path)}"` : `src="${escP(publicUrl(path))}"`}></div>`;
+}

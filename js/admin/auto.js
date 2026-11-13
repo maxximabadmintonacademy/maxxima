@@ -80,7 +80,7 @@ Object.assign(ACTIONS, {
   },
   'remind-run': async () => {
     if (S.mode !== 'supabase') return toast('Mod demo: peringatan dihantar kepada ibu bapa yang ada akaun (simulasi).');
-    try { const n = await rpc('run_payment_reminders'); toast(n ? `${n} peringatan dihantar ke portal ibu bapa` : 'Tiada invois yang perlu diingatkan hari ini'); }
+    try { const n = await rpc('run_daily_reminders'); toast(n ? `${n} peringatan dihantar ke portal ibu bapa` : 'Tiada invois yang perlu diingatkan hari ini'); }
     catch (e) { toast(e.message, true); }
   },
 });

@@ -434,3 +434,10 @@ button.b-match:hover{border-color:var(--brand)}
 .rr-table td,.rr-table th{text-align:center}.rr-table td:first-child,.rr-table th:first-child{text-align:left}
 .bars{display:flex;align-items:flex-end;gap:4px;height:120px;padding:8px 0}.bars div{flex:1;background:var(--brand);border-radius:4px 4px 0 0;min-height:2px;position:relative}
 .bars div span{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--muted);white-space:nowrap}
+/* v22: pilih coach dengan gambar */
+.coach-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:6px}
+.coach-pick .cp{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px;cursor:pointer;background:var(--surface)}
+.coach-pick .cp input{display:none}.coach-pick .cp:has(input:checked){border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft,#e0e7ff)}
+.coach-pick .cp .avatar{width:52px;height:52px;flex:none;font-size:16px}.coach-pick b{display:block;font-size:14px}.coach-pick span{display:block;font-size:12px;color:var(--muted)}
+.coach-pick .pos{color:var(--brand);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:11px}.coach-pick .q{margin-top:3px;line-height:1.35}
+.stars{display:flex;gap:4px;font-size:30px;cursor:pointer;user-select:none}.stars span{color:#d1d5db}.stars span.on{color:#f5b301}

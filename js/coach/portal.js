@@ -1,10 +1,10 @@
 // Portal Coach: sesi hari ini & minggu ini (termasuk kategori umur yang diberi), tanda kehadiran, pelajar, akaun.
-import { ACTIONS } from '../registry.js';
-import { S, loadCoach, markRead, subscribeNotifications, setPassword, insert, rpc } from '../data.js';
-import { uploadMedia, mediaGrid, publicUrl } from '../media.js';
+import { ACTIONS, INPUTS } from '../registry.js';
+import { S, loadCoach, markRead, subscribeNotifications, subscribeTables, setPassword, insert, rpc } from '../data.js';
+import { uploadMedia, mediaGrid, publicUrl, photoAvatar } from '../media.js';
 import { planCard, planView, openPlanEditor, copyPlan } from '../planner.js';
 import { LANGS_ALL } from '../admin/sessions.js';
-import { $, esc, ic, F, avatar, UI, app, toast, openModal, fmtDate, fmtShort, hm, todayISO, addDays, parseISO, DAYS, LABEL, friendlyError } from '../ui.js';
+import { $, esc, ic, F, avatar, UI, app, toast, openModal, fmtDate, fmtShort, hm, todayISO, addDays, parseISO, DAYS, LABEL, friendlyError, liveRender } from '../ui.js';
 import { T, byId, venueName, progName, attRate, studentName } from '../admin/helpers.js';
 import { courtLbl, calItems, sessionAlerts, sTime, sCourt, groupsOf, rosterOf, ageOn, ageCat, isPersonal, ensureSession, openSession, langName } from '../admin/sessions.js';
 import { setI18nActive } from '../i18n.js';
@@ -54,7 +54,8 @@ export async function enterCoach() {
   $('#view').innerHTML = `<div class="boot">Memuatkan jadual anda…</div>`;
   try { await loadCoach(); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>Gagal memuatkan data.</b><p class="muted">${esc(friendlyError(e))}</p></div>`; return; }
   if (S.mode === 'supabase' ? (S.profile.must_change_pw || !S.profile.tc_accepted_at) : /onboard/.test(location.search)) UI.cob = S.profile.must_change_pw ? 1 : 2;
-  subscribeNotifications(() => render());
+  subscribeNotifications(n => { if (n?.title) toast('🔔 ' + n.title); liveRender(render); });
+  subscribeTables(['attendance', 'class_sessions', 'announcements', 'feedback', 'progress_records', 'trials', 'events', 'booking_requests', 'lesson_plans'], () => liveRender(render));
   window.addEventListener('hashchange', () => { document.body.classList.remove('nav-open'); render(); window.scrollTo(0, 0); });
   render();
 }
@@ -118,12 +119,13 @@ CV.pelajar = () => {
   const today = todayISO(), ids = new Set(); mine(addDays(today, -60), addDays(today, 14)).forEach(({ s, c }) => rosterOf(s, c).forEach(x => ids.add(x.id)));
   T('class_enrolments').filter(e => T('classes').some(c => c.id === e.class_id && c.coach_id === st()?.id)).forEach(e => ids.add(e.student_id));
   const list = [...ids].map(id => byId('students', id)).filter(Boolean).sort((a, b) => a.full_name.localeCompare(b.full_name));
-  return `${head('Pelajar', `${list.length} pelajar dalam sesi anda`)}<div class="card"><ul class="list">${list.map(x => { const r = attRate(x.id); return `<li class="list-item" style="cursor:pointer" data-action="c-student" data-id="${x.id}">${avatar(x.full_name)}<div class="li-main"><div class="li-title">${esc(x.full_name)}${x.medical_notes ? ' <span style="color:var(--bad)">⚕</span>' : ''}</div>
+  return `${head('Pelajar', `${list.length} pelajar dalam sesi anda`)}<div class="card"><ul class="list">${list.map(x => { const r = attRate(x.id); return `<li class="list-item" style="cursor:pointer" data-action="c-student" data-id="${x.id}">${photoAvatar(x.full_name, x.photo_path, { priv: true })}<div class="li-main"><div class="li-title">${esc(x.full_name)}${x.medical_notes ? ' <span style="color:var(--bad)">⚕</span>' : ''}</div>
     <div class="li-sub">${x.birth_date ? ageOn(x.birth_date) + ' thn · ' + esc(ageCat(x) || '') + ' · ' : ''}${esc(progName(x.programme_id))}</div></div>${r != null ? `<b class="num" style="color:${r < 75 ? 'var(--bad)' : 'var(--ok)'}">${r}%</b>` : ''}</li>`; }).join('') || '<li class="empty">Belum ada pelajar.</li>'}</ul></div>`;
 };
-CV.akaun = () => { const me = st(); return `${head('Akaun', '')}<div class="card card-pad mb"><div class="cell-person">${avatar(S.profile.full_name || S.profile.email)}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
+CV.akaun = () => { const me = st(); return `${head('Akaun', '')}<div class="card card-pad mb"><div class="cell-person">${photoAvatar(S.profile.full_name || S.profile.email, me?.photo_path, { size: 56 })}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
   ${me ? `<p class="muted" style="margin-top:10px;font-size:13px">Bahasa: ${(me.languages || []).map(langName).join(', ') || '—'}${me.qualifications ? '<br>Kelayakan: ' + esc(me.qualifications) : ''}</p>` : ''}
-  <div class="actions" style="margin-top:14px"><button class="btn" data-action="c-pw">Tukar kata laluan</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} Log keluar</button></div></div>
+  <div class="actions" style="margin-top:14px">${me ? `<label class="btn" style="cursor:pointer">📷 ${me.photo_path ? 'Tukar gambar profil' : 'Tambah gambar profil'}<input type="file" accept="image/*" style="display:none" data-on-change="c-photo"></label>` : ''}${'Notification' in window && Notification.permission === 'default' ? '<button class="btn" data-action="notif-perm">🔔 Hidupkan notifikasi</button>' : ''}<button class="btn" data-action="c-pw">Tukar kata laluan</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} Log keluar</button></div></div>
+  ${T('feedback').length ? `<div class="card mb"><div class="card-head"><div><h3>Maklum balas ibu bapa</h3><div class="sub">Untuk sesi anda</div></div><b>${(T('feedback').reduce((n, f) => n + f.rating, 0) / T('feedback').length).toFixed(1)} ★</b></div><ul class="list">${T('feedback').slice().sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 10).map(f => `<li class="list-item"><div class="li-main"><div class="li-title"><span style="color:#f5b301">${'★'.repeat(f.rating)}</span><span style="color:#d1d5db">${'★'.repeat(5 - f.rating)}</span> ${esc(studentName(f.student_id) || '')}</div>${f.comment ? `<div class="li-sub">“${esc(f.comment)}”</div>` : ''}<div class="li-sub">${fmtShort((f.created_at || '').slice(0, 10))}</div></div></li>`).join('')}</ul></div>` : ''}
   <div class="card card-pad"><b>Tetapan paparan</b>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><span>Bahasa</span>${langSwitch()}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px"><span>Tema</span>${themeSwitch()}</div></div>`; };
@@ -179,3 +181,11 @@ Object.assign(ACTIONS, {
     if (ids.length) { try { await markRead(ids); render(); } catch (e) { console.warn(e); } }
   },
 });
+
+INPUTS['c-photo'] = async (v, el) => {
+  const f = el.files?.[0], me = st(); if (!f || !me) return;
+  try { const path = await uploadMedia('public-media', 'staff/' + me.id, f, { maxMB: 5 });
+    if (S.mode === 'supabase') await rpc('coach_set_photo', { p_path: path });
+    me.photo_path = path; toast('Gambar profil disimpan — dipaparkan kepada ibu bapa semasa memilih coach'); render(); }
+  catch (e) { toast(friendlyError(e), true); }
+};

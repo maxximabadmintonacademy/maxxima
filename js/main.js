@@ -1,6 +1,6 @@
 // Titik masuk: log masuk, penghalaan peranan, shell Portal Admin, router.
-import { S, init, loadAll, signIn, signOut, resetPassword, setPassword, demoLogin, expirePackages, markRead, subscribeNotifications } from './data.js';
-import { $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError } from './ui.js';
+import { S, init, loadAll, signIn, signOut, resetPassword, setPassword, demoLogin, expirePackages, markRead, subscribeNotifications, subscribeTables } from './data.js';
+import { $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError, liveRender } from './ui.js';
 import { VIEWS, ACTIONS, INPUTS } from './registry.js';
 import { t, setLang, setI18nActive, langSwitch } from './i18n.js';
 import { setTheme } from './theme.js';
@@ -23,6 +23,7 @@ import './admin/ops.js';
 import './admin/announce.js';
 import './admin/ops2.js';
 import './admin/auto.js';
+import './admin/v22.js';
 
 const root = () => $('#root');
 const logoSvg = `<img src="assets/logo.png" alt="MBA" class="brand-img">`;
@@ -55,7 +56,9 @@ function showLogin(msg = '') {
       <div class="auth-err" id="authErr">${esc(msg)}</div>
       <button class="btn primary" style="height:44px" type="submit">${t('Log Masuk')}</button>
       <button class="btn ghost" type="button" data-action="forgot">${t('Lupa kata laluan?')}</button>
-    </form>`}`, true);
+    </form>
+    <div style="border-top:1px solid var(--line);margin-top:16px;padding-top:14px;text-align:center"><div class="muted" style="font-size:13px;margin-bottom:8px">${t('Ibu bapa pelajar Maxxima tetapi belum ada akaun?')}</div>
+      <button class="btn" type="button" style="width:100%" data-action="signup">${t('Daftar akaun ibu bapa')}</button></div>`}`, true);
   $('#loginForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const f = e.target; if (!f.reportValidity()) return;
@@ -116,7 +119,9 @@ async function enter() {
   $('#view').innerHTML = `<div class="boot">Memuatkan data akademi…</div>`;
   try { await loadAll(); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>Gagal memuatkan data.</b><p class="muted">${esc(friendlyError(e))}</p><p class="muted" style="margin-top:6px">Pastikan schema.sql telah dijalankan dan config.js betul.</p></div>`; return; }
   try { await expirePackages(); } catch (e) { console.warn('expire_packages', e); }
-  subscribeNotifications(() => { renderNav(parse().id); });
+  subscribeNotifications(n => { renderNav(parse().id); if (n?.title) toast('🔔 ' + n.title); });
+  subscribeTables(['booking_requests', 'payments', 'invoices', 'students', 'leads', 'trials', 'feedback', 'package_requests', 'tournament_entries', 'waitlist', 'attendance', 'class_sessions', 'announcements', 'student_packages'],
+    () => liveRender(() => { renderNav(parse().id); route(); }));
   window.addEventListener('hashchange', route);
   route();
 }
@@ -202,9 +207,29 @@ Object.assign(ACTIONS, {
   },
   'set-theme': id => { setTheme(id); (app.relang || app.render)(); },
   'demo-login': role => { demoLogin(role); enter(); },
+  'signup': () => openModal({
+    title: t('Daftar Akaun Ibu Bapa'), submit: t('Daftar & Masuk'),
+    body: `<p class="muted" style="font-size:13px;margin-bottom:12px">${t('Untuk ibu bapa yang anaknya sudah berdaftar di akademi. Guna e-mel atau no. WhatsApp yang sama seperti semasa pendaftaran anak — sistem akan memautkan semua anak anda secara automatik.')}</p>
+    <div class="form-grid">
+      <label class="f full">${t('E-mel atau No. WhatsApp')}<input name="login" required autocomplete="username"></label>
+      <label class="f full">${t('Nama anda')}<input name="name" required></label>
+      <label class="f">${t('Nama anak (seperti didaftarkan)')}<input name="child" required></label>
+      <label class="f">${t('Tarikh lahir anak')}<input name="birth" type="date" required></label>
+      <label class="f">${t('Kata laluan (min. 8 aksara)')}<input name="p1" type="password" minlength="8" autocomplete="new-password" required></label>
+      <label class="f">${t('Ulang kata laluan')}<input name="p2" type="password" minlength="8" autocomplete="new-password" required></label>
+    </div><p class="muted" style="font-size:12px;margin-top:8px">${t('Anak belum berdaftar? Isi borang pendaftaran di laman akademi dahulu.')}</p>`,
+    onSubmit: async d => {
+      if (d.p1 !== d.p2) throw new Error(t('Kata laluan tidak sama.'));
+      if (S.mode !== 'supabase') throw new Error(t('Tidak tersedia dalam mod demo.'));
+      const { data, error } = await S.client.rpc('public_parent_signup', { p_login: d.login.trim(), p_password: d.p1, p_name: d.name.trim(), p_child: d.child.trim(), p_birth: d.birth });
+      if (error) throw new Error(error.message);
+      await signIn(data.login, d.p1); await enter();
+      toast(t('Akaun berjaya dicipta — {n} anak dipautkan.', { n: data.children }));
+    },
+  }),
   'forgot': () => openModal({
     title: t('Set Semula Kata Laluan'), submit: t('Hantar Pautan'),
-    body: `<p class="muted" style="margin-bottom:12px">${t('Kami akan menghantar pautan untuk menetapkan kata laluan baharu.')}</p><label class="f">${t('E-mel')}<input name="email" type="email" required></label>`,
+    body: `<p class="muted" style="margin-bottom:12px">${t('Kami akan menghantar pautan untuk menetapkan kata laluan baharu.')}</p><label class="f">${t('E-mel')}<input name="email" type="email" required></label><p class="muted" style="font-size:12.5px;margin-top:10px">${t('Log masuk dengan no. telefon atau tiada e-mel? Minta admin set semula kata laluan melalui WhatsApp.')}</p>`,
     onSubmit: async d => { await resetPassword(d.email.trim()); toast(t('Pautan dihantar. Semak e-mel anda.')); },
   }),
   'notifications': async () => {
@@ -248,3 +273,4 @@ boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__installPrompt = e; app.render?.(); });
 ACTIONS['pwa-install'] = async () => { const p = window.__installPrompt; if (!p) return toast('Gunakan menu pelayar: "Tambah ke skrin utama" / "Install app".'); p.prompt(); await p.userChoice.catch(() => {}); window.__installPrompt = null; app.render?.(); };
+ACTIONS['notif-perm'] = async () => { try { const r = await Notification.requestPermission(); toast(r === 'granted' ? 'Notifikasi dihidupkan ✓' : 'Notifikasi tidak dibenarkan oleh pelayar', r !== 'granted'); app.render?.(); } catch (e) { toast(e.message, true); } };

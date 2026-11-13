@@ -26,7 +26,7 @@ VIEWS.leads = () => {
     new: `<button class="btn sm primary" data-action="lead-form" data-id="${l.id}">${ic('msg', 'sm')} Hantar borang trial</button> <button class="btn sm" data-action="lead-contacted" data-id="${l.id}">Tandakan Dihubungi</button>`,
     contacted: `<button class="btn sm primary" data-action="lead-form" data-id="${l.id}">${ic('msg', 'sm')} Hantar borang trial</button> <button class="btn sm" data-action="lead-trial" data-id="${l.id}">Jadual Trial</button> <button class="btn sm" data-action="lead-enrol" data-id="${l.id}">Mohon Daftar</button>`,
     trial_scheduled: `<a class="btn sm" href="#trial">Lihat Trial</a>`,
-    trial_done: `<button class="btn sm accent" data-action="lead-enrol" data-id="${l.id}">Mohon Daftar</button>`,
+    trial_done: `<button class="btn sm accent" data-action="lead-enrol" data-id="${l.id}">Mohon Daftar</button>${l.trial_token ? ` <button class="btn sm" data-action="lead-fb" data-id="${l.id}">★ Link maklum balas</button>` : ''}`,
     requested: `<a class="btn sm" href="#kemasukan">Lihat Pendaftaran</a>`,
   }[l.status] || '<span class="muted">—</span>');
   return `
@@ -335,6 +335,10 @@ Object.assign(ACTIONS, {
     await update('students', id, { status: 'active', joined_on: todayISO() });
     if (s.lead_id) await update('leads', s.lead_id, { status: 'enrolled' });
     toast(`${s.full_name} kini pelajar aktif`); app.render();
+    // akaun portal ibu bapa dicipta automatik (jika belum ada) — kata laluan dipaparkan untuk dihantar melalui WhatsApp
+    if (!byId('students', id).guardian_id && (s.guardian_phone || T('guardians').some(g => g.student_id === id && (g.email || g.phone)))) {
+      try { await makeParentAccount(id, false); } catch (e) { toast('Akaun ibu bapa tidak dapat dicipta automatik: ' + e.message, true); }
+    }
   },
   'enrol-drop': id => confirmModal({ title: 'Batalkan permohonan?', message: `Permohonan <b>${esc(byId('students', id).full_name)}</b> akan ditandakan "Berhenti".`, ok: 'Batalkan Permohonan', danger: true, onOk: async () => { await update('students', id, { status: 'left' }); toast('Permohonan dibatalkan'); app.render(); } }),
 });
@@ -602,12 +606,8 @@ const credMsg = ({ name, login, password, kids, url }) => pickL(
   `Hi ${name}, your Maxxima Badminton Academy parent portal account for ${kids} is ready.\n\nLink: ${url}\nLogin: ${login}\nPassword: ${password}\n\nIn the portal you can see the schedule, attendance, invoices and receipts, and upload payment proof. Please change your password after logging in (Account > Change password). Thank you! 🏸`,
   `${name} 您好，${kids} 的 Maxxima Badminton Academy 家长平台账户已开通。\n\n链接：${url}\n登录：${login}\n密码：${password}\n\n您可在平台查看课程表、出席、发票和收据，并上传付款凭证。登录后请更改密码（账户 > 更改密码）。谢谢！🏸`);
 const pickL = (ms, en, zh) => ({ ms, en, zh }[getLang()] ?? ms);
-ACTIONS['parent-acct'] = (id, el) => {
-  const s = byId('students', id), reset = el?.dataset.reset === '1';
-  confirmModal({ title: reset ? 'Set semula kata laluan ibu bapa?' : 'Cipta akaun portal ibu bapa?',
-    message: reset ? 'Kata laluan baharu akan dijana. Kata laluan lama tidak boleh digunakan lagi.' : `Akaun dicipta untuk penjaga utama <b>${esc(s.guardian_name || '')}</b> menggunakan e-mel penjaga, atau no. WhatsApp jika tiada e-mel. Adik-beradik yang sama penjaga dipautkan sekali.`,
-    ok: reset ? 'Set semula' : 'Cipta akaun',
-    onOk: async () => {
+export async function makeParentAccount(id, reset = false) {
+  const s = byId('students', id);
       let r;
       if (S.mode === 'demo') {
         const ph = String(s.guardian_phone || '').replace(/\D/g, ''), login = (T('guardians').find(g => g.student_id === id && g.email)?.email || (ph.startsWith('0') ? '6' + ph : ph) + '@maxxima.app').toLowerCase();
@@ -628,7 +628,13 @@ ACTIONS['parent-acct'] = (id, el) => {
       setTimeout(() => openModal({ title: 'Akaun ibu bapa sedia', cancel: 'Tutup', body: `<div class="hint" style="margin-bottom:12px">Log masuk: <b>${esc(r.login)}</b><br>Kata laluan: <b style="font-size:16px;letter-spacing:.05em">${esc(r.password)}</b><br><span class="muted" style="font-size:12.5px">Kata laluan ini hanya dipaparkan sekali. Hantar kepada ibu bapa sekarang.</span></div>
         <pre class="copybox" id="remindText">${esc(msg)}</pre>
         <div class="actions" style="margin-top:12px">${phone ? `<a class="btn primary" href="${waLink(phone, msg)}" target="_blank" rel="noopener">${ic('msg', 'sm')} Hantar melalui WhatsApp</a>` : ''}<button type="button" class="btn" data-action="copy-remind">Salin mesej</button></div>` }), 60);
-    } });
+    }
+ACTIONS['parent-acct'] = (id, el) => {
+  const s = byId('students', id), reset = el?.dataset.reset === '1';
+  confirmModal({ title: reset ? 'Set semula kata laluan ibu bapa?' : 'Cipta akaun portal ibu bapa?',
+    message: reset ? 'Kata laluan baharu akan dijana. Kata laluan lama tidak boleh digunakan lagi.' : `Akaun dicipta untuk penjaga utama <b>${esc(s.guardian_name || '')}</b> menggunakan e-mel penjaga, atau no. WhatsApp jika tiada e-mel. Adik-beradik yang sama penjaga dipautkan sekali.`,
+    ok: reset ? 'Set semula' : 'Cipta akaun',
+    onOk: () => makeParentAccount(id, reset) });
 };
 
 import { openMonthlyReport } from '../docs2.js';
