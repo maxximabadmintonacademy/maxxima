@@ -18,6 +18,15 @@ const SOURCES = ['Instagram', 'Facebook', 'TikTok', 'WhatsApp', 'Rujukan', 'Lama
    ===================================================================== */
 const LEAD_STATUSES = ['all', 'new', 'contacted', 'trial_scheduled', 'trial_done', 'requested', 'enrolled', 'lost'];
 
+/** Statistik laman web 30 hari (home.html): pelawat, klik, borang dihantar. */
+function siteStatsCard() {
+  const st = T('site_stats'); if (!st.length) return '';
+  const since = addDays(todayISO(), -30), sum = k => st.filter(x => x.day >= since && (typeof k === 'function' ? k(x.kind) : x.kind === k)).reduce((n, x) => n + x.n, 0);
+  const v = sum('view'), leads = sum(k => k.startsWith('lead_')), wa = sum('cta_wa');
+  return `<div class="kv-mini mb"><div><b>${v}</b><small>Pelawat laman web (30 hari)</small></div><div><b>${sum('cta_trial') + sum('slot_click')}</b><small>Klik trial / slot</small></div><div><b>${wa}</b><small>Klik WhatsApp</small></div><div><b>${leads}</b><small>Borang dihantar${v ? ` · ${(leads / v * 100).toFixed(1)}% penukaran` : ''}</small></div></div>`;
+}
+const LEAD_KIND = { personal: 'Personal', adult: 'Dewasa', holiday: 'Kem cuti', intl: 'Antarabangsa', corporate: 'Korporat' };
+const LEAD_EXP = { new: 'Baru belajar', rally: 'Boleh rally', match: 'Main pertandingan', unsure: 'Tidak pasti' };
 VIEWS.leads = () => {
   const f = UI.leadFilter || 'all';
   const leads = T('leads');
@@ -31,14 +40,15 @@ VIEWS.leads = () => {
   }[l.status] || '<span class="muted">—</span>');
   return `
   ${pageHead('Leads', 'Pertanyaan ibu bapa — susuli sehingga trial dan permohonan daftar.', `<button class="btn primary" data-action="lead-add">${ic('plus', 'sm')} Lead Baharu</button>`)}
+  ${siteStatsCard()}
   <div class="chips">${LEAD_STATUSES.map(s => `<button class="chip ${f === s ? 'on' : ''}" data-action="lead-filter" data-id="${s}">${s === 'all' ? 'Semua' : LABEL[s]}<span class="n">${s === 'all' ? leads.filter(l => !l.archived_at).length : leads.filter(l => !l.archived_at && l.status === s).length}</span></button>`).join('')}${leads.some(l => l.archived_at) ? `<button class="chip ${f === 'archived' ? 'on' : ''}" data-action="lead-filter" data-id="archived">Arkib<span class="n">${leads.filter(l => l.archived_at).length}</span></button>` : ''}</div>
   <div class="card"><div class="table-wrap"><table>
     <thead><tr><th>Bakal Pelajar</th><th>Ibu Bapa</th><th>Sumber</th><th>Minat</th><th>Tarikh</th><th>Status</th><th>Tindakan</th><th></th></tr></thead>
     <tbody>${rows.map(l => `<tr>
       <td><div class="cell-person">${avatar(l.child_name)}<div><b>${esc(l.child_name)}</b><span>${l.child_age ? l.child_age + ' tahun' : '—'}</span></div></div></td>
       <td>${esc(l.guardian_name || '—')}<div class="muted" style="font-size:12px">${esc(l.phone || '')}</div></td>
-      <td>${esc(l.source || '—')}</td>
-      <td>${l.programme_id ? esc(progName(l.programme_id)) : '—'}<div class="muted" style="font-size:12px">${l.venue_id ? esc(venueName(l.venue_id)) : ''}</div></td>
+      <td>${esc(l.source || '—')}${l.kind && l.kind !== 'group_trial' ? `<div><span class="badge b-info">${esc(LEAD_KIND[l.kind] || l.kind)}</span></div>` : ''}${l.ref ? `<div class="muted" style="font-size:11.5px">${esc(l.ref)}</div>` : ''}</td>
+      <td>${l.programme_id ? esc(progName(l.programme_id)) : '—'}<div class="muted" style="font-size:12px">${l.venue_id ? esc(venueName(l.venue_id)) : ''}</div>${l.pref_times ? `<div class="muted" style="font-size:12px">🕒 ${esc(l.pref_times)}</div>` : ''}${l.experience ? `<div class="muted" style="font-size:12px">${esc(LEAD_EXP[l.experience] || l.experience)}</div>` : ''}${l.notes ? `<div class="muted" style="font-size:12px;max-width:260px;white-space:pre-line">${esc(l.notes)}</div>` : ''}${l.email ? `<div class="muted" style="font-size:12px">${esc(l.email)}</div>` : ''}</td>
       <td class="num">${fmtShort((l.created_at || '').slice(0, 10))}</td>
       <td>${badge(l.status)}</td><td style="white-space:nowrap">${next(l)}</td>
       <td style="white-space:nowrap">${l.phone ? `<a class="btn sm" href="${waLink(l.phone, msgLeadThanks({ guardian: l.guardian_name, child: l.child_name }))}" target="_blank" rel="noopener" title="WhatsApp">${ic('msg', 'sm')}</a>` : ''}

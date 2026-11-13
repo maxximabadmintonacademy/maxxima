@@ -16,7 +16,7 @@ export const S = {
 export const ADMIN_TABLES = [
   'settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'parent_tax_info', 'invoice_items', 'expenses', 'leads', 'trials', 'students',
   'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes',
-  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills', 'feedback', 'package_requests', 'staff_private', 'coach_checkins', 'session_assignments',
+  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills', 'feedback', 'package_requests', 'staff_private', 'coach_checkins', 'session_assignments', 'site_stats',
 ];
 const WINDOWED = new Set(['class_sessions', 'attendance']);   // hanya 90 hari terakhir + akan datang
 const WINDOW_DAYS = 90;
@@ -92,7 +92,7 @@ export function demoLogin(role) {
 /* ---------------------------------------------------------------------
    MUAT DATA
    --------------------------------------------------------------------- */
-const ORDER_KEY = { staff_private: 'staff_id', settings: 'key', tournament_stats: 'tournament_id' };
+const ORDER_KEY = { staff_private: 'staff_id', site_stats: 'day', settings: 'key', tournament_stats: 'tournament_id' };
 async function fetchAll(table, sinceISO) {
   const out = [];
   for (let from = 0; ; from += 1000) {
