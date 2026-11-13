@@ -4,14 +4,16 @@ import { S, loadCoach, markRead, subscribeNotifications, subscribeTables, setPas
 import { uploadMedia, mediaGrid, publicUrl, photoAvatar } from '../media.js';
 import { planCard, planView, openPlanEditor, copyPlan } from '../planner.js';
 import { LANGS_ALL } from '../admin/sessions.js';
-import { $, esc, ic, F, avatar, UI, app, toast, openModal, fmtDate, fmtShort, hm, todayISO, addDays, parseISO, DAYS, LABEL, friendlyError, liveRender } from '../ui.js';
+import { $, esc, ic, F, avatar, UI, app, toast, openModal, fmtDate, fmtShort, hm, todayISO, addDays, parseISO, DAYS, LABEL, friendlyError, liveRender , loadErrorBox } from '../ui.js';
 import { T, byId, venueName, progName, attRate, studentName } from '../admin/helpers.js';
 import { courtLbl, calItems, sessionAlerts, sTime, sCourt, groupsOf, rosterOf, ageOn, ageCat, isPersonal, ensureSession, openSession, langName } from '../admin/sessions.js';
 import { setI18nActive } from '../i18n.js';
-import { annCard, visibleAnns } from '../admin/announce.js';
+import { annCard, visibleAnns, showAnnPopup } from '../admin/announce.js';
+import { showTour } from '../tour.js';
 import { startDomI18n } from '../i18n-dom.js';
 import { langSwitch } from '../i18n.js';
 import { themeSwitch } from '../theme.js';
+import { coachExtraCards } from './v25.js';
 
 const CV = {};
 const SKILLS = [['footwork', 'Footwork'], ['strokes', 'Pukulan'], ['tactics', 'Taktik'], ['fitness', 'Kecergasan'], ['attitude', 'Sikap']];
@@ -52,12 +54,13 @@ export async function enterCoach() {
   setI18nActive(true); startDomI18n();
   renderShell(); app.render = render; app.relang = () => { renderShell(); render(); };
   $('#view').innerHTML = `<div class="boot">Memuatkan jadual anda…</div>`;
-  try { await loadCoach(); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>Gagal memuatkan data.</b><p class="muted">${esc(friendlyError(e))}</p></div>`; return; }
+  try { await loadCoach(); } catch (e) { console.error(e); $('#view').innerHTML = loadErrorBox(e); return; }
   if (S.mode === 'supabase' ? (S.profile.must_change_pw || !S.profile.tc_accepted_at) : /onboard/.test(location.search)) UI.cob = S.profile.must_change_pw ? 1 : 2;
   subscribeNotifications(n => { if (n?.title) toast('🔔 ' + n.title); liveRender(render); });
-  subscribeTables(['attendance', 'class_sessions', 'announcements', 'feedback', 'progress_records', 'trials', 'events', 'booking_requests', 'lesson_plans'], () => liveRender(render));
+  subscribeTables(['attendance', 'class_sessions', 'announcements', 'feedback', 'progress_records', 'trials', 'events', 'booking_requests', 'lesson_plans'], () => { liveRender(render); if (!UI.cob) setTimeout(() => showAnnPopup(), 600); });
   window.addEventListener('hashchange', () => { document.body.classList.remove('nav-open'); render(); window.scrollTo(0, 0); });
   render();
+  setTimeout(() => { if (!UI.cob && !showTour('coach', false, () => showAnnPopup())) showAnnPopup(); }, 900);
 }
 
 /* ---- Onboarding coach: kata laluan → paparan → profil → panduan ---- */
@@ -99,7 +102,9 @@ CV.hari = () => {
   const me = st(); if (!me) return head('Portal Coach', '') + `<div class="card card-pad">Akaun anda belum dipautkan dengan profil staf. Hubungi admin.</div>`;
   const today = todayISO(), list = mine(today, today), past = mine(addDays(today, -7), addDays(today, -1)).filter(x => x.s && x.s.status === 'scheduled');
   return `${head(`Hai, ${esc(me.full_name.split(' ')[0])}`, `${DAYS[parseISO(today).getDay()]}, ${fmtDate(today)} · ${list.length} sesi hari ini`)}
-  ${list.map(x => card(x)).join('') || '<div class="card empty mb">Tiada sesi hari ini.</div>'}
+  ${list.map(x => card(x)).join('') || (() => { const nx = mine(addDays(today, 1), addDays(today, 30)); return nx.length
+    ? `<div class="card empty mb">Tiada sesi hari ini. Sesi seterusnya: <b>${DAYS[parseISO(nx[0].date).getDay()]}, ${fmtDate(nx[0].date)}</b> — lihat tab Minggu.</div>`
+    : `<div class="card card-pad mb"><b>Belum ada sesi ditugaskan kepada anda</b><p class="muted" style="font-size:13px;margin-top:6px">Portal coach memaparkan kelas & sesi personal di mana anda ialah coach. Admin boleh tetapkan anda sebagai coach kelas di <b>Jadual Latihan</b>, coach sesi dalam panel sesi Kalendar, atau coach kategori (U8/U12…). Selepas itu jadual, senarai pelajar, kehadiran & pelan latihan akan muncul di sini.</p></div>`; })()}
   ${past.length ? `<h3 style="font-size:14px;margin:18px 0 8px">Belum ditanda (7 hari lepas)</h3>${past.map(x => card(x, true)).join('')}` : ''}
   ${T('events').filter(e => e.start_date >= today && e.status !== 'cancelled').length ? `<h3 style="font-size:14px;margin:20px 0 8px">Acara akan datang</h3>${T('events').filter(e => e.start_date >= today && e.status !== 'cancelled').sort((a, b) => a.start_date.localeCompare(b.start_date)).slice(0, 3).map(e => `<div class="card card-pad mb"><b>${esc(e.name)}</b><div class="muted" style="font-size:12.5px">${fmtDate(e.start_date)}${e.start_time ? ' · ' + hm(e.start_time) : ''}${e.venue_note ? ' · ' + esc(e.venue_note) : e.venue_id ? ' · ' + esc(venueName(e.venue_id)) : ''}${(e.staff_ids || []).includes(me.id) ? ' · <b>Anda bertugas</b>' : ''}</div></div>`).join('')}` : ''}
   ${T('courses').some(c => c.status === 'published') ? `<a class="card card-pad mb" href="#kursus" style="display:block;text-decoration:none;color:inherit">${ic('award', 'sm')} <b>Kursus</b> <span class="muted" style="font-size:12.5px">— bahan pembelajaran akademi →</span></a>` : ''}
@@ -124,7 +129,8 @@ CV.pelajar = () => {
 };
 CV.akaun = () => { const me = st(); return `${head('Akaun', '')}<div class="card card-pad mb"><div class="cell-person">${photoAvatar(S.profile.full_name || S.profile.email, me?.photo_path, { size: 56 })}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
   ${me ? `<p class="muted" style="margin-top:10px;font-size:13px">Bahasa: ${(me.languages || []).map(langName).join(', ') || '—'}${me.qualifications ? '<br>Kelayakan: ' + esc(me.qualifications) : ''}</p>` : ''}
-  <div class="actions" style="margin-top:14px">${me ? `<label class="btn" style="cursor:pointer">📷 ${me.photo_path ? 'Tukar gambar profil' : 'Tambah gambar profil'}<input type="file" accept="image/*" style="display:none" data-on-change="c-photo"></label>` : ''}${'Notification' in window && Notification.permission === 'default' ? '<button class="btn" data-action="notif-perm">🔔 Hidupkan notifikasi</button>' : ''}<button class="btn" data-action="c-pw">Tukar kata laluan</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} Log keluar</button></div></div>
+  <div class="actions" style="margin-top:14px">${me ? `<label class="btn" style="cursor:pointer">📷 ${me.photo_path ? 'Tukar gambar profil' : 'Tambah gambar profil'}<input type="file" accept="image/*" style="display:none" data-on-change="c-photo"></label>` : ''}${'Notification' in window && Notification.permission === 'default' ? '<button class="btn" data-action="notif-perm">🔔 Hidupkan notifikasi</button>' : ''}<button class="btn" data-action="tour-open" data-id="coach">📖 Panduan app</button><button class="btn" data-action="c-pw">Tukar kata laluan</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} Log keluar</button></div></div>
+  ${coachExtraCards(me)}
   ${T('feedback').length ? `<div class="card mb"><div class="card-head"><div><h3>Maklum balas ibu bapa</h3><div class="sub">Untuk sesi anda</div></div><b>${(T('feedback').reduce((n, f) => n + f.rating, 0) / T('feedback').length).toFixed(1)} ★</b></div><ul class="list">${T('feedback').slice().sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 10).map(f => `<li class="list-item"><div class="li-main"><div class="li-title"><span style="color:#f5b301">${'★'.repeat(f.rating)}</span><span style="color:#d1d5db">${'★'.repeat(5 - f.rating)}</span> ${esc(studentName(f.student_id) || '')}</div>${f.comment ? `<div class="li-sub">“${esc(f.comment)}”</div>` : ''}<div class="li-sub">${fmtShort((f.created_at || '').slice(0, 10))}</div></div></li>`).join('')}</ul></div>` : ''}
   <div class="card card-pad"><b>Tetapan paparan</b>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><span>Bahasa</span>${langSwitch()}</div>
@@ -139,7 +145,7 @@ Object.assign(ACTIONS, {
     try { if (S.mode === 'supabase') await rpc('coach_update_self', { p_langs: langs, p_quals: q, p_phone: ph }); const st = meStaff(); if (st) Object.assign(st, { languages: langs, qualifications: q || null, phone: ph || st.phone }); UI.cob = 4; render(); }
     catch (e) { toast(friendlyError(e), true); }
   },
-  'cob-done': async () => { try { if (S.mode === 'supabase') await rpc('user_onboard_done'); S.profile.must_change_pw = false; S.profile.tc_accepted_at = new Date().toISOString(); UI.cob = 0; renderShell(); render(); toast('Selamat bertugas!'); } catch (e) { toast(friendlyError(e), true); } },
+  'cob-done': async () => { try { if (S.mode === 'supabase') await rpc('user_onboard_done'); S.profile.must_change_pw = false; S.profile.tc_accepted_at = new Date().toISOString(); UI.cob = 0; renderShell(); render(); toast('Selamat bertugas!'); setTimeout(() => showTour('coach'), 500); } catch (e) { toast(friendlyError(e), true); } },
   /* Profil pelajar + progres bergambar/video */
   'c-student': id => {
     const x = byId('students', id), recs = T('progress_records').filter(r => r.student_id === id).sort((a, b) => (b.recorded_on || '').localeCompare(a.recorded_on || '')).slice(0, 8);

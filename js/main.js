@@ -1,6 +1,6 @@
 // Titik masuk: log masuk, penghalaan peranan, shell Portal Admin, router.
 import { S, init, loadAll, signIn, signOut, resetPassword, setPassword, demoLogin, expirePackages, markRead, subscribeNotifications, subscribeTables } from './data.js';
-import { $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError, liveRender } from './ui.js';
+import { $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError, liveRender , loadErrorBox } from './ui.js';
 import { VIEWS, ACTIONS, INPUTS } from './registry.js';
 import { t, setLang, setI18nActive, langSwitch } from './i18n.js';
 import { setTheme } from './theme.js';
@@ -24,6 +24,8 @@ import './admin/announce.js';
 import './admin/ops2.js';
 import './admin/auto.js';
 import './admin/v22.js';
+import './admin/scoring.js';
+import './admin/v25.js';
 
 const root = () => $('#root');
 const logoSvg = `<img src="assets/logo.png" alt="MBA" class="brand-img">`;
@@ -49,6 +51,7 @@ function showLogin(msg = '') {
         <button class="btn primary" style="height:44px" data-action="demo-login" data-id="admin">${ic('shield', 'sm')} ${t('Masuk sebagai Admin')}</button>
         <button class="btn" style="height:44px" data-action="demo-login" data-id="coach">${ic('award', 'sm')} ${t('Masuk sebagai Coach')}</button>
         <button class="btn" style="height:44px" data-action="demo-login" data-id="parent">${ic('users', 'sm')} ${t('Masuk sebagai Ibu Bapa')}</button>
+        <button class="btn" style="height:44px" data-action="demo-login" data-id="official">${ic('trophy', 'sm')} ${t('Masuk sebagai Urus Setia')}</button>
       </div>` : `
     <form id="loginForm" class="stack" novalidate>
       <label class="f">${t('E-mel atau No. Telefon')}<input name="email" type="text" inputmode="email" autocomplete="username" required autofocus></label>
@@ -113,17 +116,28 @@ async function enter() {
   if (p.lang) setLang(p.lang);   // bahasa diingat pada akaun, bukan hanya peranti
   if (p.role === 'parent') { const pp = await import('./parent/portal.js'); return pp.enterParent(); }
   if (p.role === 'coach') { const cp = await import('./coach/portal.js'); return cp.enterCoach(); }
-  if (p.role !== 'admin') return showPortalSoon(p.role);
+  if (p.role === 'official') setupOfficial();
+  else if (p.role !== 'admin') return showPortalSoon(p.role);
   setI18nActive(true); startDomI18n(); app.relang = () => { renderShell(); route(); };   // Portal Admin: teks diterjemah oleh i18n-dom.js
   renderShell();
   $('#view').innerHTML = `<div class="boot">Memuatkan data akademi…</div>`;
-  try { await loadAll(); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>Gagal memuatkan data.</b><p class="muted">${esc(friendlyError(e))}</p><p class="muted" style="margin-top:6px">Pastikan schema.sql telah dijalankan dan config.js betul.</p></div>`; return; }
-  try { await expirePackages(); } catch (e) { console.warn('expire_packages', e); }
+  try { await loadAll(); } catch (e) { console.error(e); $('#view').innerHTML = loadErrorBox(e); return; }
+  if (p.role !== 'official') try { await expirePackages(); } catch (e) { console.warn('expire_packages', e); }
   subscribeNotifications(n => { renderNav(parse().id); if (n?.title) toast('🔔 ' + n.title); });
-  subscribeTables(['booking_requests', 'payments', 'invoices', 'students', 'leads', 'trials', 'feedback', 'package_requests', 'tournament_entries', 'waitlist', 'attendance', 'class_sessions', 'announcements', 'student_packages'],
+  subscribeTables(p.role === 'official' ? ['tournament_matches', 'tournament_entries', 'tournaments'] : ['booking_requests', 'payments', 'invoices', 'students', 'leads', 'trials', 'feedback', 'package_requests', 'tournament_entries', 'waitlist', 'attendance', 'class_sessions', 'announcements', 'student_packages'],
     () => liveRender(() => { renderNav(parse().id); route(); }));
   window.addEventListener('hashchange', route);
   route();
+  setTimeout(() => import('./admin/v25.js').then(m => m.pwPrompt()), 500);
+}
+
+/* Urus setia / pengadil: portal admin terhad kepada kejohanan & skor langsung */
+function setupOfficial() {
+  const items = [{ id: 'skor', label: 'Skor Langsung', icon: 'trophy' }, { id: 'kejohanan', label: 'Kejohanan', icon: 'flag' }];
+  NAV.splice(0, NAV.length, { group: 'Kejohanan', items });
+  ALL_ITEMS.splice(0, ALL_ITEMS.length, ...items.map(i => ({ ...i, group: 'Kejohanan' })));
+  BOTTOM_NAV.splice(0, BOTTOM_NAV.length, ...items);
+  document.body.classList.add('role-official');
 }
 
 /* =====================================================================
@@ -137,7 +151,7 @@ function renderShell() {
       <nav class="nav" id="nav"></nav>
       <div class="side-foot">
         <div class="avatar lime">${esc((S.profile.full_name || 'A').slice(0, 2).toUpperCase())}</div>
-        <div style="min-width:0;flex:1"><div class="who">${esc(S.profile.full_name || 'Admin')}</div><div class="role">Pentadbir Sistem</div></div>
+        <div style="min-width:0;flex:1"><div class="who">${esc(S.profile.full_name || 'Admin')}</div><div class="role">${S.profile.role === 'official' ? 'Urus Setia Kejohanan' : 'Pentadbir Sistem'}</div></div>
         <button class="icon-btn dark" data-action="logout" title="Log keluar" aria-label="Log keluar">${ic('logout', 'sm')}</button>
       </div>
     </aside>
@@ -147,14 +161,14 @@ function renderShell() {
         <button class="menu-btn" data-action="open-nav" aria-label="Buka menu">${ic('menu')}</button>
         <div class="crumb"><div class="crumb-top" id="crumbTop">Portal Admin</div><div class="crumb-title" id="crumbTitle">Dashboard</div></div>
         ${S.mode === 'demo' ? '<span class="demo-pill">MOD DEMO</span>' : ''}
-        <label class="top-search">${ic('search', 'sm')}<input id="globalSearch" placeholder="Cari pelajar… (Enter)"></label>
+        ${S.profile.role === 'official' ? '<span style="flex:1"></span>' : `<label class="top-search">${ic('search', 'sm')}<input id="globalSearch" placeholder="Cari pelajar… (Enter)"></label>`}
         <button class="icon-btn" data-action="notifications" aria-label="Tugasan" id="bellBtn"></button>
       </header>
       <main id="view"></main>
     </div>
   </div>
   <nav class="bottomnav" id="bottomnav" aria-label="Navigasi bawah"></nav>`;
-  $('#globalSearch').addEventListener('keydown', e => {
+  $('#globalSearch')?.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     UI.studentQ = e.target.value; e.target.value = '';
     if (parse().id === 'pelajar') render(); else location.hash = 'pelajar';
@@ -163,7 +177,8 @@ function renderShell() {
 
 const parse = () => {
   const [id, ...rest] = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/');
-  return { id: VIEWS[id] ? id : 'dashboard', param: rest.join('/') || null };
+  const home = S.profile?.role === 'official' ? 'skor' : 'dashboard', ok = VIEWS[id] && (S.profile?.role !== 'official' || ALL_ITEMS.some(i => i.id === id));
+  return { id: ok ? id : home, param: ok ? rest.join('/') || null : null };
 };
 
 function renderNav(id) {
@@ -180,7 +195,7 @@ function render() {
   const sy = window.scrollY;
   try { $('#view').innerHTML = VIEWS[id](param); }
   catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>Ralat memaparkan halaman.</b><p class="muted">${esc(e.message)}</p></div>`; }
-  $('#crumbTop').textContent = 'Portal Admin · ' + item.group;
+  $('#crumbTop').textContent = (S.profile?.role === 'official' ? 'Urus Setia · ' : 'Portal Admin · ') + item.group;
   $('#crumbTitle').textContent = item.label;
   document.title = `${item.label} — Maxxima Admin`;
   renderNav(id);

@@ -53,7 +53,7 @@ ACTIONS['user-invite'] = () => {
       ${F('E-mel atau no. telefon (untuk log masuk)', 'email', { req: true })}
       ${F('Nama', 'full_name')}
       ${F('No. WhatsApp (untuk hantar maklumat log masuk)', 'phone', { type: 'tel' })}
-      ${F('Peranan', 'role', { value: 'parent', opts: [['parent', 'Ibu Bapa'], ['coach', 'Coach'], ['admin', 'Admin']] })}
+      ${F('Peranan', 'role', { value: 'parent', opts: [['parent', 'Ibu Bapa'], ['coach', 'Coach'], ['official', 'Urus setia / pengadil kejohanan'], ['admin', 'Admin']] })}
       <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="reset" value="1" style="width:auto;height:auto"> Set semula kata laluan jika akaun sudah wujud</label>
     </div>
     <div id="roleExtra" style="margin-top:14px"><div class="f"><span>Pautkan anak</span>${studentChecklist()}</div></div>`,
@@ -79,7 +79,7 @@ ACTIONS['user-edit'] = id => {
       ${F('Nama', 'full_name', { value: p.full_name })}
       ${F('Telefon', 'phone', { value: p.phone })}
       ${F('E-mel log masuk', 'email', { type: 'email', value: p.email, full: true })}
-      ${F('Peranan', 'role', { value: p.role, opts: [['admin', 'Admin'], ['coach', 'Coach'], ['parent', 'Ibu Bapa']] })}
+      ${F('Peranan', 'role', { value: p.role, opts: [['admin', 'Admin'], ['coach', 'Coach'], ['parent', 'Ibu Bapa'], ['official', 'Urus setia / pengadil kejohanan']] })}
       <label class="f" style="justify-content:flex-end"><span style="flex-direction:row;display:flex;align-items:center;gap:8px;height:40px"><input type="checkbox" name="active" value="1" ${p.active ? 'checked' : ''} style="width:auto;height:auto"> Akaun aktif</span></label>
     </div>
     ${p.role === 'parent' && T('parent_tax_info').find(x => x.id === id) ? (t => `<div class="hint" style="margin-top:10px"><b>Maklumat cukai (diisi ibu bapa):</b> ${esc(t.legal_name || '')} · ${esc(t.id_type || '').toUpperCase()} ${esc(t.id_no || '')}${t.tin ? ' · TIN ' + esc(t.tin) : ''}${t.address ? '<br>' + esc(t.address) : ''}</div>`)(T('parent_tax_info').find(x => x.id === id)) : ''}

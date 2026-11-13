@@ -20,8 +20,24 @@ export function annCard(a, tr = x => x) {
   return `<article class="card mb ann">${a.image_path ? `<img class="ann-img" loading="lazy" src="${publicUrl(a.image_path)}" alt="">` : ''}
     <div class="card-pad"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><span class="badge ${tone}">${esc(tr(k))}</span>${a.pinned ? `<span class="badge b-muted">📌</span>` : ''}<span class="muted" style="font-size:12px">${fmtShort((a.publish_at || a.created_at || '').slice(0, 10))}</span></div>
     <h3 style="font-size:16px;margin-bottom:4px">${esc(a.title)}</h3>${a.body ? `<p class="ann-body">${esc(a.body)}</p>` : ''}
-    ${a.link ? `<a class="btn sm" style="margin-top:10px" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(tr('Buka pautan'))}</a>` : ''}</div></article>`;
+    ${a.link ? `<a class="btn sm ${a.cta_label ? 'primary' : ''}" style="margin-top:10px" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.cta_label ? tr(a.cta_label) : tr('Buka pautan'))}</a>` : ''}</div></article>`;
 }
+/* Pop-up promosi (iklan) — satu sahaja setiap kali app dibuka; "Jangan tunjuk lagi" disimpan dalam peranti. */
+const POPKEY = id => 'mx_pop_' + id;
+export function showAnnPopup(tr = x => x, { only } = {}) {
+  let seen = []; try { seen = JSON.parse(sessionStorage.getItem('mx_pop_seen') || '[]'); } catch { /* abaikan */ }
+  const a = visibleAnns().filter(x => x.popup && (!only || x.id === only)).find(x => { try { return localStorage.getItem(POPKEY(x.id)) !== '1' && !seen.includes(x.id); } catch { return !seen.includes(x.id); } });
+  if (!a || document.querySelector('#modal.open')) return;
+  try { sessionStorage.setItem('mx_pop_seen', JSON.stringify([...seen, a.id])); } catch { /* abaikan */ }
+  const el = document.getElementById('modal');
+  el.innerHTML = `<div class="modal promo" role="dialog" aria-modal="true"><button class="promo-x" data-action="close-modal" aria-label="Tutup">✕</button>
+    ${a.image_path ? `<img class="promo-img" src="${publicUrl(a.image_path)}" alt="">` : ''}
+    <div class="promo-in"><h3>${esc(a.title)}</h3>${a.body ? `<p>${esc(a.body)}</p>` : ''}
+      <div class="promo-btns">${a.link ? `<a class="btn primary" href="${esc(a.link)}" target="_blank" rel="noopener" data-action="close-modal">${esc(tr(a.cta_label || 'Lihat butiran'))}</a>` : ''}
+      <button type="button" class="btn ghost" data-action="pop-never" data-id="${a.id}">${esc(tr('Jangan tunjuk lagi'))}</button></div></div></div>`;
+  el.classList.add('open');
+}
+ACTIONS['pop-never'] = id => { try { localStorage.setItem(POPKEY(id), '1'); } catch { /* abaikan */ } const el = document.getElementById('modal'); el.classList.remove('open'); el.innerHTML = ''; };
 export const visibleAnns = () => T('announcements').filter(a => (!a.expires_on || a.expires_on >= todayISO()) && (a.publish_at || '') <= new Date().toISOString())
   .sort((a, b) => (b.pinned - a.pinned) || (b.publish_at || '').localeCompare(a.publish_at || ''));
 
@@ -47,7 +63,10 @@ function annForm(a) {
     ${F('Jenis', 'kind', { value: a?.kind || 'news', opts: Object.entries(KIND).map(([k, [l]]) => [k, l]) })}
     ${F('Sasaran', 'audience', { value: a?.audience || 'all', opts: Object.entries(AUD) })}
     <div class="full" id="annTgt">${box(a?.audience || 'all', [...(a?.target_ids || []), ...(a?.target_cats || [])])}</div>
-    ${F('Pautan (pilihan)', 'link', { value: a?.link, ph: 'https://…', full: true })}
+    ${F('Pautkan ke kejohanan (pilihan)', 'tn_link', { value: '', opts: [['', '— Tiada —'], ...T('tournaments').filter(x => x.public_page && x.slug).map(x => ['tournament.html?t=' + x.slug, x.name])] })}
+    ${F('Teks butang', 'cta_label', { value: a?.cta_label || '', ph: 'cth. Daftar sekarang / Saya berminat' })}
+    ${F('Pautan (pilihan)', 'link', { value: a?.link, ph: 'https://…  atau  tournament.html?t=…', full: true })}
+    <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="popup" value="1" ${a?.popup ? 'checked' : ''} style="width:auto;height:auto"> Papar sebagai pop-up promosi bila ibu bapa / coach buka app (ada butang "Jangan tunjuk lagi") — sesuai untuk kejohanan, acara & promosi dengan poster</label>
     ${F('Terbit pada', 'publish_at', { type: 'date', value: (a?.publish_at || new Date().toISOString()).slice(0, 10) })}
     ${F('Tamat paparan (pilihan)', 'expires_on', { type: 'date', value: a?.expires_on })}
     <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="pinned" value="1" ${a?.pinned ? 'checked' : ''} style="width:auto;height:auto"> Pin di atas</label>
@@ -61,7 +80,7 @@ async function saveAnn(d, a) {
   if (d.rm_img === '1') image_path = null;
   if (d.image && d.image.size) image_path = await uploadMedia('public-media', 'announce', d.image, { maxMB: 10 });
   const today = todayISO(), pub = d.publish_at && d.publish_at > today ? new Date(d.publish_at + 'T07:00:00+08:00').toISOString() : (a?.publish_at && d.publish_at === a.publish_at.slice(0, 10) ? a.publish_at : new Date().toISOString());
-  const row = { title: d.title.trim(), body: val(d.body), kind: d.kind, audience: aud, target_ids: aud === 'category' ? [] : sel, target_cats: aud === 'category' ? sel : [], link: val(d.link), publish_at: pub, expires_on: val(d.expires_on), pinned: d.pinned === '1', image_path };
+  const row = { title: d.title.trim(), body: val(d.body), kind: d.kind, audience: aud, target_ids: aud === 'category' ? [] : sel, target_cats: aud === 'category' ? sel : [], link: val(d.tn_link) || val(d.link), cta_label: val(d.cta_label) || (val(d.tn_link) ? 'Daftar sekarang' : null), popup: d.popup === '1', publish_at: pub, expires_on: val(d.expires_on), pinned: d.pinned === '1', image_path };
   const r = a ? await update('announcements', a.id, row) : await insert('announcements', { ...row, created_by: S.mode === 'demo' ? null : S.profile.id });
   if (!a && d.notify === '1' && S.mode === 'supabase') { try { const n = await rpc('announce_notify', { p_id: r.id }); toast(`Diterbitkan · notifikasi dihantar kepada ${n} pengguna`); } catch (e) { toast(e.message, true); } }
   else toast(a ? 'Pengumuman dikemas kini' : 'Pengumuman diterbitkan');

@@ -441,3 +441,51 @@ button.b-match:hover{border-color:var(--brand)}
 .coach-pick .cp .avatar{width:52px;height:52px;flex:none;font-size:16px}.coach-pick b{display:block;font-size:14px}.coach-pick span{display:block;font-size:12px;color:var(--muted)}
 .coach-pick .pos{color:var(--brand);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:11px}.coach-pick .q{margin-top:3px;line-height:1.35}
 .stars{display:flex;gap:4px;font-size:30px;cursor:pointer;user-select:none}.stars span{color:#d1d5db}.stars span.on{color:#f5b301}
+/* v23: pop-up promosi */
+.modal.promo{max-width:420px;padding:0;overflow:hidden;position:relative;border-radius:20px}
+.promo-img{display:block;width:100%;max-height:62vh;object-fit:contain;background:#0b1e4a}
+.promo-in{padding:16px 18px 18px}.promo-in h3{font-size:17px;margin-bottom:4px;padding-right:38px}.promo-img+.promo-in h3{padding-right:0}.promo-in p{font-size:13.5px;color:var(--muted);white-space:pre-line;max-height:120px;overflow:auto}
+.promo-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.promo-btns .btn.primary{flex:1;justify-content:center}
+.promo-x{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:16px;cursor:pointer;z-index:2}
+.tn-promo{display:block;border-radius:16px;overflow:hidden;text-decoration:none;color:inherit}.tn-promo img{display:block;width:100%;max-height:340px;object-fit:cover;object-position:top}
+
+/* v25: pemapar dokumen dalam app */
+.docview{position:fixed;inset:0;z-index:300;background:#e8ebf2;display:flex;flex-direction:column}
+.docview-bar{display:flex;gap:8px;align-items:center;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));background:var(--card,#fff);border-bottom:1px solid var(--line,#e5e9f2);flex-wrap:wrap}
+.docview-bar .grow{flex:1}.docview iframe{flex:1;width:100%;border:0;background:#fff}
+@media (max-width:640px){.docview-bar .hide-m{display:none}.docview-bar .btn{padding:8px 11px}}
+/* v25: Skor langsung */
+.sk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:6px}
+.sk-card{display:block;text-align:left;width:100%;background:var(--card,#fff);border:1px solid var(--line,#e5e9f2);border-radius:14px;padding:12px 14px;cursor:pointer;font:inherit;color:inherit}
+.sk-card:active{transform:scale(.99)}.sk-card.done{opacity:.75}
+.sk-meta{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap}.sk-meta b{color:var(--ink);font-size:14px}
+.sk-court{background:var(--ink,#0b2545);color:#fff;border-radius:6px;padding:1px 7px;font-weight:700}
+.sk-vs{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-top:8px;font-weight:600;font-size:14.5px}
+.sk-vs span:last-child{text-align:right}.sk-vs em{font-style:normal;font-weight:800;color:var(--muted);font-size:13px}.sk-vs .w{color:var(--ok,#16a34a)}
+.sk-go{margin-top:8px;font-size:12.5px;font-weight:700;color:var(--brand,#1d4ed8)}
+.role-official [data-action="tn-add"],.role-official [data-action="tn-del"],.role-official [data-action="tn-edit"],.role-official [data-action="cat-add"],.role-official [data-action="cat-edit"],
+.role-official [data-action="ent-add"],.role-official [data-action="ent-del"],.role-official [data-action="ent-refund"],.role-official [data-action="tn-export"],.role-official [data-action="draw-reset"],
+.role-official [data-action="ent-invoice"],.role-official [data-action="tn-arch"]{display:none!important}
+/* v25: pilihan pukal & arkib */
+.selcol{width:38px;cursor:pointer}.cbx{display:inline-block;width:18px;height:18px;border:2px solid var(--muted,#94a3b8);border-radius:5px;vertical-align:middle;position:relative}
+.cbx.on{background:var(--brand,#1d4ed8);border-color:var(--brand,#1d4ed8)}.cbx.on::after{content:"";position:absolute;left:4px;top:0;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+tr.sel td{background:var(--brand-soft,#eef4ff)}
+.bulkbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--brand-soft,#eef4ff);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.radio-row{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;padding:7px 0;cursor:pointer}.radio-row input{width:auto;height:auto;margin-top:3px}
+/* v25: borang ketersediaan coach */
+.avail{display:flex;flex-direction:column}.av-row{display:flex;gap:6px 12px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}
+.av-day{display:flex;gap:8px;align-items:center;width:100px;font-weight:600;font-size:13.5px;cursor:pointer}.av-day input{width:18px;height:18px}
+.av-t{display:flex;gap:5px;align-items:center}.av-t input{width:96px;padding:6px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit;font-size:13px}
+.av-or{color:var(--muted);font-size:12px}.av-row:not(:has(.av-day input:checked)) .av-t{opacity:.35}
+@media (max-width:640px){.av-day{width:100%}.av-t input{width:92px}}
+/* v25: panduan pengenalan */
+.tour{position:fixed;inset:0;z-index:400;background:rgba(7,22,55,.55);display:grid;place-items:center;padding:16px;animation:tourIn .25s ease}
+@keyframes tourIn{from{opacity:0}to{opacity:1}}
+.tour-card{position:relative;width:min(420px,100%);background:var(--card,#fff);color:var(--ink);border-radius:22px;padding:26px 22px 18px;box-shadow:0 30px 80px rgba(0,0,0,.35);text-align:center}
+.tour-x{position:absolute;top:10px;right:12px;border:0;background:none;font-size:16px;color:var(--muted);cursor:pointer;padding:6px}
+.tour-body{min-height:250px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.tour-ico{font-size:52px;line-height:1;width:96px;height:96px;border-radius:28px;background:var(--brand-soft,#eef4ff);display:grid;place-items:center;margin-bottom:6px}
+.tour-body h3{font-size:19px;font-weight:800}.tour-body p{font-size:14.5px;line-height:1.55;color:var(--muted);max-width:330px}
+.tour-steps{text-align:left;font-size:13.5px;line-height:1.7;margin:4px 0 0 18px;color:var(--ink)}.tour-ok{color:var(--ok)!important;font-weight:700}
+.tour-dots{display:flex;gap:6px;justify-content:center;margin:14px 0}.tour-dots span{width:7px;height:7px;border-radius:9px;background:var(--line,#dde3ee);transition:.2s}.tour-dots span.on{width:20px;background:var(--brand,#1d4ed8)}
+.tour-nav{display:flex;justify-content:space-between;gap:10px}

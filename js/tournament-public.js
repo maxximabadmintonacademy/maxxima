@@ -5,6 +5,8 @@
 import { CONFIG } from './config.js';
 import { t, setLang, getLang, LANGS } from './i18n.js';
 import { standings, GROUP_NAMES } from './tn-core.js';
+import { certDoc } from './cert.js';
+import { openDoc } from './docview.js';
 import './theme.js';
 
 const $ = s => document.querySelector(s);
@@ -19,7 +21,7 @@ const hm = v => (v ? String(v).slice(0, 5) : '');
 const RM = n => 'RM' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const pubUrl = p => !p ? '' : /^https?:/.test(p) ? p : `${CONFIG.SUPABASE_URL}/storage/v1/object/public/public-media/${p}`;
 const wa = (phone, text) => `https://wa.me/${String(phone || '').replace(/\D/g, '').replace(/^0/, '60')}?text=${encodeURIComponent(text)}`;
-let client = null, INFO = null, RES = null, F = { step: 1 }, LOOK = null;
+let client = null, INFO = null, RES = null, F = { step: 1 }, LOOK = null, FEED = [], ME = null;
 
 const rpc = async (fn, args) => { if (demo) return demoRpc(fn, args); const { data, error } = await client.rpc(fn, args); if (error) throw error; return data; };
 const track = k => { try { if (!demo && sessionStorage.getItem('tn_' + k + slug) !== '1') { sessionStorage.setItem('tn_' + k + slug, '1'); rpc('public_tn_track', { p_slug: slug, p_kind: k }); } } catch { /* abaikan */ } };
@@ -48,13 +50,13 @@ function page() {
   const T = INFO.t, cats = INFO.cats || [], open = isOpen(T), rules = parseRules(T.rules);
   const max = cats.reduce((n, c) => Math.max(n, c.max || 0), 0);
   const dates = [[T.early_deadline, t('Akhir jersi percuma & bayaran penuh')], [T.registration_deadline, t('Tutup pendaftaran (atau lebih awal jika penuh)')], [T.list_date, t('Senarai peserta dikongsi')], [T.protest_end, t('Tempoh bantahan kelayakan tamat')], [T.start_date, t('Hari pertandingan'), 'game']].filter(x => x[0]).sort((a, b) => a[0].localeCompare(b[0]));
-  const showRes = RES && ['ongoing', 'completed', 'closed'].includes(T.status) && (RES.matches || []).length;
+  const showRes = RES && (T.draw_public || ['ongoing', 'completed', 'closed'].includes(T.status)) && (RES.matches || []).length;
   const prizes = String(T.prizes || '').split('\n').filter(l => l.trim()).map(l => { const i = l.indexOf(':'); return i > 0 ? [l.slice(0, i).trim(), l.slice(i + 1).trim()] : ['', l.trim()]; });
   const nameParts = String(T.name).match(/^(.*?)(\s+(?:\d{4}))?$/) || [T.name, T.name, ''];
   const contact = T.contact_phone ? wa(T.contact_phone, t('Hi, saya ingin bertanya tentang {n}', { n: T.name })) : '';
   return `
   <header class="topbar"><div class="wrap"><a class="brand" href="#top"><img src="assets/logo.png" alt=""><span>${esc(T.academy || 'Maxxima')}</span></a>
-    <nav><a href="#kategori">${t('Kategori')}</a>${(T.shirt_sizes || []).length ? `<a href="#jersi">${t('Jersi')}</a>` : ''}<a href="#format">${t('Format')}</a>${rules.length ? `<a href="#peraturan">${t('Peraturan')}</a>` : ''}${showRes ? `<a href="#keputusan">${t('Keputusan')}</a>` : ''}<a href="#semak">${t('Semak status')}</a>${open ? `<a class="cta" href="#daftar" data-reg>${t('Daftar')}</a>` : ''}</nav>
+    <nav><a href="#kategori">${t('Kategori')}</a>${(T.shirt_sizes || []).length ? `<a href="#jersi">${t('Jersi')}</a>` : ''}<a href="#format">${t('Format')}</a>${rules.length ? `<a href="#peraturan">${t('Peraturan')}</a>` : ''}${showRes ? `<a href="#keputusan">${T.status === 'open' || T.status === 'closed' ? t('Cabutan') : t('Keputusan')}</a>` : ''}<a href="#peserta">${t('Portal peserta')}</a><a href="#semak">${t('Semak status')}</a>${open ? `<a class="cta" href="#daftar" data-reg>${t('Daftar')}</a>` : ''}</nav>
     <div class="langsw2">${LANGS.map(([c, l]) => `<button type="button" class="${c === getLang() ? 'on' : ''}" data-lang="${c}">${l}</button>`).join('')}</div></div></header>
   ${T.notice ? `<div class="notice"><div class="wrap"><span class="tag">${t('NOTIS')}</span><span>${esc(T.notice)}</span>${contact ? `<a href="${contact}" target="_blank" rel="noopener">${t('Hubungi admin')}</a>` : ''}</div></div>` : ''}
   <section class="hero" id="top"><div class="wrap"><div>
@@ -74,7 +76,7 @@ function page() {
   </div>
   <div class="box" style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b>📍 ${esc(T.venue || '')}</b><div class="muted" style="font-size:13px">${esc(T.venue_area || '')}</div></div><a class="b out" href="${mapUrl(T)}" target="_blank" rel="noopener">${t('Cari lokasi')}</a>${T.shirt_free && T.early_deadline ? `<div style="flex-basis:100%;font-size:13px;color:#7a5b00;background:#fff7e0;border-radius:10px;padding:8px 10px">👕 ${t('Daftar & bayar penuh sebelum {d} untuk jersi acara PERCUMA.', { d: fd(T.early_deadline) })}</div>` : ''}</div></div>
 
-  ${showRes ? `<section class="sec wrap" id="keputusan"><h2>${t('Keputusan & kedudukan langsung')}</h2>${results()}</section>` : ''}
+  ${showRes ? `<section class="sec wrap" id="keputusan"><h2>${['ongoing', 'completed'].includes(T.status) ? t('Keputusan & kedudukan langsung') : t('Cabutan kumpulan & jadual')}</h2>${results()}</section>` : ''}
 
   <section class="sec wrap" id="kategori"><h2>${t('Kategori')}</h2><p class="sub">${t('{n} kategori perseorangan · kelayakan ikut tahun lahir, bukan tarikh hari jadi.', { n: cats.length })}</p>
     <div class="cards">${cats.map(c => { const left = c.max ? c.max - c.taken : null, pct = c.max ? Math.min(100, Math.round(c.taken / c.max * 100)) : 0; return `<div class="cat ${left === 0 ? 'full' : ''}"><div class="n">${esc(c.name)}</div><div class="el">${G[c.gender]?.() || ''} · ${eligTxt(c)}</div>
@@ -106,6 +108,7 @@ function page() {
       <div class="box"><span class="step-n">3</span><div><h3>${t('Bayar & sahkan')}</h3><p>${t('Tempat disahkan selepas penganjur menyemak borang dan bayaran.')}</p></div></div></div>
     ${open ? `<div class="regbox">${form()}</div>` : `<div class="box"><p>${t('Pendaftaran ditutup.')}</p></div>`}</section>
 
+  <section class="sec wrap" id="peserta"><h2>${t('Portal peserta')}</h2><p class="sub">${t('Log masuk dengan No. rujukan dan No. WhatsApp penjaga untuk lihat kumpulan, jadual & keputusan, dan muat turun sijil.')}</p><div class="regbox">${playerBox()}</div></section>
   <section class="sec wrap" id="semak"><h2>${t('Semak status & bayaran')}</h2><div class="regbox">${lookup()}</div></section>
   <footer><div class="wrap" style="display:flex;gap:18px;flex-wrap:wrap;justify-content:space-between"><div><b style="color:#fff">${esc(T.name)}</b><br>${fd(T.start_date)} · ${esc(T.venue || '')}</div>
     <div>${T.contact_phone ? `WhatsApp: <a href="${contact}" target="_blank" rel="noopener">${esc(T.contact_phone)}</a><br>` : ''}${T.contact_email ? `${t('E-mel')}: <a href="mailto:${esc(T.contact_email)}">${esc(T.contact_email)}</a>` : ''}</div>
@@ -164,11 +167,68 @@ function results() {
     const grp = [...new Set(ms.filter(m => m.stage === 'group').map(m => m.group_no))].sort((a, b) => a - b), fin = ms.filter(m => m.stage === 'final');
     const tbl = (title, list) => { const ids = [...new Set(list.flatMap(m => [m.entry_a, m.entry_b]).filter(Boolean))], st = standings(ids, list);
       return `<div class="card card-pad mb"><b>${title}</b><table class="st" style="margin-top:6px"><tr><th>${t('Pemain')}</th><th>${t('M')}</th><th>${t('K')}</th><th>+/-</th></tr>${st.map((r, i) => `<tr><td>${i + 1}. ${nm(r.id)}</td><td>${r.w}</td><td>${r.l}</td><td>${r.pf - r.pa}</td></tr>`).join('')}</table>
-      <table class="st" style="margin-top:8px">${list.sort((a, b) => a.round_no - b.round_no || a.match_no - b.match_no).map(m => `<tr><td>${nm(m.entry_a)}</td><td><b>${m.status === 'pending' ? (m.play_time ? hm(m.play_time) : 'vs') : m.status === 'walkover' ? 'WO' : `${m.score_a}–${m.score_b}`}</b></td><td style="text-align:right">${nm(m.entry_b)}</td></tr>`).join('')}</table></div>`; };
+      <table class="st" style="margin-top:8px">${list.sort((a, b) => a.round_no - b.round_no || a.match_no - b.match_no).map(m => `<tr><td>${nm(m.entry_a)}</td><td><b>${m.status === 'pending' ? (m.play_time ? hm(m.play_time) : 'vs') : m.status === 'walkover' ? 'WO' : `${m.score_a}–${m.score_b}`}</b>${m.status === 'pending' && m.court ? `<div style="font-size:11px;color:#64748b">C${esc(m.court)}</div>` : ''}</td><td style="text-align:right">${nm(m.entry_b)}</td></tr>`).join('')}</table></div>`; };
     const ko = ms.filter(m => m.stage === 'ko');
     return `<h3 style="margin:14px 0 8px">${esc(c.name)}</h3>${fin.length ? tbl(t('Pusingan akhir'), fin) : ''}${grp.map(g => tbl(t('Kumpulan') + ' ' + GROUP_NAMES[g - 1], ms.filter(m => m.stage === 'group' && m.group_no === g))).join('')}
       ${ko.length ? `<div class="card card-pad mb">${ko.sort((a, b) => a.round_no - b.round_no || a.match_no - b.match_no).map(m => `<div style="font-size:13px;margin:3px 0">${esc(m.round_label || '')} #${m.match_no}: ${nm(m.entry_a)} vs ${nm(m.entry_b)} ${m.score_text ? '· <b>' + esc(m.score_text) + '</b>' : ''}</div>`).join('')}</div>` : ''}`;
   }).join('');
+}
+
+
+/* ---- Suapan "baru mendaftar" (bertukar setiap 3 saat) ---- */
+function startFeed() {
+  if (!FEED.length || document.getElementById('feed')) return;
+  try { if (sessionStorage.getItem('tn_feed_off') === '1') return; } catch { /* abaikan */ }
+  const el = document.createElement('div'); el.id = 'feed'; el.className = 'feed'; document.body.appendChild(el);
+  const ago = iso => { const m = Math.max(1, Math.round((Date.now() - new Date(iso)) / 6e4)); return m < 60 ? t('{n} minit lalu', { n: m }) : m < 1440 ? t('{n} jam lalu', { n: Math.round(m / 60) }) : t('{n} hari lalu', { n: Math.round(m / 1440) }); };
+  let i = 0;
+  const show = () => { const x = FEED[i % FEED.length]; i++;
+    el.innerHTML = `<div class="feed-ic">🏸</div><div><b>${esc(x.name)}</b> ${t('baru mendaftar')}<br><span>${esc(x.cat)}${x.club ? ' · ' + esc(x.club) : ''} · ${ago(x.at)}</span></div><button aria-label="x" data-feedx>✕</button>`;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    el.querySelector('[data-feedx]').onclick = () => { clearInterval(startFeed._t); el.remove(); try { sessionStorage.setItem('tn_feed_off', '1'); } catch { /* abaikan */ } }; };
+  setTimeout(() => { show(); startFeed._t = setInterval(show, 3000); }, 2500);
+}
+
+/* ---- Portal peserta ---- */
+const PST = { unpaid: () => t('Belum bayar'), pending: () => t('Bukti diterima — menunggu pengesahan'), paid: () => t('Dibayar ✓'), waived: () => t('Percuma'), refunded: () => t('Dipulangkan') };
+function playerBox() {
+  if (!ME) return `<form id="pl" class="form-grid"><label class="f">${t('No. rujukan')}<input name="ref" style="text-transform:uppercase" placeholder="BR26-…" required></label><label class="f">${t('No. WhatsApp penjaga')}<input name="phone" inputmode="tel" placeholder="012-3456789" required></label>
+    <div class="f full"><button class="b dark" style="justify-content:center">${t('Log masuk peserta')}</button></div></form>`;
+  const e = ME.entry, T = ME.t, E = new Map((ME.entries || []).map(x => [x.id, x])), nm = id => esc(E.get(id)?.name || '—');
+  const my = (ME.matches || []).filter(m => m.entry_a === e.id || m.entry_b === e.id).sort((a, b) => (a.stage === 'final') - (b.stage === 'final') || a.round_no - b.round_no);
+  const grpMs = (ME.matches || []).filter(m => m.stage === 'group' && m.group_no === e.group), finMs = (ME.matches || []).filter(m => m.stage === 'final');
+  const tbl = (title, list) => { if (!list.length) return ''; const ids = [...new Set(list.flatMap(m => [m.entry_a, m.entry_b]).filter(Boolean))], st = standings(ids, list);
+    return `<div class="box pbx" style="margin-top:10px"><b>${title}</b><table class="st" style="margin-top:6px"><tr><th>${t('Pemain')}</th><th>${t('M')}</th><th>${t('K')}</th><th>+/-</th></tr>${st.map((r, i) => `<tr style="${r.id === e.id ? 'background:#eef4ff;font-weight:700' : ''}"><td>${i + 1}. ${nm(r.id)}</td><td>${r.w}</td><td>${r.l}</td><td>${r.pf - r.pa}</td></tr>`).join('')}</table></div>`; };
+  const place = placeOf(ME), withdrawn = e.status === 'withdrawn';
+  return `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start"><div><div style="font-size:20px;font-weight:800">${esc(e.name)}</div><div class="muted">${esc(ME.cat.name)} · ${esc(e.ref)}${e.club ? ' · ' + esc(e.club) : ''}</div></div><button class="b out" data-plout>${t('Log keluar')}</button></div>
+    <div class="dates" style="margin-top:12px"><div><b>${t('Status')}</b><span>${withdrawn ? t('Tarik diri') : e.status === 'confirmed' ? t('Disahkan ✓') : t('Berdaftar')}</span></div>
+      <div><b>${t('Bayaran')}</b><span>${(PST[e.pay_status] || PST.unpaid)()}${e.refund_amount ? ` · ${t('dipulangkan')} ${RM(e.refund_amount)}${e.refunded_at ? ' (' + fd(e.refunded_at) + ')' : ''}` : ''}</span></div>
+      ${e.shirt ? `<div><b>${t('Jersi')}</b><span>${esc(e.shirt)}${e.jersey ? ' · ' + t('percuma ✓') : ''}</span></div>` : ''}
+      ${e.group ? `<div><b>${t('Kumpulan')}</b><span>${GROUP_NAMES[e.group - 1]}</span></div>` : ''}</div>
+    ${T.group_link && !withdrawn ? `<a class="b lime" style="margin-top:12px" href="${esc(T.group_link)}" target="_blank" rel="noopener">${t('Sertai kumpulan WhatsApp')}</a>` : ''}
+    ${withdrawn ? '' : !my.length ? `<p class="muted" style="margin-top:12px">${t('Cabutan & jadual belum diterbitkan. Semak semula selepas senarai peserta dikongsi.')}</p>` : `
+      <h3 style="margin-top:16px">${t('Perlawanan saya')}</h3><div class="box pbx" style="margin-top:8px"><table class="st">${my.map(m => { const opp = m.entry_a === e.id ? m.entry_b : m.entry_a, mine = m.entry_a === e.id ? [m.score_a, m.score_b] : [m.score_b, m.score_a];
+        return `<tr><td style="text-align:left"><b>vs ${nm(opp)}</b><div style="font-size:11.5px;color:#64748b">${m.stage === 'final' ? t('Akhir') : t('Kumpulan') + ' ' + GROUP_NAMES[(m.group_no || 1) - 1]} · R${m.round_no}</div></td><td style="text-align:right;white-space:nowrap">${m.status === 'pending' ? `${m.play_time ? hm(m.play_time) : '—'}${m.court ? ' · C' + esc(m.court) : ''}` : m.status === 'walkover' ? (m.winner === e.id ? t('Menang (WO)') : t('Kalah (WO)')) : `<b style="color:${m.winner === e.id ? '#16a34a' : '#dc2626'}">${mine[0]}–${mine[1]}</b>`}</td></tr>`; }).join('')}</table></div>
+      ${tbl(t('Kumpulan') + ' ' + GROUP_NAMES[(e.group || 1) - 1], grpMs)}${finMs.some(m => m.entry_a === e.id || m.entry_b === e.id) ? tbl(t('Pusingan akhir'), finMs) : ''}`}
+    ${!withdrawn && T.cert_ready ? `${place ? `<div class="box" style="margin-top:12px;background:#fff8e1;border-color:#f5d97a"><b>🏆 ${['', t('Juara'), t('Naib juara'), t('Tempat ketiga'), t('Tempat keempat')][place]}!</b><div class="muted" style="font-size:13px">${t('Tahniah! Sijil pemenang rasmi diserahkan oleh urus setia kejohanan.')}</div></div>` : ''}<div class="box" style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:200px"><b>🎖️ ${t('Sijil penyertaan')}</b><div class="muted" style="font-size:13px">${t('Muat turun & simpan sebagai PDF')}</div></div><button class="b dark" data-cert>${t('Muat turun sijil')}</button></div>` : ''}`;
+}
+/** Kedudukan akhir pemain (1–4) daripada pusingan akhir round robin. */
+function placeOf(P) {
+  const fin = (P.matches || []).filter(m => m.stage === 'final'); if (!fin.length || fin.some(m => m.status === 'pending')) return 0;
+  const ids = [...new Set(fin.flatMap(m => [m.entry_a, m.entry_b]).filter(Boolean))], st = standings(ids, fin), i = st.findIndex(r => r.id === P.entry.id);
+  return i >= 0 && i < 4 ? i + 1 : 0;
+}
+async function openCert(P) {
+  const e = P.entry, T = P.t, place = placeOf(P);
+  let cfg = {}; try { cfg = (await rpc('public_cert_info')) || {}; } catch { /* abaikan */ }
+  const winPlain = place && (cfg.winner_mode || 'plain') === 'plain';
+  openDoc(certDoc([{ name: e.name, cat: P.cat.name, place: winPlain ? 0 : place, ref: e.ref }], { event: T.name, dates: fd(T.start_date), venue: T.venue, academy: 'Maxxima Badminton Academy',
+    logo: new URL('assets/logo.png', location.href).href, cfg, imgUrl: p => (/^https?:/.test(p) ? p : `${CONFIG.SUPABASE_URL}/storage/v1/object/public/public-media/${p.split('/').map(encodeURIComponent).join('/')}`) }), `sijil-${e.ref}.html`);
+}
+async function plLogin(ref, phone, silent) {
+  try { const r = await rpc('public_tn_player', { p_ref: ref, p_phone: phone }); if (!r?.ok) { if (!silent) toast(r?.error || t('Tidak dijumpai'), true); ME = null; return; }
+    ME = r; try { sessionStorage.setItem('tn_pl', JSON.stringify({ ref, phone })); } catch { /* abaikan */ } }
+  catch (err) { if (!silent) toast(err.message || String(err), true); }
 }
 
 function readForm() { const f = $('#tnf'); if (!f) return; const d = new FormData(f); for (const [k, v] of d.entries()) F[k] = k === 'birth_year' ? (v ? Number(v) : '') : v; if (f.agree) F.agree = f.agree.checked; }
@@ -201,6 +261,10 @@ function render() {
   }
   document.querySelector('[data-new]')?.addEventListener('click', () => { F = { step: 1 }; render(); $('#daftar').scrollIntoView(); });
   document.querySelector('[data-goref]')?.addEventListener('click', async e => { e.preventDefault(); try { LOOK = await rpc('public_tn_status', { p_ref: e.target.dataset.goref }); render(); $('#semak').scrollIntoView(); } catch (err) { toast(err.message, true); } });
+  const pl = $('#pl');
+  pl?.addEventListener('submit', async e => { e.preventDefault(); const d = new FormData(pl); await plLogin(String(d.get('ref')).trim(), String(d.get('phone')).trim()); render(); $('#peserta').scrollIntoView(); });
+  document.querySelector('[data-plout]')?.addEventListener('click', () => { ME = null; try { sessionStorage.removeItem('tn_pl'); } catch { /* abaikan */ } render(); $('#peserta').scrollIntoView(); });
+  document.querySelector('[data-cert]')?.addEventListener('click', () => openCert(ME));
   const lk = $('#lk');
   lk?.addEventListener('submit', async e => { e.preventDefault(); const ref = new FormData(lk).get('ref'); if (!ref) return; try { LOOK = await rpc('public_tn_status', { p_ref: ref }); if (LOOK) LOOK.ref ||= String(ref).toUpperCase(); track('status_check'); render(); $('#semak').scrollIntoView(); } catch (err) { toast(err.message, true); } });
   lk?.querySelector('[data-proof]')?.addEventListener('click', async ev => {
@@ -227,6 +291,13 @@ function demoRpc(fn, a) {
   if (fn === 'public_tn_track') return null;
   if (fn === 'public_tn_register') { const ref = 'BRBC-' + Math.random().toString(36).slice(2, 8).toUpperCase(); DEMO_DB.entries.push({ ref, ...a.p, pay_status: 'unpaid' }); return { ref, fee: 150, category: 'demo' }; }
   if (fn === 'public_tn_status') { const e = DEMO_DB.entries.find(x => x.ref === String(a.p_ref).toUpperCase()); return e ? { ok: true, ref: e.ref, player: e.player_name, category: 'Demo', pay_status: e.pay_status, status: 'registered', amount: 150 } : { ok: false }; }
+  if (fn === 'public_cert_info') return { signers: [{ name: 'Coach Doryn', title: 'Ketua Jurulatih' }, { name: '', title: 'Pengarah Kejohanan' }], winner_mode: 'plain' };
+  if (fn === 'public_tn_recent') return [{ name: 'Chan D** Y**', cat: "Boys' Singles Under 16", club: 'Ipoh City BA', at: new Date(Date.now() - 36e5).toISOString() }, { name: 'Leim X** J**', cat: 'Singles Under 10 (Boys & Girls)', club: '', at: new Date(Date.now() - 864e5).toISOString() }, { name: 'Yuki Y** Q**', cat: "Girls' Singles Under 16", club: 'Skba', at: new Date(Date.now() - 2 * 864e5).toISOString() }];
+  if (fn === 'public_tn_player') { if (String(a.p_ref).toUpperCase() !== 'BR26-DEMO') return { ok: false, error: 'No. rujukan tidak dijumpai.' };
+    const ids = ['e1', 'e2', 'e3', 'e4'], nm = ['Ali Demo', 'Chan Wei', 'Raju Kumar', 'Lim Boon'];
+    const ms = [[0, 1, 1, 21, 15], [2, 3, 1, 18, 21], [0, 2, 2, 21, 19], [1, 3, 2, 20, 18], [0, 3, 3, null, null], [1, 2, 3, null, null]].map(([a1, b1, r, sa, sb], i) => ({ id: 'm' + i, stage: 'group', group_no: 1, round_no: r, match_no: i + 1, entry_a: ids[a1], entry_b: ids[b1], score_a: sa, score_b: sb, status: sa == null ? 'pending' : 'done', winner: sa == null ? null : sa > sb ? ids[a1] : ids[b1], court: '3', play_time: '15:20' }));
+    return { ok: true, entry: { id: 'e1', ref: 'BR26-DEMO', name: 'Ali Demo', club: 'Maxxima', status: 'confirmed', pay_status: 'paid', amount: 150, shirt: 'S', jersey: true, group: 1 }, cat: { id: 'c2', name: "Boys' Singles Under 12" },
+      t: { name: 'Bukit Raja Badminton Challenge 2026', start_date: `${y}-12-12`, venue: 'GoTeam Sports Complex', status: 'ongoing', draw_public: true, cert_ready: true, group_link: 'https://chat.whatsapp.com/demo' }, entries: ids.map((id, i) => ({ id, name: nm[i], group: 1 })), matches: ms }; }
   if (fn === 'public_tn_proof') { const e = DEMO_DB.entries.find(x => x.ref === a.p_ref); if (e) e.pay_status = 'pending'; return null; }
 }
 
@@ -234,7 +305,9 @@ function demoRpc(fn, a) {
   try {
     if (!demo) { const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'); client = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, { auth: { persistSession: false } }); }
     INFO = await rpc('public_tn_info', { p_slug: slug });
-    if (INFO?.ok) { document.title = INFO.t.name; track('view'); try { RES = await rpc('public_tn_results', { p_slug: slug }); } catch { RES = null; } }
-    render();
+    if (INFO?.ok) { document.title = INFO.t.name; track('view'); try { RES = await rpc('public_tn_results', { p_slug: slug }); } catch { RES = null; }
+      try { FEED = (await rpc('public_tn_recent', { p_slug: slug })) || []; } catch { FEED = []; }
+      try { const sv = JSON.parse(sessionStorage.getItem('tn_pl') || 'null'); if (sv) await plLogin(sv.ref, sv.phone, true); } catch { /* abaikan */ } }
+    render(); startFeed();
   } catch (e) { console.error(e); $('#reg').innerHTML = `<div class="done"><h1>${t('Ralat')}</h1><p class="muted">${esc(e.message || e)}</p></div>`; }
 })();

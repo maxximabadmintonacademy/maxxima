@@ -104,7 +104,7 @@ const LABEL_MS = {
   // cuti
   approved: 'Lulus', rejected: 'Ditolak',
   // peranan
-  admin: 'Admin', coach: 'Coach', parent: 'Ibu Bapa',
+  admin: 'Admin', coach: 'Coach', parent: 'Ibu Bapa', official: 'Urus Setia',
   // jenis
   monthly: 'Yuran Bulanan', registration: 'Pendaftaran', jersey: 'Jersi', personal: 'Personal Coaching', tournament: 'Kejohanan', other: 'Lain-lain',
   full_time: 'Sepenuh Masa', part_time: 'Sambilan', group_trial: 'Trial Berkumpulan', personal_intro: 'Sesi Pengenalan Personal',
@@ -120,7 +120,7 @@ const LABEL_EN = {
   held: 'Completed', expired: 'Expired', fixed: 'Fixed Schedule', flexible: 'Flexible', package: 'Session Package',
   draft: 'Draft', open: 'Registration Open', closed: 'Registration Closed', ongoing: 'Ongoing', completed: 'Completed',
   registered: 'Registered', confirmed: 'Confirmed', withdrawn: 'Withdrawn', walkover: 'Walkover',
-  approved: 'Approved', rejected: 'Rejected', admin: 'Admin', coach: 'Coach', parent: 'Parent',
+  approved: 'Approved', rejected: 'Rejected', admin: 'Admin', coach: 'Coach', parent: 'Parent', official: 'Official',
   monthly: 'Monthly Fee', registration: 'Registration', jersey: 'Jersey', personal: 'Personal Coaching', tournament: 'Tournament', other: 'Others',
   full_time: 'Full-time', part_time: 'Part-time', group_trial: 'Group Trial', personal_intro: 'Personal Intro Session',
   singles: 'Singles', doubles: 'Doubles', boys: 'Boys', girls: 'Girls', mixed: 'Mixed', male: 'Male', female: 'Female',
@@ -135,7 +135,7 @@ const LABEL_ZH = {
   held: '已完成', expired: '已过期', fixed: '固定时间', flexible: '灵活预约', package: '课时配套',
   draft: '草稿', open: '报名开放', closed: '报名截止', ongoing: '进行中', completed: '已完成',
   registered: '已登记', confirmed: '已确认', withdrawn: '退出', walkover: '弃权',
-  approved: '批准', rejected: '已拒绝', admin: '管理员', coach: '教练', parent: '家长',
+  approved: '批准', rejected: '已拒绝', admin: '管理员', coach: '教练', parent: '家长', official: '赛事工作人员',
   monthly: '月费', registration: '报名费', jersey: '球衣', personal: '私人教练课', tournament: '比赛', other: '其他',
   full_time: '全职', part_time: '兼职', group_trial: '团体试课', personal_intro: '私人体验课',
   singles: '单打', doubles: '双打', boys: '男子', girls: '女子', mixed: '混合', male: '男', female: '女',
@@ -237,6 +237,7 @@ export function friendlyError(e) {
   if (c === '42501' || /row-level security|permission denied/i.test(m)) return t('Anda tidak mempunyai kebenaran untuk tindakan ini.');
   if (/Invalid login credentials/i.test(m)) return t('E-mel atau kata laluan tidak betul.');
   if (/Failed to fetch|NetworkError/i.test(m)) return t('Tiada sambungan ke pelayan. Semak internet anda.');
+  if (c === '57014' || /statement timeout/i.test(m)) return t('Pelayan mengambil masa terlalu lama. Tekan "Cuba semula". Jika berulang, maklumkan admin (perlu jalankan SQL prestasi terkini).');
   return t(m) || t('Sesuatu tidak kena. Cuba lagi.');
 }
 
@@ -252,4 +253,10 @@ export function liveRender(fn) {
     a.addEventListener('blur', () => setTimeout(() => liveRender(fn), 50), { once: true }); return;
   }
   const y = window.scrollY; fn(); window.scrollTo(0, y);
+}
+
+/** Kotak ralat muat data dengan butang cuba semula & log keluar (portal tidak tersekat kosong). */
+export function loadErrorBox(e) {
+  return `<div class="card card-pad"><b>${t('Gagal memuatkan data.')}</b><p class="muted">${esc(friendlyError(e))}</p>
+    <div class="actions" style="margin-top:12px;flex-wrap:wrap"><button class="btn primary" onclick="location.reload()">${t('Cuba semula')}</button><button class="btn" data-action="logout">${t('Log keluar')}</button></div></div>`;
 }

@@ -21,7 +21,7 @@ const LEAD_STATUSES = ['all', 'new', 'contacted', 'trial_scheduled', 'trial_done
 VIEWS.leads = () => {
   const f = UI.leadFilter || 'all';
   const leads = T('leads');
-  const rows = leads.filter(l => f === 'all' || l.status === f).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  const rows = leads.filter(l => (f === 'archived' ? !!l.archived_at : !l.archived_at && (f === 'all' || l.status === f))).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   const next = l => ({
     new: `<button class="btn sm primary" data-action="lead-form" data-id="${l.id}">${ic('msg', 'sm')} Hantar borang trial</button> <button class="btn sm" data-action="lead-contacted" data-id="${l.id}">Tandakan Dihubungi</button>`,
     contacted: `<button class="btn sm primary" data-action="lead-form" data-id="${l.id}">${ic('msg', 'sm')} Hantar borang trial</button> <button class="btn sm" data-action="lead-trial" data-id="${l.id}">Jadual Trial</button> <button class="btn sm" data-action="lead-enrol" data-id="${l.id}">Mohon Daftar</button>`,
@@ -31,7 +31,7 @@ VIEWS.leads = () => {
   }[l.status] || '<span class="muted">—</span>');
   return `
   ${pageHead('Leads', 'Pertanyaan ibu bapa — susuli sehingga trial dan permohonan daftar.', `<button class="btn primary" data-action="lead-add">${ic('plus', 'sm')} Lead Baharu</button>`)}
-  <div class="chips">${LEAD_STATUSES.map(s => `<button class="chip ${f === s ? 'on' : ''}" data-action="lead-filter" data-id="${s}">${s === 'all' ? 'Semua' : LABEL[s]}<span class="n">${s === 'all' ? leads.length : leads.filter(l => l.status === s).length}</span></button>`).join('')}</div>
+  <div class="chips">${LEAD_STATUSES.map(s => `<button class="chip ${f === s ? 'on' : ''}" data-action="lead-filter" data-id="${s}">${s === 'all' ? 'Semua' : LABEL[s]}<span class="n">${s === 'all' ? leads.filter(l => !l.archived_at).length : leads.filter(l => !l.archived_at && l.status === s).length}</span></button>`).join('')}${leads.some(l => l.archived_at) ? `<button class="chip ${f === 'archived' ? 'on' : ''}" data-action="lead-filter" data-id="archived">Arkib<span class="n">${leads.filter(l => l.archived_at).length}</span></button>` : ''}</div>
   <div class="card"><div class="table-wrap"><table>
     <thead><tr><th>Bakal Pelajar</th><th>Ibu Bapa</th><th>Sumber</th><th>Minat</th><th>Tarikh</th><th>Status</th><th>Tindakan</th><th></th></tr></thead>
     <tbody>${rows.map(l => `<tr>
@@ -42,7 +42,7 @@ VIEWS.leads = () => {
       <td class="num">${fmtShort((l.created_at || '').slice(0, 10))}</td>
       <td>${badge(l.status)}</td><td style="white-space:nowrap">${next(l)}</td>
       <td style="white-space:nowrap">${l.phone ? `<a class="btn sm" href="${waLink(l.phone, msgLeadThanks({ guardian: l.guardian_name, child: l.child_name }))}" target="_blank" rel="noopener" title="WhatsApp">${ic('msg', 'sm')}</a>` : ''}
-        <button class="btn sm" data-action="lead-edit" data-id="${l.id}" title="Edit">${ic('edit', 'sm')}</button></td></tr>`).join('') || `<tr><td colspan="8" class="empty">Tiada lead dalam kategori ini.</td></tr>`}</tbody>
+        <button class="btn sm" data-action="lead-edit" data-id="${l.id}" title="Edit">${ic('edit', 'sm')}</button> <button class="btn sm" data-action="lead-archive" data-id="${l.id}" title="${l.archived_at ? 'Keluarkan dari arkib' : 'Arkib'}">${l.archived_at ? '↩' : ic('file', 'sm')}</button></td></tr>`).join('') || `<tr><td colspan="8" class="empty">Tiada lead dalam kategori ini.</td></tr>`}</tbody>
   </table></div></div>`;
 };
 
@@ -478,7 +478,8 @@ const progNamesOf = s => progIdsOf(s).map(progName).join(' + ') || '—';
 VIEWS.pelajar = () => {
   const q = (UI.studentQ || '').toLowerCase(), st = UI.studentStatus || 'active', pg = UI.studentProg || '', vn = UI.studentVenue || '';
   const all = T('students');
-  const rows = all.filter(s => (st === 'all' || s.status === st) && (!pg || s.programme_id === pg) && (!vn || s.venue_id === vn) && (!UI.studentLink || !s.guardian_id)
+ const sel = UI.stSel ||= new Set();
+  const rows = all.filter(s => (st === 'archived' ? !!s.archived_at : !s.archived_at && (st === 'all' || s.status === st)) && (!pg || s.programme_id === pg) && (!vn || s.venue_id === vn) && (!UI.studentLink || !s.guardian_id)
     && (!q || [s.full_name, s.guardian_name, s.guardian_phone, s.family_ref, ...guardiansOf(s.id).map(g => g.email)].join(' ').toLowerCase().includes(q)))
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
   return `
@@ -486,23 +487,27 @@ VIEWS.pelajar = () => {
   <div class="card">
     <div class="toolbar">
       <label class="field grow">${ic('search', 'sm')}<input id="studentSearch" data-on-input="student-q" placeholder="Cari nama, ibu bapa, telefon…" value="${esc(UI.studentQ || '')}"></label>
-      <label class="field"><select data-on-change="student-status">${[['active', 'Aktif'], ['paused', 'Digantung'], ['left', 'Berhenti'], ['pending', 'Dalam proses'], ['all', 'Semua status']].map(([v, l]) => `<option value="${v}" ${st === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="field"><select data-on-change="student-status">${[['active', 'Aktif'], ['paused', 'Digantung'], ['left', 'Berhenti'], ['pending', 'Dalam proses'], ['all', 'Semua status'], ['archived', `Arkib (${all.filter(s => s.archived_at).length})`]].map(([v, l]) => `<option value="${v}" ${st === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="field"><select data-on-change="student-prog"><option value="">Semua program</option>${T('programmes').map(p => `<option value="${p.id}" ${pg === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
       <label class="field"><select data-on-change="student-link"><option value="">Semua akaun</option><option value="1" ${UI.studentLink ? 'selected' : ''}>Belum dipautkan akaun (${all.filter(s => s.status === 'active' && !s.guardian_id).length})</option></select></label>
       <label class="field"><select data-on-change="student-venue"><option value="">Semua lokasi</option>${T('venues').map(v => `<option value="${v.id}" ${vn === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
     </div>
+    ${sel.size ? `<div class="bulkbar"><b>${sel.size} dipilih</b>
+      <button class="btn sm" data-action="st-bulk" data-id="left">Tandakan Berhenti</button><button class="btn sm" data-action="st-bulk" data-id="archive">${ic('file', 'sm')} Arkib</button>
+      <button class="btn sm" data-action="st-bulk" data-id="active">Aktifkan semula</button>${st === 'archived' ? '<button class="btn sm" data-action="st-bulk" data-id="unarchive">Keluarkan dari arkib</button>' : ''}<button class="btn sm" data-action="st-sel-clear">Kosongkan pilihan</button></div>` : ''}
     <div class="table-wrap"><table>
-      <thead><tr><th>Pelajar</th><th>Program</th><th>Lokasi</th><th>Ibu bapa</th><th>Kehadiran</th><th>Pakej</th></tr></thead>
+      <thead><tr><th class="selcol" data-action="st-sel-all" data-id="${rows.map(r => r.id).join(',')}"><span class="cbx ${rows.length && rows.every(r => sel.has(r.id)) ? 'on' : ''}"></span></th><th>Pelajar</th><th>Program</th><th>Lokasi</th><th>Ibu bapa</th><th>Kehadiran</th><th>Pakej</th></tr></thead>
       <tbody>${rows.map(s => {
         const r = attRate(s.id), lp = livePackages(s.id)[0], pp = studentPackages(s.id).find(p => p.status === 'pending');
-        return `<tr class="click" data-action="student-view" data-id="${s.id}">
-          <td><div class="cell-person">${avatar(s.full_name)}<div><b>${esc(s.full_name)}</b><span>${s.birth_date ? ageOf(s.birth_date) + ' thn' : '—'}${s.status !== 'active' ? ' · ' + LABEL[s.status] : ''}</span>${s.fee_exempt ? '<span class="badge b-lime" style="margin-top:3px">Tiada yuran</span>' : ''}</div></div></td>
+        return `<tr class="click ${sel.has(s.id) ? 'sel' : ''}" data-action="student-view" data-id="${s.id}">
+          <td class="selcol" data-action="st-sel" data-id="${s.id}"><span class="cbx ${sel.has(s.id) ? 'on' : ''}"></span></td>
+          <td><div class="cell-person">${avatar(s.full_name)}<div><b>${esc(s.full_name)}</b><span>${s.birth_date ? ageOf(s.birth_date) + ' thn' : '—'}${s.status !== 'active' ? ' · ' + LABEL[s.status] : ''}${s.archived_at ? ' · Arkib' : ''}</span>${s.fee_exempt ? '<span class="badge b-lime" style="margin-top:3px">Tiada yuran</span>' : ''}</div></div></td>
           <td>${esc(progNamesOf(s))}<div class="muted" style="font-size:12px">${lp ? LABEL[lp.schedule_mode] : ''}</div></td>
           <td>${esc(venueName(s.venue_id))}</td>
           <td>${esc(s.guardian_name || '—')}<div class="muted" style="font-size:12px">${esc(s.guardian_phone || '')}${guardiansOf(s.id)[0]?.email ? ' · ' + esc(guardiansOf(s.id)[0].email) : ''}</div>${s.guardian_id ? '' : '<span class="badge b-warn" style="margin-top:3px">Belum dipautkan akaun</span>'}</td>
           <td style="min-width:120px">${r == null ? '<span class="muted">—</span>' : `<div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><span style="width:${r}%;background:${barColor(r)}"></span></div><b class="num" style="font-size:12.5px">${r}%</b></div>`}</td>
           <td style="white-space:nowrap">${lp ? `<b class="num" style="color:${pkgRemaining(lp) <= 1 ? 'var(--bad)' : 'var(--ink)'}">${pkgRemaining(lp)}</b><span class="muted"> / ${lp.sessions_total} sesi</span><div class="muted" style="font-size:11.5px">tamat ${fmtShort(lp.expires_on)}</div>` : pp ? '<span class="badge b-info">menunggu bayaran</span>' : s.status === 'active' ? '<span class="badge b-warn">tiada pakej</span>' : '<span class="muted">—</span>'}</td></tr>`;
-      }).join('') || `<tr><td colspan="6" class="empty">Tiada pelajar sepadan.</td></tr>`}</tbody>
+      }).join('') || `<tr><td colspan="7" class="empty">Tiada pelajar sepadan.</td></tr>`}</tbody>
     </table></div>
   </div>`;
 };
@@ -574,6 +579,7 @@ Object.assign(ACTIONS, {
         <button type="button" class="btn" data-action="student-edit" data-id="${id}">${ic('edit', 'sm')} Edit</button>
         ${['active', 'paused'].includes(s.status) ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|${s.status === 'active' ? 'paused' : 'active'}">${s.status === 'active' ? 'Gantung' : 'Aktifkan semula'}</button>` : ''}
         ${s.status !== 'left' ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|left">Berhenti</button>` : `<button type="button" class="btn" data-action="student-status" data-id="${id}|active">Aktifkan semula</button>`}
+        <button type="button" class="btn" data-action="st-archive" data-id="${id}" title="Sembunyikan daripada senarai (rekod kekal)">${s.archived_at ? 'Keluarkan dari arkib' : 'Arkib'}</button>
         <button type="button" class="btn" data-action="adj-add" data-id="${id}" title="Rekod kredit / caj untuk invois akan datang">${ic('wallet', 'sm')} Pelarasan bil</button>
         <button type="button" class="btn" data-action="st-report" data-id="${id}">${ic('file', 'sm')} Laporan bulanan</button>
         <button type="button" class="btn" data-action="student-merge" data-id="${id}" title="Gabungkan profil berganda (cth. nama pendek) ke profil sebenar">${ic('users', 'sm')} Gabung profil</button>

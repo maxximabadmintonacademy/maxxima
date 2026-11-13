@@ -32,6 +32,7 @@ export const NAV = [
     { id: 'jadual', label: 'Jadual Mingguan', icon: 'grid' },
     { id: 'kehadiran', label: 'Kehadiran', icon: 'check' },
     { id: 'kejohanan', label: 'Kejohanan', icon: 'trophy' },
+    { id: 'skor', label: 'Skor Langsung', icon: 'flag' },
   ] },
   { group: 'Kewangan', items: [
     { id: 'yuran', label: 'Invois & Bayaran', icon: 'wallet', count: () => T('invoices').filter(i => invStatus(i) === 'overdue').length + pendingPayments().length, red: true },

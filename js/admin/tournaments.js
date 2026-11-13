@@ -19,9 +19,10 @@ VIEWS.kejohanan = param => (param ? detail(param) : list());
    SENARAI KEJOHANAN
    --------------------------------------------------------------------- */
 function list() {
-  const ts = T('tournaments').slice().sort((a, b) => (b.start_date || '9999').localeCompare(a.start_date || '9999'));
+  const arch = T('tournaments').filter(t => t.archived_at).length;
+  const ts = T('tournaments').filter(t => !!t.archived_at === !!UI.tnArch).sort((a, b) => (b.start_date || '9999').localeCompare(a.start_date || '9999'));
   return `
-  ${pageHead('Kejohanan', 'Anjur kejohanan akademi: kategori, pendaftaran peserta, cabutan dan keputusan.', `<button class="btn primary" data-action="tn-add">${ic('plus', 'sm')} Kejohanan Baharu</button>`)}
+  ${pageHead('Kejohanan', 'Anjur kejohanan akademi: kategori, pendaftaran peserta, cabutan dan keputusan.', `${arch || UI.tnArch ? `<button class="btn" data-action="tn-showarch">${UI.tnArch ? '← Kejohanan aktif' : `Arkib (${arch})`}</button> ` : ''}<button class="btn primary" data-action="tn-add">${ic('plus', 'sm')} Kejohanan Baharu</button>`)}
   <div class="grid g-3">${ts.map(t => {
     const cats = catsOf(t.id), n = sum(cats, c => entriesOf(c.id).filter(e => e.status !== 'withdrawn').length);
     return `<a href="#kejohanan/${t.id}" class="card coach-card tn-card">
@@ -52,6 +53,9 @@ const tnForm = t => `<div class="form-grid">
   ${F('Tempoh bantahan tamat', 'protest_end', { type: 'date', value: t?.protest_end })}
   <div class="full"><b style="font-size:13px">Halaman awam & pendaftaran online</b></div>
   <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="public_page" value="1" ${t?.public_page ? 'checked' : ''} style="width:auto;height:auto"> Terbitkan halaman awam (borang daftar, peraturan, keputusan langsung)</label>
+  <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="live_feed" value="1" ${t ? t.live_feed !== false : true ? 'checked' : ''} style="width:auto;height:auto"> Papar notifikasi "baru mendaftar" di halaman awam (nama disamarkan, cth. Chan D** Y**)</label>
+  <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="draw_public" value="1" ${t?.draw_public ? 'checked' : ''} style="width:auto;height:auto"> Terbitkan cabutan kumpulan & jadual di halaman awam dan portal peserta</label>
+  <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="cert_ready" value="1" ${t?.cert_ready ? 'checked' : ''} style="width:auto;height:auto"> Benarkan peserta muat turun sijil dari portal peserta</label>
   ${F('Pautan pendek (slug)', 'slug', { value: t?.slug, ph: 'cth. brbc2026 — huruf kecil/nombor sahaja' })}
   <label class="f">Poster (gambar)<input type="file" name="poster" accept="image/*"></label>
   ${F('Notis (banner kuning di atas halaman, cth. tukar tarikh)', 'notice', { type: 'textarea', value: t?.notice, full: true })}
@@ -74,7 +78,7 @@ const tnPatch = d => ({ name: d.name.trim(), venue_id: val(d.venue_id), venue_no
   registration_deadline: val(d.registration_deadline), entry_fee: num(d.entry_fee) || 0, status: d.status, description: val(d.description), format: d.format || 'knockout', group_size: num(d.group_size) || 4, points_to: num(d.points_to) || 21,
   early_deadline: val(d.early_deadline), list_date: val(d.list_date), protest_end: val(d.protest_end), public_page: d.public_page === '1', slug: val(String(d.slug || '').toLowerCase().replace(/[^a-z0-9-]/g, '')),
   shirt_free: d.shirt_free === '1', shirt_sizes: String(d.shirt_sizes || '').split(',').map(x => x.trim()).filter(Boolean), prizes: val(d.prizes), rules: val(d.rules), pay_note: val(d.pay_note), contact_phone: val(d.contact_phone), contact_email: val(d.contact_email),
-  notice: val(d.notice), eligibility_note: val(d.eligibility_note), scoring_note: val(d.scoring_note), group_link: val(d.group_link) });
+  notice: val(d.notice), eligibility_note: val(d.eligibility_note), scoring_note: val(d.scoring_note), group_link: val(d.group_link), live_feed: d.live_feed === '1', draw_public: d.draw_public === '1', cert_ready: d.cert_ready === '1' });
 const withPoster = async (d, row) => {
   if (d.poster && d.poster.size) row.poster_path = await uploadMedia('public-media', 'tournament', d.poster, { maxMB: 10 });
   if (d.pay_qr && d.pay_qr.size) row.pay_qr_path = await uploadMedia('public-media', 'tournament', d.pay_qr, { maxMB: 5 });
@@ -106,7 +110,7 @@ function detail(id) {
         <div class="muted" style="font-size:12.5px;margin-top:2px">Yuran penyertaan: <b style="color:var(--ink)">${t.entry_fee ? RM(t.entry_fee) : 'Percuma'}</b>${t.registration_deadline ? ' · tutup pendaftaran ' + fmtDate(t.registration_deadline) : ''}</div>
         ${t.description ? `<p style="margin-top:8px;font-size:13px">${esc(t.description)}</p>` : ''}</div>
       <div class="actions"><label class="field"><select data-on-change="tn-status">${STATUS_ORDER.map(s => `<option value="${s}" ${t.status === s ? 'selected' : ''}>${LABEL[s]}</option>`).join('')}</select></label>
-        <button class="btn" data-action="tn-edit" data-id="${id}">${ic('edit', 'sm')} Edit</button></div>
+        <button class="btn" data-action="tn-arch" data-id="${id}">${t.archived_at ? 'Keluarkan dari arkib' : 'Arkib'}</button> <button class="btn" data-action="tn-edit" data-id="${id}">${ic('edit', 'sm')} Edit</button></div>
     </div>
   </div>
   <div class="chips">${tabs.map(([k, l]) => `<button class="chip ${tab === k ? 'on' : ''}" data-action="tn-tab" data-id="${k}">${l}</button>`).join('')}</div>
@@ -137,8 +141,9 @@ function tabEntries(t, cat) {
     <td><select class="att-select" data-on-change="ent-status" data-key="${e.id}">${['registered', 'confirmed', 'withdrawn'].map(x => `<option value="${x}" ${e.status === x ? 'selected' : ''}>${LABEL[x]}</option>`).join('')}</select></td>
     <td>${e.student_id && inv ? badge(invStatus(inv)) : `<span class="badge ${pt}">${pl}</span>${e.amount ? ' <span class="muted" style="font-size:12px">' + RM(e.amount) + '</span>' : ''}`}
       ${e.proof_path ? `<br><button class="btn sm" data-action="ent-proof" data-id="${e.id}">Bukti</button>` : ''}${!e.student_id && !['paid', 'waived'].includes(e.pay_status) ? ` <button class="btn sm primary" data-action="ent-paid" data-id="${e.id}">Sahkan bayaran</button>` : ''}
+      ${e.status === 'withdrawn' && (e.refund_amount || e.withdraw_reason) ? `<div style="font-size:11.5px;color:var(--muted);margin-top:3px">${e.refund_amount ? `↩ ${RM(e.refund_amount)}${e.refund_method ? ' · ' + esc(e.refund_method) : ''}${e.refunded_at ? ' · ' + fmtShort(e.refunded_at) : ''}` : 'Tiada pulangan'}${e.withdraw_reason ? '<br>' + esc(e.withdraw_reason) : ''}</div>` : ''}
       ${e.student_id && !inv && (cat.fee ?? t.entry_fee) > 0 ? `<button class="btn sm" data-action="ent-invoice" data-id="${e.id}">Keluarkan invois</button>` : ''}</td>
-    <td><button class="btn sm" data-action="ent-del" data-id="${e.id}" ${locked ? 'disabled' : ''} title="Buang">${ic('trash', 'sm')}</button></td></tr>`; }).join('') || `<tr><td colspan="6" class="empty">Tiada peserta.</td></tr>`}</tbody></table></div></div>`;
+    <td style="white-space:nowrap"><button class="btn sm" data-action="ent-refund" data-id="${e.id}" title="Tarik diri / pulangan bayaran">${e.status === 'withdrawn' ? 'Edit refund' : 'Tarik diri / refund'}</button> <button class="btn sm" data-action="ent-del" data-id="${e.id}" ${locked ? 'disabled' : ''} title="Buang">${ic('trash', 'sm')}</button></td></tr>`; }).join('') || `<tr><td colspan="6" class="empty">Tiada peserta.</td></tr>`}</tbody></table></div></div>`;
 }
 
 /* ---- Ringkasan: kiraan, kutipan, isian kategori, analitik halaman awam ---- */
@@ -147,9 +152,13 @@ function tabSummary(t, cats) {
   const st = T('tournament_stats').filter(x => x.tournament_id === t.id), sumK = k => st.filter(x => x.kind === k).reduce((n, x) => n + Number(x.n), 0);
   const days = [...new Set(st.map(x => x.day))].sort().slice(-21), maxV = Math.max(1, ...days.map(d => st.filter(x => x.day === d && x.kind === 'view').reduce((n, x) => n + Number(x.n), 0)));
   const views = sumK('view'), clicks = sumK('register_click'), subs = sumK('submit'), link = publicLink(t);
+  const wd = cats.flatMap(c => entriesOf(c.id)).filter(e => e.status === 'withdrawn'), refunds = wd.filter(e => Number(e.refund_amount) > 0), refTot = refunds.reduce((n, e) => n + Number(e.refund_amount), 0);
+  const gross = cats.flatMap(c => entriesOf(c.id)).filter(e => e.pay_status === 'paid' || e.pay_status === 'refunded' || (e.student_id && byId('invoices', e.invoice_id)?.status === 'paid')).reduce((n, e) => n + Number(e.amount || t.entry_fee || 0), 0);
   const sizes = {}; all.forEach(e => { if (e.shirt_size) sizes[e.shirt_size] = (sizes[e.shirt_size] || 0) + 1; });
   return `<div class="kv-mini mb"><div><b>${all.length}</b><small>Peserta aktif</small></div><div><b>${paid.length}</b><small>Sudah bayar</small></div><div><b>${all.filter(e => e.pay_status === 'pending').length}</b><small>Bukti menunggu semakan</small></div>
-    <div><b>${RM(paid.reduce((n, e) => n + Number(e.amount || t.entry_fee || 0), 0))}</b><small>Kutipan disahkan</small></div><div><b>${RM(all.filter(e => e.pay_status === 'unpaid').reduce((n, e) => n + Number(e.amount || t.entry_fee || 0), 0))}</b><small>Belum bayar</small></div></div>
+    <div><b>${RM(paid.reduce((n, e) => n + Number(e.amount || t.entry_fee || 0), 0))}</b><small>Kutipan disahkan</small></div><div><b>${RM(all.filter(e => e.pay_status === 'unpaid').reduce((n, e) => n + Number(e.amount || t.entry_fee || 0), 0))}</b><small>Belum bayar</small></div>
+    <div><b>${wd.length}</b><small>Tarik diri</small></div><div><b>${refunds.length} · ${RM(refTot)}</b><small>Dipulangkan</small></div><div><b>${RM(gross - refTot)}</b><small>Kutipan bersih</small></div></div>
+  ${wd.length ? `<div class="card card-pad mb"><h3 style="font-size:14.5px;margin-bottom:8px">Tarik diri & pulangan bayaran</h3><div class="table-wrap"><table><thead><tr><th>Pemain</th><th>Kategori</th><th>Sebab</th><th>Pulangan</th><th></th></tr></thead><tbody>${wd.map(e => `<tr><td>${esc(entryLabel(e))}<br><span class="muted" style="font-size:11.5px">${esc(e.ref_code || '')}</span></td><td style="font-size:12.5px">${esc(byId('tournament_categories', e.category_id)?.name || '')}</td><td style="font-size:12.5px">${esc(e.withdraw_reason || '—')}</td><td style="font-size:12.5px">${e.refund_amount ? `<b>${RM(e.refund_amount)}</b>${e.refund_method ? ' · ' + esc(e.refund_method) : ''}${e.refunded_at ? '<br>' + fmtShort(e.refunded_at) : ''}` : '<span class="muted">Tiada</span>'}</td><td><button class="btn sm" data-action="ent-refund" data-id="${e.id}">${ic('edit', 'sm')}</button></td></tr>`).join('')}</tbody></table></div></div>` : ''}
   <div class="card card-pad mb"><h3 style="font-size:14.5px;margin-bottom:8px">Halaman awam</h3>${t.public_page && link ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><code style="font-size:12.5px;word-break:break-all">${esc(link)}</code><button class="btn sm" data-action="copy-text" data-id="${esc(link)}">Salin</button><a class="btn sm" target="_blank" rel="noopener" href="${esc(link)}">Buka</a><a class="btn sm" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(t.name + ' — daftar di sini: ' + link)}">${ic('msg', 'sm')} Kongsi WhatsApp</a></div>
     <img alt="QR" style="width:120px;margin-top:10px;border-radius:8px;background:#fff;padding:6px" src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(link)}">` : '<p class="muted" style="font-size:13px">Belum diterbitkan. Edit kejohanan → tanda "Terbitkan halaman awam" dan isi pautan pendek (slug).</p>'}</div>
   <div class="grid g-2"><div class="card card-pad mb"><h3 style="font-size:14.5px">Analitik laman (tanpa data peribadi)</h3>
@@ -174,12 +183,15 @@ function tabRR(t, cat) {
   const champ = fin.length && fin.every(m => m.status !== 'pending') ? standings(finIds, fin) : null;
   return `${champ ? `<div class="champ">${ic('trophy')}<div><small>Keputusan akhir — ${esc(cat.name)}</small><b>${champ.slice(0, 4).map((r, i) => ['🥇', '🥈', '🥉', '4️⃣'][i] + ' ' + esc(entryLabel(E(r.id)))).join(' &nbsp; ')}</b></div></div>` : ''}
   <div class="actions" style="margin-bottom:12px;flex-wrap:wrap">${!fin.length && groups.length > 1 ? `<button class="btn sm primary" data-action="rr-final" data-id="${cat.id}" ${allGroupDone ? '' : 'disabled title="Selesaikan semua perlawanan kumpulan dahulu"'}>Jana pusingan akhir (pemenang kumpulan)</button>` : ''}
+    ${flagBtns(t)}
     <button class="btn sm" data-action="rr-log" data-id="${cat.id}">Log cabutan</button><button class="btn sm danger-o" data-action="draw-reset" data-id="${cat.id}">Reset kumpulan & jadual</button></div>
   ${fin.length ? table('Pusingan Akhir (round robin)', finIds, fin) : ''}
   <div class="grid g-2">${groups.map(g => `<div>${table('Kumpulan ' + GROUP_NAMES[g - 1], groupIds(g), ms.filter(m => m.stage === 'group' && m.group_no === g))}</div>`).join('')}</div>
   <p class="muted" style="font-size:12.5px">Kedudukan: bilangan menang → keputusan bersemuka (jika 2 pemain seri) → beza mata → mata dijaringkan. Satu game hingga ${t.points_to || 21} mata.</p>`;
 }
 
+const flagBtns = t => `<button class="btn sm ${t.draw_public ? 'primary' : ''}" data-action="tn-flag" data-id="${t.id}" data-key="draw_public">${t.draw_public ? '✓ Cabutan diterbitkan' : 'Terbitkan cabutan & jadual'}</button>
+    <button class="btn sm ${t.cert_ready ? 'primary' : ''}" data-action="tn-flag" data-id="${t.id}" data-key="cert_ready">${t.cert_ready ? '✓ Sijil boleh dimuat turun' : 'Benarkan muat turun sijil'}</button>`;
 function tabDraw(t, cat) {
   const ms = matchesOf(cat.id), live = entriesOf(cat.id).filter(e => e.status !== 'withdrawn');
   if (!ms.length) return `<div class="card empty"><div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px">Cabutan belum dijana</div>${live.length} peserta aktif dalam kategori ini. Peserta ber-seed diletakkan mengikut kedudukan piawai; selebihnya dicabut secara rawak. Bye diberikan kepada seed teratas.<br><button class="btn primary" style="margin-top:14px" data-action="draw-make" data-id="${cat.id}" ${live.length < 2 ? 'disabled' : ''}>${ic('shuttle', 'sm')} Jana Cabutan (${live.length} peserta)</button>${live.length < 2 ? '<div class="hint warn" style="margin-top:10px">Perlu sekurang-kurangnya 2 peserta.</div>' : ''}</div>`;
@@ -193,7 +205,7 @@ function tabDraw(t, cat) {
   };
   return `
   ${champ ? `<div class="champ">${ic('trophy')}<div><small>Johan — ${esc(cat.name)}</small><b>${esc(entryLabel(champ))}</b></div></div>` : ''}
-  <div class="actions" style="margin-bottom:12px"><button class="btn sm" data-action="draw-reset" data-id="${cat.id}">Reset cabutan</button></div>
+  <div class="actions" style="margin-bottom:12px;flex-wrap:wrap">${flagBtns(t)}<button class="btn sm" data-action="draw-reset" data-id="${cat.id}">Reset cabutan</button></div>
   <div class="bracket">${rounds.map(r => { const rm = ms.filter(m => m.round_no === r).sort((a, b) => a.match_no - b.match_no); return `<div class="b-round"><div class="b-title">${esc(rm[0].round_label)}</div>${rm.map(m => {
     const ready = m.entry_a && m.entry_b, auto = m.status === 'walkover' && (!m.entry_a || !m.entry_b);
     return `<${ready && !auto ? 'button' : 'div'} class="b-match ${m.status !== 'pending' ? 'done' : ''}" ${ready && !auto ? `data-action="match-edit" data-id="${m.id}"` : ''}>
@@ -270,11 +282,30 @@ Object.assign(ACTIONS, {
   },
   'draw-reset': cid => confirmModal({ title: 'Reset cabutan?', message: 'Semua perlawanan dan keputusan dalam kategori ini akan dipadam supaya cabutan boleh dijana semula.', ok: 'Reset Cabutan', danger: true, onOk: async () => { for (const m of matchesOf(cid)) await remove('tournament_matches', m.id); for (const e of entriesOf(cid).filter(e => e.group_no)) await update('tournament_entries', e.id, { group_no: null }); toast('Cabutan direset'); app.render(); } }),
 
+  'ent-refund': id => { const e = byId('tournament_entries', id), paid = ['paid', 'refunded'].includes(e.pay_status), def = e.refund_amount ?? (paid ? e.amount || 0 : 0);
+    openModal({ title: 'Tarik diri / pulangan bayaran', submit: 'Simpan', body: `<p style="font-size:13.5px;margin-bottom:10px"><b>${esc(entryLabel(e))}</b> · ${esc(e.ref_code || '')} · ${RM(e.amount || 0)} · ${esc((PAY[e.pay_status] || PAY.unpaid)[0])}</p><div class="form-grid">
+      ${F('Sebab', 'reason', { value: e.withdraw_reason, full: true, ph: 'cth. Tidak dapat hadir tarikh baru (12 Dis)' })}
+      ${F('Amaun dipulangkan (RM) — 0 jika tiada', 'amount', { type: 'number', value: def })}
+      <label class="f">Kaedah<select name="method">${['Pindahan bank', 'DuitNow', 'Tunai', 'Kredit untuk kejohanan lain'].map(x => `<option ${e.refund_method === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+      ${F('Tarikh pulangan', 'date', { type: 'date', value: e.refunded_at || todayISO() })}
+      ${F('Catatan dalaman', 'notes', { value: e.notes, full: true })}</div>
+      <p class="muted" style="font-size:12px;margin-top:8px">Peserta ditanda "Tarik diri" dan dikeluarkan daripada senarai/feed. Jika kumpulan sudah dicabut, perlawanannya boleh ditanda walkover.</p>
+      ${e.status === 'withdrawn' ? `<button type="button" class="btn sm" style="margin-top:8px" data-action="ent-unwithdraw" data-id="${id}">Batal tarik diri (aktifkan semula)</button>` : ''}`,
+      onSubmit: async d => { const amt = num(d.amount) || 0, paidAmt = Number(e.amount || byId('tournaments', byId('tournament_categories', e.category_id)?.tournament_id)?.entry_fee || 0);
+        if (amt < 0 || (paidAmt && amt > paidAmt)) { toast(`Amaun pulangan tidak boleh melebihi ${RM(paidAmt)}`, true); return false; }
+        await update('tournament_entries', id, { status: 'withdrawn', withdraw_reason: val(d.reason), refund_amount: amt || null, refund_method: amt ? d.method : null, refunded_at: amt ? val(d.date) : null, notes: val(d.notes),
+          pay_status: amt > 0 ? 'refunded' : e.pay_status === 'refunded' ? (e.paid_at ? 'paid' : 'unpaid') : e.pay_status });
+        toast(amt ? `Ditanda tarik diri · ${RM(amt)} dipulangkan` : 'Ditanda tarik diri'); app.render(); } }); },
+  'ent-unwithdraw': id => { const e = byId('tournament_entries', id); closeModal(); confirmModal({ title: 'Aktifkan semula peserta?', message: `${esc(entryLabel(e))} akan kembali ke senarai peserta. Rekod pulangan dikosongkan.`, ok: 'Aktifkan', onOk: async () => {
+    await update('tournament_entries', id, { status: e.paid_at ? 'confirmed' : 'registered', pay_status: e.paid_at ? 'paid' : 'unpaid', refund_amount: null, refund_method: null, refunded_at: null, withdraw_reason: null }); toast('Peserta diaktifkan semula'); app.render(); } }); },
+  'tn-flag': (id, el) => { const t = byId('tournaments', id), k = el.dataset.key, on = !t[k];
+    const go = async () => { await update('tournaments', id, { [k]: on }); toast(k === 'draw_public' ? (on ? 'Cabutan & jadual kini dipapar di halaman awam' : 'Cabutan disembunyikan') : (on ? 'Peserta kini boleh muat turun sijil' : 'Muat turun sijil ditutup')); app.render(); };
+    k === 'cert_ready' && on && catsOf(id).some(c => matchesOf(c.id).some(m => m.status === 'pending')) ? confirmModal({ title: 'Masih ada perlawanan belum selesai', message: 'Sijil pencapaian (johan/naib johan) hanya tepat selepas pusingan akhir selesai. Benarkan juga?', ok: 'Benarkan', onOk: go }) : go(); },
   'ent-paid': id => { const e = byId('tournament_entries', id); confirmModal({ title: 'Sahkan bayaran?', message: `${esc(entryLabel(e))} · ${RM(e.amount || 0)}${e.ref_code ? ' · ' + esc(e.ref_code) : ''}`, ok: 'Sahkan dibayar', onOk: async () => { await update('tournament_entries', id, { pay_status: 'paid', paid_at: new Date().toISOString(), status: e.status === 'withdrawn' ? e.status : 'confirmed' }); toast('Bayaran disahkan'); app.render(); } }); },
   'ent-proof': async id => { const e = byId('tournament_entries', id); if (S.mode !== 'supabase') return toast('Demo: tiada fail'); const { data, error } = await S.client.storage.from('payment-proofs').createSignedUrl(e.proof_path, 300); if (error) return toast(error.message, true); window.open(data.signedUrl, '_blank', 'noopener'); },
   'tn-export': tid => {
-    const t = byId('tournaments', tid), rows = [['Kategori', 'No. rujukan', 'Pemain', 'Tahun lahir', 'Jantina', 'Kelab/sekolah', 'Penjaga', 'Telefon', 'E-mel', 'Jersi', 'Layak jersi percuma', 'IC (4 digit akhir)', 'Status', 'Bayaran', 'Amaun', 'Tarikh bayar', 'Kumpulan', 'Tarikh daftar', 'Catatan']];
-    catsOf(tid).forEach(c => entriesOf(c.id).forEach(e => { const s = byId('students', e.student_id); rows.push([c.name, e.ref_code || '', entryLabel(e), e.birth_year || (s?.birth_date || '').slice(0, 4), e.gender || s?.gender || '', e.club || (s ? 'Maxxima' : ''), e.guardian_name || s?.guardian_name || '', e.guardian_phone || s?.guardian_phone || '', e.guardian_email || '', e.shirt_size || '', e.jersey_eligible ? 'Ya' : 'Tidak', e.ic_masked || '', e.status, e.pay_status, e.amount ?? '', (e.paid_at || '').slice(0, 10), e.group_no ? GROUP_NAMES[e.group_no - 1] : '', (e.created_at || '').slice(0, 10), e.notes || '']); }));
+    const t = byId('tournaments', tid), rows = [['Kategori', 'No. rujukan', 'Pemain', 'Tahun lahir', 'Jantina', 'Kelab/sekolah', 'Penjaga', 'Telefon', 'E-mel', 'Jersi', 'Layak jersi percuma', 'IC (4 digit akhir)', 'Status', 'Bayaran', 'Amaun', 'Tarikh bayar', 'Kumpulan', 'Tarikh daftar', 'Catatan', 'Sebab tarik diri', 'Amaun dipulangkan', 'Kaedah pulangan', 'Tarikh pulangan']];
+    catsOf(tid).forEach(c => entriesOf(c.id).forEach(e => { const s = byId('students', e.student_id); rows.push([c.name, e.ref_code || '', entryLabel(e), e.birth_year || (s?.birth_date || '').slice(0, 4), e.gender || s?.gender || '', e.club || (s ? 'Maxxima' : ''), e.guardian_name || s?.guardian_name || '', e.guardian_phone || s?.guardian_phone || '', e.guardian_email || '', e.shirt_size || '', e.jersey_eligible ? 'Ya' : 'Tidak', e.ic_masked || '', e.status, e.pay_status, e.amount ?? '', (e.paid_at || '').slice(0, 10), e.group_no ? GROUP_NAMES[e.group_no - 1] : '', (e.created_at || '').slice(0, 10), e.notes || '', e.withdraw_reason || '', e.refund_amount ?? '', e.refund_method || '', e.refunded_at || '']); }));
     const csv = '\ufeff' + rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })), download: `${(t.slug || t.name).replace(/\W+/g, '_')}_peserta.csv` }); a.click();
   },
@@ -359,4 +390,10 @@ import { openCertificates } from '../docs2.js';
 ACTIONS['tn-cert'] = catId => { const cat = byId('tournament_categories', catId), tn = byId('tournaments', cat.tournament_id);
   const L = T('tournament_entries').filter(e => e.category_id === catId && e.status !== 'withdrawn' && e.pay_status !== 'refunded');
   if (!L.length) return toast('Tiada peserta dalam kategori ini.', true);
-  openCertificates(L, tn); };
+  const cfg = (S.t.settings || []).find(x => x.key === 'cert')?.value || {};
+  openModal({ title: 'Sijil — ' + esc(cat.name), submit: 'Jana sijil', body: `<div class="f full"><span>Jenis</span>
+      <label class="radio-row"><input type="radio" name="only" value="win" checked> Pemenang (johan – tempat ke-4)${(cfg.winner_mode || 'plain') === 'plain' ? ' — <b>teks sahaja</b>, cetak atas kertas sijil urus setia' : ''}</label>
+      <label class="radio-row"><input type="radio" name="only" value="part"> Peserta — sijil penyertaan berreka bentuk + tandatangan</label>
+      <label class="radio-row"><input type="radio" name="only" value=""> Semua</label></div>
+    <p class="muted" style="font-size:12.5px;margin-top:8px">Peserta juga boleh muat turun sijil penyertaan sendiri di portal peserta selepas "Benarkan muat turun sijil" ditanda. <a href="javascript:void 0" data-action="cert-settings">Tetapan sijil & tandatangan →</a></p>`,
+    onSubmit: d => { openCertificates(L, tn, d.only || ''); } }); };

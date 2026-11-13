@@ -1,6 +1,6 @@
 // Service worker Maxxima: rangkaian dahulu (supaya kemas kini terus sampai), cache sebagai sandaran luar talian.
 // Hanya fail aplikasi di domain sendiri — data Supabase TIDAK disimpan dalam cache.
-const CACHE = 'maxxima-v22';
+const CACHE = 'maxxima-v25';
 const CORE = ['./', 'index.html', 'css/app.css', 'js/main.js', 'assets/logo.png', 'assets/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

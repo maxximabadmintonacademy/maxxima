@@ -1,11 +1,12 @@
 // Portal Ibu Bapa & Pelajar: ringkasan anak, jadual & tempahan, yuran (bayar + bukti + resit), progres.
 // Semua teks melalui t() supaya boleh dipaparkan dalam BM / English / 中文.
 import { ACTIONS, INPUTS } from '../registry.js';
-import { annCard, visibleAnns } from '../admin/announce.js';
+import { annCard, visibleAnns, showAnnPopup } from '../admin/announce.js';
+import { showTour } from '../tour.js';
 import { offerCard } from '../admin/ops2.js';
 import { mediaGrid, publicUrl } from '../media.js';
 import { S, loadParent, insert, update, remove, refresh, markRead, subscribeNotifications, subscribeTables, setPassword, rpc } from '../data.js';
-import { $, esc, ic, F, RM, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, fmtDate, fmtShort, hm, todayISO, addDays, DAYS, LABEL, friendlyError, liveRender } from '../ui.js';
+import { $, esc, ic, F, RM, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, fmtDate, fmtShort, hm, todayISO, addDays, DAYS, LABEL, friendlyError, liveRender , loadErrorBox } from '../ui.js';
 import { T, byId, venueName, progName, staffName, invStatus, paidOf, creditOf, pkgRemaining } from '../admin/helpers.js';
 import { openReceipt } from '../receipt.js';
 import { openInvoice, openCreditNote } from '../invoice.js';
@@ -67,13 +68,14 @@ export async function enterParent() {
   setI18nActive(true);
   renderShell(); app.render = render; app.relang = () => { renderShell(); render(); };
   $('#view').innerHTML = `<div class="boot">${t('Memuatkan data anak anda…')}</div>`;
-  try { await loadParent(); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>${t('Gagal memuatkan data.')}</b><p class="muted">${esc(friendlyError(e))}</p></div>`; return; }
+  try { await loadParent(); } catch (e) { console.error(e); $('#view').innerHTML = loadErrorBox(e); return; }
   subscribeNotifications(n => { if (n?.title) toast('🔔 ' + n.title); liveRender(render); });
   subscribeTables(['announcements', 'invoices', 'payments', 'booking_requests', 'attendance', 'class_sessions', 'student_packages', 'progress_records', 'class_offers',
-    'courses', 'course_lessons', 'events', 'waitlist', 'package_requests', 'feedback', 'students'], () => liveRender(render));
+    'courses', 'course_lessons', 'events', 'waitlist', 'package_requests', 'feedback', 'students', 'tournaments'], () => { liveRender(render); if (!UI.ob) setTimeout(() => showAnnPopup(t), 600); });
   window.addEventListener('hashchange', () => { document.body.classList.remove('nav-open'); render(); window.scrollTo(0, 0); });
   if (needsOnboard()) { UI.ob = S.profile.must_change_pw ? 1 : 2; }
   render(); gwReturn();
+  setTimeout(() => { if (!UI.ob && !showTour('parent', false, () => showAnnPopup(t))) showAnnPopup(t); }, 900);
 }
 /* ---- Log masuk kali pertama: kata laluan → bahasa/tema → profil anak → Terma & Syarat ---- */
 const needsOnboard = () => S.mode === 'supabase' ? (!!S.profile.must_change_pw || !S.profile.tc_accepted_at) : /onboard/.test(location.search);
@@ -120,7 +122,8 @@ PV.utama = () => {
   const due = dueNow(), toConfirm = T('attendance').filter(a => kidSet().has(a.student_id) && ['present', 'late'].includes(a.status) && !a.parent_confirmed);
   return `${head(t('Salam, {name} 👋', { name: esc((S.profile.full_name || '').split(' ').slice(0, 2).join(' ')) }), t('Ringkasan anak anda di Maxxima Badminton Academy'))}
   ${T('courses').some(c => c.status === 'published') ? `<a class="card card-pad mb" href="#kursus" style="display:flex;gap:10px;align-items:center;text-decoration:none;color:inherit">${ic('award')}<b>${t('Kursus online')}</b><span class="muted" style="font-size:12.5px;margin-left:auto">${t('Belajar peraturan, peralatan, senaman dan lain-lain')} →</span></a>` : ''}
-  ${T('tournaments').filter(x => x.public_page && x.slug && x.status === 'open').map(x => `<div class="card card-pad mb" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${ic('trophy')}<div style="flex:1;min-width:180px"><b>${esc(x.name)}</b><div class="muted" style="font-size:12.5px">${x.start_date ? fmtShort(x.start_date) : ''}${x.registration_deadline ? ' · ' + t('tutup pendaftaran') + ' ' + fmtShort(x.registration_deadline) : ''}</div></div><a class="btn sm primary" target="_blank" rel="noopener" href="tournament.html?t=${encodeURIComponent(x.slug)}">${t('Daftar sekarang')}</a></div>`).join('')}
+  ${T('tournaments').filter(x => x.public_page && x.slug && x.status === 'open').map(x => { const img = x.poster_path || visibleAnns().find(a => a.image_path && (a.link || '').includes('t=' + x.slug))?.image_path; return img ? `<a class="card mb tn-promo" target="_blank" rel="noopener" href="tournament.html?t=${encodeURIComponent(x.slug)}"><img src="${publicUrl(img)}" alt="${esc(x.name)}" loading="lazy"><div class="card-pad" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:170px"><b>${esc(x.name)}</b><div class="muted" style="font-size:12.5px">${x.start_date ? fmtShort(x.start_date) : ''}${x.registration_deadline ? ' · ' + t('tutup pendaftaran') + ' ' + fmtShort(x.registration_deadline) : ''}</div></div><span class="btn sm primary">${t('Daftar sekarang')}</span></div></a>` : ''; }).join('')}
+  ${T('tournaments').filter(x => x.public_page && x.slug && x.status === 'open' && !(x.poster_path || visibleAnns().find(a => a.image_path && (a.link || '').includes('t=' + x.slug)))).map(x => `<div class="card card-pad mb" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${ic('trophy')}<div style="flex:1;min-width:180px"><b>${esc(x.name)}</b><div class="muted" style="font-size:12.5px">${x.start_date ? fmtShort(x.start_date) : ''}${x.registration_deadline ? ' · ' + t('tutup pendaftaran') + ' ' + fmtShort(x.registration_deadline) : ''}</div></div><a class="btn sm primary" target="_blank" rel="noopener" href="tournament.html?t=${encodeURIComponent(x.slug)}">${t('Daftar sekarang')}</a></div>`).join('')}
   ${visibleAnns().length ? `<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px"><h3 style="font-size:15px">${t('Berita & acara terkini')}</h3>${visibleAnns().length > 2 ? `<a class="btn sm ghost" href="#berita">${t('Lihat semua')}</a>` : ''}</div>${visibleAnns().slice(0, 2).map(a => annCard(a, t)).join('')}` : ''}
   ${due.length ? `<div class="card mb" style="border-color:var(--warn)"><div class="card-head"><div><h3>${t('Yuran belum dijelaskan')}</h3><div class="sub">${t('Bayar melalui QR atau pindahan bank, kemudian muat naik bukti.')}</div></div><span class="badge b-warn">${due.length}</span></div>
     <ul class="list">${due.map(i => `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${esc(kidName(i.student_id))} · <span class="num">${RM(balanceOf(i) - pendingOf(i))}</span></div><div class="li-sub">${kindLabel(i)} · ${esc(i.number)} · ${t('akhir {d}', { d: fmtShort(i.due_date) })}</div></div>
@@ -369,7 +372,7 @@ Object.assign(ACTIONS, {
   },
   'ob-done': async () => {
     if (!$('#obTc').checked) return toast(t('Sila tandakan persetujuan Terma & Syarat.'), true);
-    try { if (S.mode === 'supabase') await rpc('parent_onboard', { p_accept: true }); S.profile.must_change_pw = false; S.profile.tc_accepted_at = new Date().toISOString(); UI.ob = 0; toast(t('Terima kasih! Selamat menggunakan portal.')); render(); }
+    try { if (S.mode === 'supabase') await rpc('parent_onboard', { p_accept: true }); S.profile.must_change_pw = false; S.profile.tc_accepted_at = new Date().toISOString(); UI.ob = 0; toast(t('Terima kasih! Selamat menggunakan portal.')); render(); setTimeout(() => showTour('parent'), 500); }
     catch (e) { toast(friendlyError(e), true); }
   },
   /* Pakej "ibu bapa pilih": jadual tetap (pilih slot mingguan) atau fleksibel */
@@ -545,7 +548,7 @@ PV.progres = () => {
 
 Object.assign(ACTIONS, {
   'p-report': key => { const [id, m] = key.split('|'); openMonthlyReport(id, m, t); },
-  'p-cert': id => { const e = byId('tournament_entries', id), c = byId('tournament_categories', e.category_id); openCertificates([e], byId('tournaments', c.tournament_id)); },
+  'p-cert': id => { const e = byId('tournament_entries', id), c = byId('tournament_categories', e.category_id); openCertificates([e], byId('tournaments', c.tournament_id), '', { participation: true }); },
 });
 /* ===================================================================== AKAUN + NOTIFIKASI */
 const ID_KEYS = { nric: 'No. Kad Pengenalan (NRIC)', passport: 'No. Pasport', army: 'No. Tentera/Polis', brn: 'No. Pendaftaran Syarikat' };
@@ -556,7 +559,7 @@ const taxCard = () => {
   ${x ? `<div style="margin-top:12px;font-size:13.5px;line-height:1.7"><div>${esc(x.legal_name || '—')}</div><div class="muted">${esc(idLbl(x.id_type))}: ${esc(x.id_no || '—')}</div><div class="muted">TIN: ${esc(x.tin || '—')}</div>${x.address ? `<div class="muted">${esc(x.address)}</div>` : ''}</div>` : `<div class="muted" style="margin-top:10px;font-size:13px">${t('Belum diisi. Anda boleh isi sekarang supaya invois terus memaparkan maklumat anda.')}</div>`}</div>`;
 };
 PV.akaun = () => `${head(t('Akaun'), '')}<div class="card card-pad mb"><div class="cell-person">${avatar(S.profile.full_name || S.profile.email)}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
-  <div class="actions" style="margin-top:14px">${window.__installPrompt ? `<button class="btn primary" data-action="pwa-install">📱 ${t('Pasang app')}</button>` : ''}${'Notification' in window && Notification.permission === 'default' ? `<button class="btn" data-action="notif-perm">🔔 ${t('Hidupkan notifikasi')}</button>` : ''}<button class="btn" data-action="p-pw">${t('Tukar kata laluan')}</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} ${t('Log keluar')}</button></div></div>
+  <div class="actions" style="margin-top:14px">${window.__installPrompt ? `<button class="btn primary" data-action="pwa-install">📱 ${t('Pasang app')}</button>` : ''}<button class="btn" data-action="tour-open" data-id="parent">📖 ${t('Panduan app')}</button>${'Notification' in window && Notification.permission === 'default' ? `<button class="btn" data-action="notif-perm">🔔 ${t('Hidupkan notifikasi')}</button>` : ''}<button class="btn" data-action="p-pw">${t('Tukar kata laluan')}</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} ${t('Log keluar')}</button></div></div>
   <div class="card card-pad mb"><b>${t('Tetapan paparan')}</b>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><span>${t('Bahasa')}</span>${langSwitch()}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px"><span>${t('Tema')}</span>${themeSwitch()}</div></div>

@@ -48,7 +48,7 @@ export async function privateUrl(path) {
 }
 /** Isi <img data-pmedia> / <video data-pmedia> selepas render. */
 export function hydratePrivate(root = document) {
-  root.querySelectorAll('[data-pmedia]:not([src])').forEach(async el => { const u = await privateUrl(el.dataset.pmedia); if (u) el.src = u; });
+  root.querySelectorAll('[data-pmedia]:not([src]):not([data-pfail])').forEach(async el => { const u = await privateUrl(el.dataset.pmedia); if (u) el.src = u; else { el.dataset.pfail = '1'; el.onerror?.(); } });
 }
 export const isVideo = m => /^video\//.test(m?.type || '') || /\.(mp4|mov|webm)$/i.test(m?.path || '');
 if (typeof document !== 'undefined' && document.body) {
@@ -68,5 +68,5 @@ const ini = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] 
 export function photoAvatar(name, path, { priv = false, cls = '', size } = {}) {
   const st = size ? `width:${size}px;height:${size}px;` : '';
   if (!path) return `<div class="avatar ${cls}" style="${st}">${escP(ini(name))}</div>`;
-  return `<div class="avatar ${cls}" style="${st}padding:0;overflow:hidden"><img alt="" style="width:100%;height:100%;object-fit:cover" ${priv ? `data-pmedia="${escP(path)}"` : `src="${escP(publicUrl(path))}"`}></div>`;
+  return `<div class="avatar ${cls}" style="${st}padding:0;overflow:hidden"><img alt="" style="width:100%;height:100%;object-fit:cover" onerror="console.warn('gambar gagal dimuat', this.src);this.parentNode.style.padding='';this.parentNode.textContent='${escP(ini(name))}'" ${priv ? `data-pmedia="${escP(path)}"` : `src="${escP(publicUrl(path))}"`}></div>`;
 }

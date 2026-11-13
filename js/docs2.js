@@ -1,16 +1,14 @@
 // v21: Sijil penyertaan kejohanan & Laporan progres bulanan (dokumen boleh cetak / simpan PDF).
+import { openDoc } from './docview.js';
 import { LOGO_DATA } from './logo-data.js';
+import { certDoc } from './cert.js';
+import { standings } from './tn-core.js';
+import { publicUrl } from './media.js';
 import { S } from './data.js';
 import { getLang } from './i18n.js';
 import { esc, fmtDate, todayISO, DAYS, hm, LABEL } from './ui.js';
 import { T, byId, progName, venueName, staffName } from './admin/helpers.js';
 
-function openDoc(html, filename) {
-  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-  const w = window.open(url, '_blank');
-  if (!w) { const el = document.createElement('a'); el.href = url; el.download = filename; el.click(); }
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-}
 const academyName = () => (S.t.settings || []).find(s => s.key === 'academy')?.value?.name || 'Maxxima Badminton Academy';
 
 /* ---------------- SIJIL ---------------- */
@@ -18,6 +16,10 @@ export const entryName = e => e ? (e.player_name || byId('students', e.student_i
 /** Kedudukan peserta dalam kategori: 1 = juara, 2 = naib, 3 = separuh akhir. */
 export function placements(catId) {
   const M = T('tournament_matches').filter(m => m.category_id === catId), out = {};
+  // Round robin: pusingan akhir berkumpulan (atau satu kumpulan sahaja) → kedudukan 1–4
+  const finRR = M.filter(m => m.stage === 'final'), grp = M.filter(m => m.stage === 'group'), oneGroup = grp.length && new Set(grp.map(m => m.group_no)).size === 1 && !finRR.length;
+  const rr = finRR.length > 1 ? finRR : oneGroup ? grp : null;
+  if (rr) { if (rr.some(m => m.status === 'pending')) return out; const ids = [...new Set(rr.flatMap(m => [m.entry_a, m.entry_b]).filter(Boolean))]; standings(ids, rr).slice(0, 4).forEach((r, i) => { out[r.id] = i + 1; }); return out; }
   let fin = M.find(m => m.stage === 'final' && m.winner);
   if (!fin) { const ko = M.filter(m => !m.stage || m.stage === 'ko'); const maxR = Math.max(0, ...ko.map(m => m.round_no)); const last = ko.filter(m => m.round_no === maxR); if (last.length === 1 && last[0].winner) fin = last[0];
     if (fin) ko.filter(m => m.round_no === maxR - 1 && m.winner).forEach(m => { const l = m.winner === m.entry_a ? m.entry_b : m.entry_a; if (l) out[l] = 3; }); }
@@ -25,34 +27,14 @@ export function placements(catId) {
   if (fin) { out[fin.winner] = 1; const l = fin.winner === fin.entry_a ? fin.entry_b : fin.entry_a; if (l) out[l] = 2; }
   return out;
 }
-const PLACE = { 1: 'JUARA', 2: 'NAIB JUARA', 3: 'TEMPAT KETIGA' };
-export function openCertificates(entries, tn) {
+/** only: '' semua · 'win' pemenang sahaja · 'part' peserta (bukan pemenang) sahaja */
+export function openCertificates(entries, tn, only = '', { participation = false } = {}) {
   const dates = tn.start_date ? fmtDate(tn.start_date) + (tn.end_date && tn.end_date !== tn.start_date ? ' – ' + fmtDate(tn.end_date) : '') : fmtDate(todayISO());
   const place = {}; [...new Set(entries.map(e => e.category_id))].forEach(cid => Object.assign(place, placements(cid)));
-  const pages = entries.map(e => { const cat = byId('tournament_categories', e.category_id), p = place[e.id];
-    return `<section class="cert ${p ? 'win' : ''}"><div class="in">
-      <img src="${LOGO_DATA}" class="logo" alt="">
-      <div class="kicker">${p ? 'SIJIL PENCAPAIAN' : 'SIJIL PENYERTAAN'}</div>
-      <div class="title">${p ? 'Certificate of Achievement' : 'Certificate of Participation'}</div>
-      <div class="pre">Dengan ini disahkan bahawa</div>
-      <div class="name">${esc(entryName(e))}</div>
-      <div class="pre">${p ? `telah meraih <b>${PLACE[p]}</b> dalam kategori` : 'telah menyertai kategori'} <b>${esc(cat?.name || '')}</b></div>
-      <div class="event">${esc(tn.name)}</div>
-      <div class="pre">${esc(dates)}${tn.venue_id ? ' · ' + esc(venueName(tn.venue_id)) : tn.venue_note ? ' · ' + esc(tn.venue_note) : ''}</div>
-      <div class="sign"><div><span></span>Ketua Jurulatih</div><div><span></span>Pengarah Kejohanan</div></div>
-      <div class="foot">${esc(academyName())}${e.ref_code ? ' · ' + esc(e.ref_code) : ''}</div></div></section>`; }).join('');
-  openDoc(`<!doctype html><html><head><meta charset="utf-8"><title>Sijil — ${esc(tn.name)}</title><style>
-  @page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Georgia,'Times New Roman',serif;background:#ddd;color:#1b1b2f}
-  .bar{position:sticky;top:0;background:#1b1b2f;color:#fff;padding:10px 16px;font:14px system-ui;display:flex;gap:12px;align-items:center}.bar button{font:inherit;padding:6px 14px;border-radius:8px;border:0;background:#C6F432;cursor:pointer}
-  .cert{width:297mm;height:210mm;margin:10px auto;background:#fff;padding:12mm;page-break-after:always;position:relative}
-  .in{height:100%;border:3px solid #1b1b2f;outline:1px solid #C6A84A;outline-offset:-9px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10mm 18mm}
-  .win .in{border-color:#a8841c}.logo{width:70px;height:70px;object-fit:contain;margin-bottom:6px}
-  .kicker{letter-spacing:.35em;font:700 13px system-ui;color:#6b6b80}.title{font-size:34px;margin:4px 0 14px;font-style:italic}
-  .pre{font-size:17px;margin:6px 0;color:#333}.name{font-size:40px;font-weight:700;margin:6px 0 4px;border-bottom:2px solid #C6A84A;padding:0 24px 4px}
-  .event{font-size:24px;font-weight:700;margin:10px 0 2px}.sign{display:flex;gap:80px;margin-top:26px;font:13px system-ui;color:#555}.sign span{display:block;width:180px;border-bottom:1px solid #333;height:34px;margin-bottom:6px}
-  .foot{position:absolute;bottom:20mm;font:11px system-ui;color:#888}
-  @media print{body{background:#fff}.bar{display:none}.cert{margin:0}}</style></head><body>
-  <div class="bar"><b>${entries.length} sijil</b><button onclick="print()">Cetak / Simpan PDF</button><span style="opacity:.7">Pilih "Save as PDF" dan orientasi Landscape.</span></div>${pages}</body></html>`, 'sijil.html');
+  const items = entries.map(e => ({ name: entryName(e), cat: byId('tournament_categories', e.category_id)?.name || '', place: participation ? 0 : place[e.id] || 0, ref: e.ref_code }))
+    .filter(x => !only || (only === 'win' ? x.place : !x.place)).sort((a, b) => (a.place || 9) - (b.place || 9));
+  if (!items.length) throw new Error(only === 'win' ? 'Belum ada pemenang — selesaikan pusingan akhir dahulu.' : 'Tiada peserta.');
+  openDoc(certDoc(items, { event: tn.name, dates, venue: tn.venue_id ? venueName(tn.venue_id) : tn.venue_note, academy: academyName(), logo: LOGO_DATA, cfg: (S.t.settings || []).find(x => x.key === 'cert')?.value || {}, imgUrl: publicUrl }), 'sijil.html');
 }
 
 /* ---------------- LAPORAN PROGRES BULANAN ---------------- */

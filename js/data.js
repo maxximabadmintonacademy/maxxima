@@ -16,7 +16,7 @@ export const S = {
 export const ADMIN_TABLES = [
   'settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'parent_tax_info', 'invoice_items', 'expenses', 'leads', 'trials', 'students',
   'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes',
-  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills', 'feedback', 'package_requests',
+  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills', 'feedback', 'package_requests', 'staff_private',
 ];
 const WINDOWED = new Set(['class_sessions', 'attendance']);   // hanya 90 hari terakhir + akan datang
 const WINDOW_DAYS = 90;
@@ -41,6 +41,8 @@ export async function init() {
     const { data } = await S.client.auth.getSession();
     S.session = data.session;
     if (S.session) await loadProfile();
+    // Minta storan kekal supaya sesi log masuk tidak dibuang oleh telefon (app skrin utama kekal log masuk)
+    try { if (S.session && navigator.storage?.persist) navigator.storage.persisted().then(p => p || navigator.storage.persist()); } catch { /* abaikan */ }
     S.client.auth.onAuthStateChange((event, session) => {
       // Elak panggilan Supabase async di dalam callback ini (risiko deadlock).
       S.session = session;
@@ -84,13 +86,13 @@ export async function setPassword(password) {
   if (!S.profile && S.session) await loadProfile();
 }
 export function demoLogin(role) {
-  S.profile = { id: 'demo-' + role, full_name: { admin: 'Doryn (Demo)', coach: 'Coach Alvi (Demo)', parent: 'Ibu Bapa (Demo)' }[role], role, active: true, email: role + '@demo.local' };
+  S.profile = { id: 'demo-' + role, full_name: { admin: 'Doryn (Demo)', coach: 'Coach Alvi (Demo)', parent: 'Ibu Bapa (Demo)', official: 'Urus Setia (Demo)' }[role], role, active: true, email: role + '@demo.local' };
 }
 
 /* ---------------------------------------------------------------------
    MUAT DATA
    --------------------------------------------------------------------- */
-const ORDER_KEY = { settings: 'key', tournament_stats: 'tournament_id' };
+const ORDER_KEY = { staff_private: 'staff_id', settings: 'key', tournament_stats: 'tournament_id' };
 async function fetchAll(table, sinceISO) {
   const out = [];
   for (let from = 0; ; from += 1000) {
@@ -124,7 +126,7 @@ export async function loadParent() {
 }
 
 /* Portal coach: RLS hanya memulangkan kelas, sesi dan pelajar yang coach itu ajar. */
-const COACH_TABLES = ['courses', 'course_lessons', 'lesson_plans', 'events', 'announcements', 'trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests', 'feedback'];
+const COACH_TABLES = ['courses', 'course_lessons', 'lesson_plans', 'events', 'announcements', 'trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests', 'feedback', 'staff_private'];
 export async function loadCoach() {
   if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
   const since = addDays(todayISO(), -WINDOW_DAYS), next = {};
@@ -167,9 +169,13 @@ export async function loadAll() {
   }
   const since = addDays(todayISO(), -WINDOW_DAYS);
   const next = {};
-  await Promise.all(ADMIN_TABLES.map(async t => { next[t] = await fetchAll(t, since); }));
+  // Urus setia / pengadil: muat data kejohanan sahaja (jadual lain kosong)
+  const list = S.profile?.role === 'official' ? OFFICIAL_TABLES : ADMIN_TABLES;
+  ADMIN_TABLES.forEach(t => { next[t] = []; });
+  await Promise.all(list.map(async t => { next[t] = await fetchAll(t, since); }));
   S.t = next;
 }
+export const OFFICIAL_TABLES = ['settings', 'venues', 'notifications', 'students', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'tournament_draw_log', 'tournament_stats'];
 
 /* ---------------------------------------------------------------------
    CRUD (cache dikemas kini selepas pelayan berjaya)
@@ -315,7 +321,7 @@ export function subscribeNotifications(onNew) {
   if (S.mode !== 'supabase' || S.notifChannel) return;
   S.notifChannel = S.client.channel('notif-' + S.session.user.id)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${S.session.user.id}` },
-      p => { if (!S.t.notifications.some(n => n.id === p.new.id)) S.t.notifications.unshift(p.new); browserNotify(p.new); onNew?.(p.new); })
+      p => { if (!S.t.notifications.some(n => n.id === p.new.id)) S.t.notifications.unshift(p.new); browserNotify(p.new); onNew?.(p.new); setTimeout(() => S.liveResync?.(), 800); })
     .subscribe();
 }
 
@@ -335,6 +341,10 @@ export function subscribeTables(tables, onChange) {
     bump(t);
   });
   S.syncChannel = ch.subscribe();
+  // Sandaran: muat semula jadual bila notifikasi baharu tiba, dan setiap 2 minit semasa app dibuka
+  const resync = async () => { try { await refresh(tables.filter(t => S.t[t])); onChange?.(tables); } catch (e) { console.warn('resync', e); } };
+  S.liveResync = resync;
+  setInterval(() => { if (!document.hidden) resync(); }, 120000);
   let hiddenAt = 0;
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden) { hiddenAt = Date.now(); return; }

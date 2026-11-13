@@ -1,4 +1,5 @@
 // Invois, Nota Kredit & Resit: templat lama Maxxima (ungu, logo kanan atas), dijana sebagai halaman boleh cetak / simpan PDF.
+import { openDoc } from './docview.js';
 import { S, setting } from './data.js';
 import { esc, fmtDateIn } from './ui.js';
 import { docLang, docShell, withLang } from './i18n.js';
@@ -231,12 +232,6 @@ export function receiptHtml(paymentId) {
   <div class="ft"><span>${x('Thank you for choosing {name}.', { name: esc(a.name) })}</span><span>${esc(p.receipt_no || '')}</span></div>`; });
 }
 
-function openDoc(html, filename) {
-  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-  const w = window.open(url, '_blank');
-  if (!w) { const el = document.createElement('a'); el.href = url; el.download = filename; el.click(); }
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-}
 export const openInvoice = id => openDoc(invoiceHtml(id), 'invois.html');
 export const openCreditNote = id => openDoc(creditNoteHtml(id), 'nota-kredit.html');
 export const openReceiptDoc = id => openDoc(receiptHtml(id), 'resit.html');
