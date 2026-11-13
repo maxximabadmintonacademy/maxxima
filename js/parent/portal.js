@@ -3,6 +3,7 @@
 import { ACTIONS, INPUTS } from '../registry.js';
 import { annCard, visibleAnns, showAnnPopup } from '../admin/announce.js';
 import { showTour } from '../tour.js';
+import { remindCard } from './v26.js';
 import { offerCard } from '../admin/ops2.js';
 import { mediaGrid, publicUrl } from '../media.js';
 import { S, loadParent, insert, update, remove, refresh, markRead, subscribeNotifications, subscribeTables, setPassword, rpc } from '../data.js';
@@ -560,6 +561,7 @@ const taxCard = () => {
 };
 PV.akaun = () => `${head(t('Akaun'), '')}<div class="card card-pad mb"><div class="cell-person">${avatar(S.profile.full_name || S.profile.email)}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
   <div class="actions" style="margin-top:14px">${window.__installPrompt ? `<button class="btn primary" data-action="pwa-install">📱 ${t('Pasang app')}</button>` : ''}<button class="btn" data-action="tour-open" data-id="parent">📖 ${t('Panduan app')}</button>${'Notification' in window && Notification.permission === 'default' ? `<button class="btn" data-action="notif-perm">🔔 ${t('Hidupkan notifikasi')}</button>` : ''}<button class="btn" data-action="p-pw">${t('Tukar kata laluan')}</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} ${t('Log keluar')}</button></div></div>
+  ${remindCard()}
   <div class="card card-pad mb"><b>${t('Tetapan paparan')}</b>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><span>${t('Bahasa')}</span>${langSwitch()}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px"><span>${t('Tema')}</span>${themeSwitch()}</div></div>

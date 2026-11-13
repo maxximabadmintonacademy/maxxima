@@ -14,8 +14,10 @@ import { startDomI18n } from '../i18n-dom.js';
 import { langSwitch } from '../i18n.js';
 import { themeSwitch } from '../theme.js';
 import { coachExtraCards } from './v25.js';
+import { CV26, sopCard, sopGate, assignBanner, checkStrip } from './v26.js';
 
 const CV = {};
+Object.assign(CV, CV26);
 const SKILLS = [['footwork', 'Footwork'], ['strokes', 'Pukulan'], ['tactics', 'Taktik'], ['fitness', 'Kecergasan'], ['attitude', 'Sikap']];
 const NAV = [['hari', 'Hari Ini', 'home'], ['minggu', 'Minggu Ini', 'calendar'], ['pelajar', 'Pelajar', 'users'], ['pelan', 'Pelan Latihan', 'check'], ['akaun', 'Akaun', 'user']];
 const meStaff = () => T('staff').find(s => s.profile_id === S.profile.id) || (S.mode === 'demo' ? (T('staff').find(s => /alvi/i.test(s.full_name)) || T('staff')[0]) : null);
@@ -42,7 +44,7 @@ function render() {
   if (UI.cob) { $('#view').innerHTML = onboard(); $('#crumbTitle').textContent = 'Selamat datang'; $('#nav').innerHTML = ''; $('#bottomnav').innerHTML = ''; return; }
   const id = parse(), sy = window.scrollY;
   try { $('#view').innerHTML = CV[id](); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>Ralat memaparkan halaman.</b><p class="muted">${esc(e.message)}</p></div>`; }
-  const item = NAV.find(n => n[0] === id) || [id, id === 'kursus' ? 'Kursus' : 'Berita & acara', 'msg'];
+  const item = NAV.find(n => n[0] === id) || [id, id === 'kursus' ? 'Kursus' : id === 'sop' ? 'SOP Sesi' : 'Berita & acara', 'msg'];
   $('#crumbTitle').textContent = item[1]; document.title = `${item[1]} — Maxxima Coach`;
   $('#nav').innerHTML = `<div class="nav-group">${NAV.map(([k, l, i]) => `<a href="#${k}" class="nav-link ${k === id ? 'active' : ''}">${ic(i)}<span>${l}</span></a>`).join('')}</div>`;
   $('#bottomnav').innerHTML = NAV.map(([k, l, i]) => `<a href="#${k}" class="${k === id ? 'active' : ''}">${ic(i)}${l}</a>`).join('');
@@ -57,10 +59,10 @@ export async function enterCoach() {
   try { await loadCoach(); } catch (e) { console.error(e); $('#view').innerHTML = loadErrorBox(e); return; }
   if (S.mode === 'supabase' ? (S.profile.must_change_pw || !S.profile.tc_accepted_at) : /onboard/.test(location.search)) UI.cob = S.profile.must_change_pw ? 1 : 2;
   subscribeNotifications(n => { if (n?.title) toast('🔔 ' + n.title); liveRender(render); });
-  subscribeTables(['attendance', 'class_sessions', 'announcements', 'feedback', 'progress_records', 'trials', 'events', 'booking_requests', 'lesson_plans'], () => { liveRender(render); if (!UI.cob) setTimeout(() => showAnnPopup(), 600); });
+  subscribeTables(['session_assignments', 'coach_checkins', 'attendance', 'class_sessions', 'announcements', 'feedback', 'progress_records', 'trials', 'events', 'booking_requests', 'lesson_plans'], () => { liveRender(render); if (!UI.cob) setTimeout(() => showAnnPopup(), 600); });
   window.addEventListener('hashchange', () => { document.body.classList.remove('nav-open'); render(); window.scrollTo(0, 0); });
   render();
-  setTimeout(() => { if (!UI.cob && !showTour('coach', false, () => showAnnPopup())) showAnnPopup(); }, 900);
+  setTimeout(() => { if (!UI.cob && !showTour('coach', false, () => { if (!sopGate()) showAnnPopup(); })) { if (!sopGate()) showAnnPopup(); } }, 900);
 }
 
 /* ---- Onboarding coach: kata laluan → paparan → profil → panduan ---- */
@@ -91,20 +93,23 @@ const card = ({ s, c, date }, showDate) => {
   const [a, b] = sTime(s, c), cats = myCat(s), n = s ? rosterOf(s, c).length : T('class_enrolments').filter(e => e.class_id === c.id).length;
   const done = s ? T('attendance').filter(x => x.session_id === s.id && x.status !== 'booked').length : 0;
   const court = cats.length ? groupsOf(s.id).filter(g => cats.includes(g.category)).map(g => g.court).filter(Boolean).join(', ') : sCourt(s, c);
-  return `<button class="slot ${s?.status === 'cancelled' ? 'cancel' : ''}" data-action="c-open" data-id="${s ? s.id : c.id + '|' + date}" style="margin-bottom:8px">
+  const strip = checkStrip({ s, c, date });
+  return `${strip ? '<div class="slot-wrap">' : ''}<button class="slot ${s?.status === 'cancelled' ? 'cancel' : ''}" data-action="c-open" data-id="${s ? s.id : c.id + '|' + date}" style="margin-bottom:${strip ? 0 : 8}px">
     <b>${showDate ? DAYS[parseISO(date).getDay()] + ', ' + fmtShort(date) + ' · ' : ''}${a}–${b} · ${esc(progName(c.programme_id))}</b>
     <div class="meta">${esc(venueName(c.venue_id))}${court ? ' · ' + courtLbl(court) : ''}${cats.length ? ' · Kategori anda: <b>' + cats.map(esc).join(', ') + '</b>' : ''}</div>
     <div class="meta">${isPersonal(c) ? esc(rosterOf(s, c).map(x => x.full_name).join(', ')) : n + ' pelajar'}${s ? ` · ${done}/${n} direkod` : ''}${s?.status === 'held' ? ' · selesai' : ''}${s?.status === 'cancelled' ? ' · dibatalkan' : ''}</div>
-  </button>`;
+  </button>${strip ? strip + '</div>' : ''}`;
 };
 
 CV.hari = () => {
   const me = st(); if (!me) return head('Portal Coach', '') + `<div class="card card-pad">Akaun anda belum dipautkan dengan profil staf. Hubungi admin.</div>`;
   const today = todayISO(), list = mine(today, today), past = mine(addDays(today, -7), addDays(today, -1)).filter(x => x.s && x.s.status === 'scheduled');
   return `${head(`Hai, ${esc(me.full_name.split(' ')[0])}`, `${DAYS[parseISO(today).getDay()]}, ${fmtDate(today)} · ${list.length} sesi hari ini`)}
+  ${assignBanner()}
   ${list.map(x => card(x)).join('') || (() => { const nx = mine(addDays(today, 1), addDays(today, 30)); return nx.length
     ? `<div class="card empty mb">Tiada sesi hari ini. Sesi seterusnya: <b>${DAYS[parseISO(nx[0].date).getDay()]}, ${fmtDate(nx[0].date)}</b> — lihat tab Minggu.</div>`
     : `<div class="card card-pad mb"><b>Belum ada sesi ditugaskan kepada anda</b><p class="muted" style="font-size:13px;margin-top:6px">Portal coach memaparkan kelas & sesi personal di mana anda ialah coach. Admin boleh tetapkan anda sebagai coach kelas di <b>Jadual Latihan</b>, coach sesi dalam panel sesi Kalendar, atau coach kategori (U8/U12…). Selepas itu jadual, senarai pelajar, kehadiran & pelan latihan akan muncul di sini.</p></div>`; })()}
+  ${sopCard()}
   ${past.length ? `<h3 style="font-size:14px;margin:18px 0 8px">Belum ditanda (7 hari lepas)</h3>${past.map(x => card(x, true)).join('')}` : ''}
   ${T('events').filter(e => e.start_date >= today && e.status !== 'cancelled').length ? `<h3 style="font-size:14px;margin:20px 0 8px">Acara akan datang</h3>${T('events').filter(e => e.start_date >= today && e.status !== 'cancelled').sort((a, b) => a.start_date.localeCompare(b.start_date)).slice(0, 3).map(e => `<div class="card card-pad mb"><b>${esc(e.name)}</b><div class="muted" style="font-size:12.5px">${fmtDate(e.start_date)}${e.start_time ? ' · ' + hm(e.start_time) : ''}${e.venue_note ? ' · ' + esc(e.venue_note) : e.venue_id ? ' · ' + esc(venueName(e.venue_id)) : ''}${(e.staff_ids || []).includes(me.id) ? ' · <b>Anda bertugas</b>' : ''}</div></div>`).join('')}` : ''}
   ${T('courses').some(c => c.status === 'published') ? `<a class="card card-pad mb" href="#kursus" style="display:block;text-decoration:none;color:inherit">${ic('award', 'sm')} <b>Kursus</b> <span class="muted" style="font-size:12.5px">— bahan pembelajaran akademi →</span></a>` : ''}
@@ -129,7 +134,7 @@ CV.pelajar = () => {
 };
 CV.akaun = () => { const me = st(); return `${head('Akaun', '')}<div class="card card-pad mb"><div class="cell-person">${photoAvatar(S.profile.full_name || S.profile.email, me?.photo_path, { size: 56 })}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
   ${me ? `<p class="muted" style="margin-top:10px;font-size:13px">Bahasa: ${(me.languages || []).map(langName).join(', ') || '—'}${me.qualifications ? '<br>Kelayakan: ' + esc(me.qualifications) : ''}</p>` : ''}
-  <div class="actions" style="margin-top:14px">${me ? `<label class="btn" style="cursor:pointer">📷 ${me.photo_path ? 'Tukar gambar profil' : 'Tambah gambar profil'}<input type="file" accept="image/*" style="display:none" data-on-change="c-photo"></label>` : ''}${'Notification' in window && Notification.permission === 'default' ? '<button class="btn" data-action="notif-perm">🔔 Hidupkan notifikasi</button>' : ''}<button class="btn" data-action="tour-open" data-id="coach">📖 Panduan app</button><button class="btn" data-action="c-pw">Tukar kata laluan</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} Log keluar</button></div></div>
+  <div class="actions" style="margin-top:14px">${me ? `<label class="btn" style="cursor:pointer">📷 ${me.photo_path ? 'Tukar gambar profil' : 'Tambah gambar profil'}<input type="file" accept="image/*" style="display:none" data-on-change="c-photo"></label>` : ''}${'Notification' in window && Notification.permission === 'default' ? '<button class="btn" data-action="notif-perm">🔔 Hidupkan notifikasi</button>' : ''}<button class="btn" data-action="tour-open" data-id="coach">📖 Panduan app</button><a class="btn" href="#sop">📋 SOP sesi</a><button class="btn" data-action="c-pw">Tukar kata laluan</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} Log keluar</button></div></div>
   ${coachExtraCards(me)}
   ${T('feedback').length ? `<div class="card mb"><div class="card-head"><div><h3>Maklum balas ibu bapa</h3><div class="sub">Untuk sesi anda</div></div><b>${(T('feedback').reduce((n, f) => n + f.rating, 0) / T('feedback').length).toFixed(1)} ★</b></div><ul class="list">${T('feedback').slice().sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 10).map(f => `<li class="list-item"><div class="li-main"><div class="li-title"><span style="color:#f5b301">${'★'.repeat(f.rating)}</span><span style="color:#d1d5db">${'★'.repeat(5 - f.rating)}</span> ${esc(studentName(f.student_id) || '')}</div>${f.comment ? `<div class="li-sub">“${esc(f.comment)}”</div>` : ''}<div class="li-sub">${fmtShort((f.created_at || '').slice(0, 10))}</div></div></li>`).join('')}</ul></div>` : ''}
   <div class="card card-pad"><b>Tetapan paparan</b>

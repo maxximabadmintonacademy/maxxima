@@ -3,6 +3,7 @@
 import { ACTIONS } from './registry.js';
 import { t } from './i18n.js';
 import { app, toast } from './ui.js';
+import { ensurePush } from './data.js';
 
 const KEY = r => `mx_tour_${r}_v1`;
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -79,5 +80,5 @@ export function showTour(role, force = false, onClose = null) {
 }
 
 ACTIONS['tour-open'] = role => showTour(role, true);
-ACTIONS['tour-notif'] = async () => { try { const r = await Notification.requestPermission(); toast(r === 'granted' ? t('Notifikasi dihidupkan ✓') : t('Notifikasi tidak dibenarkan oleh pelayar'), r !== 'granted'); } catch { /* abaikan */ } if (cur) draw(); };
+ACTIONS['tour-notif'] = async () => { try { const r = await Notification.requestPermission(); if (r === 'granted') ensurePush(); toast(r === 'granted' ? t('Notifikasi dihidupkan ✓') : t('Notifikasi tidak dibenarkan oleh pelayar'), r !== 'granted'); } catch { /* abaikan */ } if (cur) draw(); };
 window.addEventListener('beforeinstallprompt', () => { if (cur) setTimeout(draw, 0); });

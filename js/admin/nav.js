@@ -44,6 +44,7 @@ export const NAV = [
   ] },
   { group: 'Pasukan', items: [
     { id: 'coach', label: 'Coach', icon: 'award' },
+    { id: 'checkin', label: 'Check-in & Tugasan', icon: 'check', count: () => T('session_assignments').filter(a => ['rejected', 'expired'].includes(a.status) && !a.seen_at).length, red: true },
     { id: 'pelanlatihan', label: 'Pelan Latihan', icon: 'check' },
     { id: 'hr', label: 'HR & Staf', icon: 'briefcase', count: () => T('leave_requests').filter(l => l.status === 'pending').length },
   ] },

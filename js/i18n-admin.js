@@ -1,6 +1,38 @@
 // Kamus Portal Admin: 'teks BM': ['English', '中文'].
 // Bahagian 1: menu, Dashboard, Senarai Pelajar, Jadual Kelas, Kehadiran, Tetapan. Halaman lain ditambah berperingkat.
 export const AD = {
+  // v26
+  "Check-in & Tugasan": ["Check-in & Assignments", "签到与任务"],
+  "Check-in & Tugasan Coach": ["Coach Check-in & Assignments", "教练签到与任务"],
+  "Check-in hari ini": ["Today's check-ins", "今日签到"],
+  "7 hari lepas": ["Last 7 days", "过去7天"],
+  "Tugasan sesi": ["Session assignments", "课程任务"],
+  "SOP sesi": ["Session SOP", "课程SOP"],
+  "Jalankan peringatan sekarang": ["Run reminders now", "立即发送提醒"],
+  "Tugasan coach": ["Coach duties", "教练任务"],
+  "Sudah check in": ["Checked in", "已签到"],
+  "Lewat": ["Late", "迟到"],
+  "Belum / tiada check in": ["Not / no check-in", "未签到"],
+  "Tiada check in": ["No check-in", "未签到"],
+  "Ketepatan masa (30 hari)": ["Punctuality (30 days)", "准时率（30天）"],
+  "Pengesahan coach": ["Coach acknowledgement", "教练确认"],
+  "Ubah SOP sesi": ["Edit session SOP", "编辑课程SOP"],
+  "SOP Sesi Coach": ["Coach Session SOP", "教练课程SOP"],
+  "Check in": ["Check in", "签到"],
+  "Check out": ["Check out", "签退"],
+  "Check in sesi": ["Session check-in", "课程签到"],
+  "Check out sesi": ["Session check-out", "课程签退"],
+  "Tugasan sesi baharu": ["New session assignment", "新课程任务"],
+  "Kelas tetap baharu": ["New regular class", "新固定课程"],
+  "Tolak tugasan": ["Reject assignment", "拒绝任务"],
+  "Saya faham & akan patuh": ["I understand & will comply", "我明白并会遵守"],
+  "Swafoto di court (wajib)": ["Selfie at the court (required)", "球场自拍（必填）"],
+  "📍 Tiba 10 minit awal & check in": ["📍 Arrive 10 min early & check in", "📍 提前10分钟到达并签到"],
+  "Lokasi GPS (untuk semakan check in coach)": ["GPS location (for coach check-in)", "GPS位置（教练签到核对）"],
+  "📍 Guna lokasi saya sekarang": ["📍 Use my current location", "📍 使用我的当前位置"],
+  "Radius dibenarkan (meter)": ["Allowed radius (metres)", "允许半径（米）"],
+  "Tiada respons": ["No response", "无回应"],
+
   // v25
   "Skor Langsung": ["Live Scoring", "即时比分"],
   "Masukkan skor →": ["Enter score →", "输入比分 →"],

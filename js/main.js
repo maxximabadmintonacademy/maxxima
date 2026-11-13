@@ -1,5 +1,5 @@
 // Titik masuk: log masuk, penghalaan peranan, shell Portal Admin, router.
-import { S, init, loadAll, signIn, signOut, resetPassword, setPassword, demoLogin, expirePackages, markRead, subscribeNotifications, subscribeTables } from './data.js';
+import { S, init, loadAll, signIn, signOut, resetPassword, setPassword, demoLogin, expirePackages, markRead, subscribeNotifications, subscribeTables, ensurePush } from './data.js';
 import { $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError, liveRender , loadErrorBox } from './ui.js';
 import { VIEWS, ACTIONS, INPUTS } from './registry.js';
 import { t, setLang, setI18nActive, langSwitch } from './i18n.js';
@@ -26,6 +26,7 @@ import './admin/auto.js';
 import './admin/v22.js';
 import './admin/scoring.js';
 import './admin/v25.js';
+import './admin/v26.js';
 
 const root = () => $('#root');
 const logoSvg = `<img src="assets/logo.png" alt="MBA" class="brand-img">`;
@@ -110,6 +111,7 @@ function showPortalSoon(role) {
    MASUK KE PORTAL
    ===================================================================== */
 async function enter() {
+  setTimeout(() => ensurePush(), 4000);   // langgan push jika notifikasi sudah dibenarkan
   const p = S.profile;
   if (!p) return showMessage('Profil tidak dijumpai', 'Akaun anda sudah wujud tetapi belum mempunyai profil. Hubungi admin akademi.');
   if (!p.active) return showMessage('Akaun dinyahaktifkan', 'Sila hubungi admin akademi.');
@@ -288,4 +290,4 @@ boot();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__installPrompt = e; app.render?.(); });
 ACTIONS['pwa-install'] = async () => { const p = window.__installPrompt; if (!p) return toast('Gunakan menu pelayar: "Tambah ke skrin utama" / "Install app".'); p.prompt(); await p.userChoice.catch(() => {}); window.__installPrompt = null; app.render?.(); };
-ACTIONS['notif-perm'] = async () => { try { const r = await Notification.requestPermission(); toast(r === 'granted' ? 'Notifikasi dihidupkan ✓' : 'Notifikasi tidak dibenarkan oleh pelayar', r !== 'granted'); app.render?.(); } catch (e) { toast(e.message, true); } };
+ACTIONS['notif-perm'] = async () => { try { const r = await Notification.requestPermission(); if (r === 'granted') ensurePush(); toast(r === 'granted' ? 'Notifikasi dihidupkan ✓' : 'Notifikasi tidak dibenarkan oleh pelayar', r !== 'granted'); app.render?.(); } catch (e) { toast(e.message, true); } };

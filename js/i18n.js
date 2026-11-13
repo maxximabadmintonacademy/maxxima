@@ -619,6 +619,16 @@ const D = {
   'Maklum balas': ['Feedback', '反馈'],
   'Selepas sesi, beri bintang dan komen — coach & admin membacanya untuk menambah baik latihan.': ['After a session, give stars and comments — coaches & admin read them to improve training.', '课后给予星级与评论——教练和管理员会参考以改进训练。'],
   'Kembali': ['Back', '返回'],
+  // v26
+  'Peringatan sesi': ['Session reminders', '课程提醒'],
+  '{n} jam sebelum sesi': ['{n} hours before session', '课前 {n} 小时'],
+  '2 jam sebelum sesi': ['2 hours before session', '课前 2 小时'],
+  'Sempat mohon cuti / tukar sesi sebelum had notis {n} jam.': ['Time to request leave / change session before the {n}-hour notice limit.', '可在 {n} 小时通知期限前请假/换课。'],
+  'Peringatan latihan: bawa raket, kasut, air & tuala.': ['Training reminder: bring racket, shoes, water & towel.', '训练提醒：带球拍、球鞋、水和毛巾。'],
+  'Notifikasi telefon aktif — peringatan sampai walaupun app ditutup.': ['Phone notifications on — reminders arrive even when the app is closed.', '手机通知已开启——即使关闭应用也能收到提醒。'],
+  'Notifikasi disekat dalam tetapan telefon — peringatan hanya dalam app (ikon loceng).': ['Notifications are blocked in phone settings — reminders only in the app (bell icon).', '手机设置已阻止通知——提醒仅在应用内（铃铛图标）。'],
+  'Tekan "Hidupkan notifikasi" di atas supaya peringatan sampai ke telefon.': ['Tap "Turn on notifications" above so reminders reach your phone.', '请点击上方“开启通知”，以便手机收到提醒。'],
+  'Tetapan disimpan': ['Settings saved', '设置已保存'],
 };
 
 /* t('teks BM', { n: 3 }) -> teks dalam bahasa semasa; force = paksa bahasa tertentu (untuk dokumen) */

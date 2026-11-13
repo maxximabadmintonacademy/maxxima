@@ -16,7 +16,7 @@ export const S = {
 export const ADMIN_TABLES = [
   'settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'parent_tax_info', 'invoice_items', 'expenses', 'leads', 'trials', 'students',
   'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes',
-  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills', 'feedback', 'package_requests', 'staff_private',
+  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills', 'feedback', 'package_requests', 'staff_private', 'coach_checkins', 'session_assignments',
 ];
 const WINDOWED = new Set(['class_sessions', 'attendance']);   // hanya 90 hari terakhir + akan datang
 const WINDOW_DAYS = 90;
@@ -71,7 +71,7 @@ export async function signIn(email, password) {
   S.session = data.session; await loadProfile();
 }
 export async function signOut() {
-  if (S.mode === 'supabase') await S.client.auth.signOut();
+  if (S.mode === 'supabase') { await dropPush(); await S.client.auth.signOut(); }
   else { S.profile = null; location.reload(); }
 }
 export async function resetPassword(email) {
@@ -126,7 +126,7 @@ export async function loadParent() {
 }
 
 /* Portal coach: RLS hanya memulangkan kelas, sesi dan pelajar yang coach itu ajar. */
-const COACH_TABLES = ['courses', 'course_lessons', 'lesson_plans', 'events', 'announcements', 'trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests', 'feedback', 'staff_private'];
+const COACH_TABLES = ['courses', 'course_lessons', 'lesson_plans', 'events', 'announcements', 'trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests', 'feedback', 'staff_private', 'coach_checkins', 'session_assignments'];
 export async function loadCoach() {
   if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
   const since = addDays(todayISO(), -WINDOW_DAYS), next = {};
@@ -388,4 +388,28 @@ export async function inviteUser(payload) {
   if (error) throw new Error(error.message);
   for (const t of ['profiles', 'students', 'staff']) S.t[t] = await fetchAll(t, '');
   return data;
+}
+
+/* ---------- Notifikasi push (Web Push): sampai walaupun app ditutup ---------- */
+const b64u = s => { const p = '='.repeat((4 - (s.length % 4)) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...b].map(c => c.charCodeAt(0))); };
+/** Langgan push untuk peranti ini (selepas kebenaran notifikasi diberi). Senyap jika tidak disokong / fungsi "push" belum dipasang. */
+export async function ensurePush() {
+  try {
+    if (S.mode !== 'supabase' || !S.session || !('serviceWorker' in navigator) || !('PushManager' in window) || Notification.permission !== 'granted') return false;
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      let key = localStorage.getItem('mx_vapid');
+      if (!key) { const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/push?action=key`); if (!r.ok) return false; key = (await r.json()).publicKey; if (!key) return false; localStorage.setItem('mx_vapid', key); }
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(key) });
+    }
+    const j = sub.toJSON();
+    const { error } = await S.client.from('push_subscriptions').upsert({ endpoint: j.endpoint, user_id: S.session.user.id, p256dh: j.keys.p256dh, auth: j.keys.auth, ua: navigator.userAgent.slice(0, 200) });
+    if (error) { await sub.unsubscribe().catch(() => {}); return false; }   // peranti dikongsi akaun lain: langgan semula kali seterusnya
+    return true;
+  } catch (e) { console.warn('push', e); return false; }
+}
+async function dropPush() {
+  try { const reg = await navigator.serviceWorker?.getRegistration(); const sub = await reg?.pushManager?.getSubscription();
+    if (sub) { await S.client.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); } } catch { /* abaikan */ }
 }

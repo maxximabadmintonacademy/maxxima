@@ -41,7 +41,9 @@ export async function privateUrl(path) {
   if (!path) return '';
   if (DEMO.has(path)) return DEMO.get(path);
   const c = SIGNED.get(path); if (c && c.exp > Date.now()) return c.url;
-  const { data, error } = await S.client.storage.from('progress-media').createSignedUrl(path, 3600);
+  const [bucket, key] = path.includes('::') ? path.split('::') : ['progress-media', path];   // "checkins::<laluan>" untuk baldi lain
+  if (DEMO.has(key)) return DEMO.get(key);
+  const { data, error } = await S.client.storage.from(bucket).createSignedUrl(key, 3600);
   if (error) { console.warn(error); return ''; }
   SIGNED.set(path, { url: data.signedUrl, exp: Date.now() + 3500 * 1000 });
   return data.signedUrl;

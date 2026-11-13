@@ -128,7 +128,8 @@ ACTIONS['reg-copy'] = async () => { try { await navigator.clipboard.writeText(re
 
 /* ---- Notifikasi admin boleh diubah (setiap admin sendiri) ---- */
 export const NOTIF_KINDS = [['booking', 'Tempahan / reschedule / batal daripada ibu bapa'], ['trial', 'Trial baharu (borang lead)'], ['enrolment', 'Pendaftaran online baharu'], ['payment', 'Bayaran / bukti bayaran baharu'], ['payment_ok', 'Bayaran disahkan'],
-  ['renewal', 'Invois pembaharuan pakej dijana'], ['student', 'Pelajar baharu ditambah'], ['leave', 'Permohonan cuti staf']];
+  ['renewal', 'Invois pembaharuan pakej dijana'], ['student', 'Pelajar baharu ditambah'], ['leave', 'Permohonan cuti staf'],
+  ['coach', 'Coach: tugasan ditolak / tiada respons, check in lewat, ketersediaan'], ['attendance', 'Kehadiran belum ditanda 12 jam selepas sesi']];
 const myProfile = () => T('profiles').find(p => p.id === S.profile.id) || S.profile;
 const notifCard = () => { const off = new Set(myProfile().notify_off || []); return `<div class="card card-pad mb"><h3 style="font-size:14.5px;margin-bottom:4px">${ic('bell', 'sm')} Notifikasi saya</h3>
   <p class="muted" style="font-size:12.5px;margin-bottom:10px">Pilih notifikasi loceng yang anda mahu terima. Setiap admin boleh pilih sendiri.</p>
@@ -227,8 +228,15 @@ Object.assign(ACTIONS, {
 
   'venue-add': () => openModal({ title: 'Lokasi Baharu', submit: 'Tambah', body: `<div class="form-grid">${F('Nama lokasi', 'name', { req: true, full: true })}${F('Kawasan', 'area', { full: true })}${langBox(null)}</div>`, onSubmit: async d => { await insert('venues', { name: d.name.trim(), area: val(d.area), active: true, required_langs: [].concat(d.required_langs || []).filter(Boolean) }); toast('Lokasi ditambah'); app.render(); } }),
   'venue-edit': id => { const v = byId('venues', id); openModal({
-    title: 'Edit Lokasi', body: `<div class="form-grid">${F('Nama lokasi', 'name', { value: v.name, req: true, full: true })}${F('Kawasan', 'area', { value: v.area, full: true })}${langBox(v)}${activeBox(v.active)}</div><div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="venue-del" data-id="${id}">${ic('trash', 'sm')} Padam</button></div>`,
-    onSubmit: async d => { await update('venues', id, { name: d.name.trim(), area: val(d.area), active: d.active === '1', required_langs: [].concat(d.required_langs || []).filter(Boolean) }); toast('Lokasi dikemas kini'); app.render(); } }); },
+    title: 'Edit Lokasi', body: `<div class="form-grid">${F('Nama lokasi', 'name', { value: v.name, req: true, full: true })}${F('Kawasan', 'area', { value: v.area, full: true })}${langBox(v)}${activeBox(v.active)}
+      <div class="f full" style="border-top:1px solid var(--line);padding-top:10px"><b style="font-size:13px">📍 Lokasi GPS (untuk semakan check in coach)</b><span class="muted" style="font-size:12px">Buka Google Maps → tekan lama pada dewan → salin nombor "3.07, 101.51". Atau tekan butang semasa berada di dewan.</span></div>
+      ${F('Latitud, longitud', 'latlng', { value: v.lat != null ? `${v.lat}, ${v.lng}` : '', ph: '3.0738, 101.5183' })}${F('Radius dibenarkan (meter)', 'radius_m', { type: 'number', value: v.radius_m ?? 300 })}
+      <div class="f full"><button type="button" class="btn sm" data-action="venue-here">📍 Guna lokasi saya sekarang</button></div></div><div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="venue-del" data-id="${id}">${ic('trash', 'sm')} Padam</button></div>`,
+    onSubmit: async d => { const m = String(d.latlng || '').match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/);
+      if (d.latlng && !m) throw new Error('Format lokasi: "3.0738, 101.5183"');
+      await update('venues', id, { name: d.name.trim(), area: val(d.area), active: d.active === '1', required_langs: [].concat(d.required_langs || []).filter(Boolean), lat: m ? Number(m[1]) : null, lng: m ? Number(m[2]) : null, radius_m: Number(d.radius_m) || 300 }); toast('Lokasi dikemas kini'); app.render(); } }); },
+  'venue-here': () => { if (!navigator.geolocation) return toast('Peranti tidak menyokong lokasi', true);
+    navigator.geolocation.getCurrentPosition(p => { const el = document.querySelector('#modal input[name=latlng]'); if (el) el.value = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`; toast(`Lokasi diambil (±${Math.round(p.coords.accuracy)} m)`); }, () => toast('Lokasi tidak dibenarkan', true), { enableHighAccuracy: true, timeout: 10000 }); },
   'venue-del': id => confirmModal({ title: 'Padam lokasi?', message: `Semua kelas di <b>${esc(venueName(id))}</b> akan turut dipadam. Pertimbangkan "Tidak aktif" sahaja.`, ok: 'Padam', danger: true, onOk: async () => { await remove('venues', id); toast('Lokasi dipadam'); app.render(); } }),
 
   'prog-add': () => openModal({ title: 'Program Baharu', submit: 'Tambah', body: progForm(), onSubmit: async d => { await insert('programmes', progPatch(d)); toast('Program ditambah'); app.render(); } }),
