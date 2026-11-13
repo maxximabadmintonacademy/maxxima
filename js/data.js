@@ -16,7 +16,7 @@ export const S = {
 export const ADMIN_TABLES = [
   'settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'parent_tax_info', 'invoice_items', 'expenses', 'leads', 'trials', 'students',
   'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes',
-  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans',
+  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills',
 ];
 const WINDOWED = new Set(['class_sessions', 'attendance']);   // hanya 90 hari terakhir + akan datang
 const WINDOW_DAYS = 90;
@@ -90,14 +90,21 @@ export function demoLogin(role) {
 /* ---------------------------------------------------------------------
    MUAT DATA
    --------------------------------------------------------------------- */
+const ORDER_KEY = { settings: 'key', tournament_stats: 'tournament_id' };
 async function fetchAll(table, sinceISO) {
   const out = [];
   for (let from = 0; ; from += 1000) {
     let q = S.client.from(table).select('*');
     if (WINDOWED.has(table)) q = q.gte('session_date', sinceISO);
     if (table === 'notifications') q = q.eq('user_id', S.session.user.id);
-    const { data, error } = await q.order(table === 'settings' ? 'key' : 'id').range(from, from + 999);
-    if (error) throw error;
+    const { data, error } = await q.order(ORDER_KEY[table] || 'id').range(from, from + 999);
+    if (error) {
+      // Jadual/lajur baharu yang SQL-nya belum dijalankan: jangan rosakkan seluruh portal
+      if (['42P01', '42703', 'PGRST205', 'PGRST204'].includes(error.code) || /does not exist|schema cache/i.test(error.message || '')) {
+        console.warn('[data] langkau', table, error.message); (S.missingTables ||= new Set()).add(table); return [];
+      }
+      throw error;
+    }
     out.push(...data);
     if (data.length < 1000) break;
   }
@@ -105,7 +112,7 @@ async function fetchAll(table, sinceISO) {
 }
 
 const PARENT_TABLES = ['settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'students', 'classes', 'class_enrolments',
-  'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'parent_tax_info', 'invoice_items', 'booking_requests', 'session_groups', 'announcements', 'tournaments', 'class_offers', 'courses', 'course_lessons'];
+  'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'parent_tax_info', 'invoice_items', 'booking_requests', 'session_groups', 'announcements', 'tournaments', 'class_offers', 'courses', 'course_lessons', 'waitlist', 'gateway_bills', 'lesson_plans', 'tournament_entries', 'tournament_categories', 'tournament_matches'];
 /* Portal ibu bapa: RLS hanya memulangkan data anak sendiri. */
 export async function loadParent() {
   if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
@@ -168,8 +175,8 @@ export async function loadAll() {
    CRUD (cache dikemas kini selepas pelayan berjaya)
    --------------------------------------------------------------------- */
 const CHILDREN = {
-  students: [['expenses', 'student_id', 'null'], ['guardians', 'student_id', 'cascade'], ['student_programmes', 'student_id', 'cascade'], ['student_packages', 'student_id', 'cascade'], ['class_enrolments', 'student_id', 'cascade'], ['attendance', 'student_id', 'cascade'], ['progress_records', 'student_id', 'cascade'], ['invoices', 'student_id', 'cascade'], ['tournament_entries', 'student_id', 'cascade'], ['tournament_entries', 'partner_id', 'null'], ['booking_requests', 'student_id', 'cascade']],
-  classes: [['class_enrolments', 'class_id', 'cascade'], ['class_sessions', 'class_id', 'cascade']],
+  students: [['expenses', 'student_id', 'null'], ['guardians', 'student_id', 'cascade'], ['student_programmes', 'student_id', 'cascade'], ['student_packages', 'student_id', 'cascade'], ['class_enrolments', 'student_id', 'cascade'], ['attendance', 'student_id', 'cascade'], ['progress_records', 'student_id', 'cascade'], ['invoices', 'student_id', 'cascade'], ['tournament_entries', 'student_id', 'cascade'], ['tournament_entries', 'partner_id', 'null'], ['booking_requests', 'student_id', 'cascade'], ['waitlist', 'student_id', 'cascade']],
+  classes: [['class_enrolments', 'class_id', 'cascade'], ['class_sessions', 'class_id', 'cascade'], ['waitlist', 'class_id', 'cascade']],
   class_sessions: [['attendance', 'session_id', 'cascade'], ['session_groups', 'session_id', 'cascade'], ['booking_requests', 'session_id', 'null']],
   leads: [['trials', 'lead_id', 'cascade'], ['students', 'lead_id', 'null']],
   invoices: [['invoice_items', 'invoice_id', 'cascade'], ['credit_notes', 'invoice_id', 'restrict'], ['payments', 'invoice_id', 'cascade'], ['tournament_entries', 'invoice_id', 'null'], ['student_packages', 'invoice_id', 'null']],

@@ -12,6 +12,7 @@ import { openInvoice, openCreditNote } from '../invoice.js';
 import { t, langSwitch, setI18nActive } from '../i18n.js';
 import { themeSwitch } from '../theme.js';
 import { tr } from '../i18n-dom.js';
+import { openMonthlyReport, openCertificates } from '../docs2.js';
 
 const PV = {};
 const NAV = [['utama', 'Utama', 'home'], ['jadual', 'Jadual', 'calendar'], ['tempah', 'Tempah', 'plus'], ['yuran', 'Yuran', 'wallet'], ['progres', 'Progres', 'trend'], ['akaun', 'Akaun', 'user']];
@@ -69,7 +70,7 @@ export async function enterParent() {
   subscribeNotifications(() => render());
   window.addEventListener('hashchange', () => { document.body.classList.remove('nav-open'); render(); window.scrollTo(0, 0); });
   if (needsOnboard()) { UI.ob = S.profile.must_change_pw ? 1 : 2; }
-  render();
+  render(); gwReturn();
 }
 /* ---- Log masuk kali pertama: kata laluan → bahasa/tema → profil anak → Terma & Syarat ---- */
 const needsOnboard = () => S.mode === 'supabase' ? (!!S.profile.must_change_pw || !S.profile.tc_accepted_at) : /onboard/.test(location.search);
@@ -221,7 +222,8 @@ PV.tempah = () => {
       <div class="card"><ul class="list">${slots.slice(0, 60).map(x => { const key = x.class_id + '|' + x.session_date, left = Math.max(Number(x.capacity) - Number(x.booked || 0), 0), cat = ageCatOf(k, x.session_date);
         return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${DAYS[new Date(x.session_date + 'T00:00:00').getDay()]}, ${fmtShort(x.session_date)} · ${hm(x.start_time)}–${hm(x.end_time)}</div>
           <div class="li-sub">${esc(tr(x.programme))} · ${esc(x.venue)}${(x.categories || []).length ? ' · ' + x.categories.map(esc).join('/') : ''}${cat ? ` · ${t('Kategori anak')}: <b>${esc(cat)}</b>` : ''} · ${left > 0 ? t('{n} tempat kosong', { n: left }) : `<b style="color:var(--bad)">${t('penuh')}</b>`}</div></div>
-          ${taken.has(key) ? `<span class="badge b-info">${t('Sudah ditempah')}</span>` : `<button class="btn sm primary" data-action="p-req-g" data-id="${key}" ${left <= 0 ? 'disabled' : ''}>${t('Tempah')}</button>`}</li>`; }).join('') || `<li class="empty">${t('Tiada slot terbuka dalam 3 minggu ini.')}</li>`}</ul></div>`;
+          ${taken.has(key) ? `<span class="badge b-info">${t('Sudah ditempah')}</span>` : `<button class="btn sm primary" data-action="p-req-g" data-id="${key}" ${left <= 0 ? 'disabled' : ''}>${t('Tempah')}</button>`}</li>`; }).join('') || `<li class="empty">${t('Tiada slot terbuka dalam 3 minggu ini.')}</li>`}</ul></div>
+      ${waitBox(k)}`;
     }
   } else {
     const progs = T('programmes').filter(p => p.active && p.kind === 'personal');
@@ -249,6 +251,18 @@ PV.tempah = () => {
       <div class="li-sub">${b.kind === 'group' ? `${b.session_date ? when(b.session_date, c || { start_time: '', end_time: '' }) : ''}${c ? ' · ' + esc(where(c)) : ''}` : `${(b.pref_days || []).map(d => DAYS[d]).join(', ')}${b.pref_time ? ' · ' + esc(b.pref_time) : ''}`}${b.admin_note ? ' · ' + esc(b.admin_note) : ''}</div></div>
       ${b.status === 'new' ? `<button class="btn sm danger-o" data-action="p-req-x" data-id="${b.id}">${t('Batal')}</button>` : ''}</li>`; }).join('') || `<li class="empty">${t('Belum ada permintaan.')}</li>`}</ul></div>` : body}`;
 };
+/* Senarai menunggu: kelas penuh */
+function waitBox(k) {
+  if (!S.pClassList) { S.pClassList = []; (S.mode === 'supabase' ? rpc('parent_class_list') : Promise.resolve(T('classes').filter(c => c.active && byId('programmes', c.programme_id)?.kind !== 'personal').map(c => ({ ...c, enrolled: T('class_enrolments').filter(e => e.class_id === c.id).length }))))
+    .then(r => { S.pClassList = r || []; render(); }).catch(e => console.warn(e)); }
+  const mine = T('waitlist').filter(w => w.student_id === k.id && ['waiting', 'offered'].includes(w.status)), enrolled = new Set(T('class_enrolments').filter(e => e.student_id === k.id).map(e => e.class_id));
+  const full = (S.pClassList || []).filter(c => Number(c.enrolled) >= Number(c.capacity) && !enrolled.has(c.id) && !mine.some(w => w.class_id === c.id));
+  const lbl = c => `${DAYS[c.weekday]} ${hm(c.start_time)}–${hm(c.end_time)} · ${tr(progName(c.programme_id))} · ${venueName(c.venue_id)}`;
+  if (!mine.length && !full.length) return '';
+  return `<div class="card card-pad" style="margin-top:14px"><b>${t('Senarai menunggu')}</b><div class="muted" style="font-size:12.5px;margin:4px 0 10px">${t('Kelas tetap penuh? Masuk senarai menunggu — anda akan dimaklumkan bila ada tempat kosong.')}</div>
+    ${mine.map(w => { const c = (S.pClassList || []).find(x => x.id === w.class_id) || byId('classes', w.class_id); return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap"><span>${c ? esc(lbl(c)) : ''} ${w.status === 'offered' ? `<span class="badge b-ok">${t('Tempat ditawarkan — hubungi admin')}</span>` : `<span class="badge b-warn">${t('Menunggu')}</span>`}</span><button class="btn sm danger-o" data-action="p-wl-x" data-id="${w.id}">${t('Keluar')}</button></div>`; }).join('')}
+    ${full.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap"><label class="field grow"><select id="pWl">${full.map(c => `<option value="${c.id}">${esc(lbl(c))}</option>`).join('')}</select></label><button class="btn sm" data-action="p-wl" data-id="${k.id}">${t('Masuk senarai menunggu')}</button></div>` : ''}</div>`;
+}
 function offersBody(k) {
   const L = T('class_offers').filter(o => o.status !== 'closed');
   L.filter(o => o.coach_id && o.coach_name === undefined).forEach(o => { o.coach_name = null; if (S.mode === 'supabase') rpc('offer_coach_name', { p: o.coach_id }).then(n => { o.coach_name = n ? 'Coach ' + n : null; render(); }).catch(() => {}); else { const st = byId('staff', o.coach_id); o.coach_name = st ? 'Coach ' + st.full_name : null; } });
@@ -270,6 +284,9 @@ Object.assign(ACTIONS, {
       toast(t('Tempahan dihantar. Admin akan sahkan.')); render();
     } });
   },
+  'p-wl': async kid => { const cid = document.getElementById('pWl')?.value; if (!cid) return;
+    await insert('waitlist', { class_id: cid, student_id: kid, status: 'waiting', created_by: S.mode === 'demo' ? null : me() }); toast(t('Anda dalam senarai menunggu. Kami akan maklumkan bila ada tempat.')); render(); },
+  'p-wl-x': async id => { await remove('waitlist', id); toast(t('Dikeluarkan dari senarai menunggu')); render(); },
   'p-req-x': async id => { await update('booking_requests', id, { status: 'cancelled' }); toast(t('Permintaan dibatalkan')); render(); },
 });
 
@@ -438,7 +455,7 @@ PV.yuran = () => {
       <div class="li-sub">${kindLabel(i)} · ${esc(i.number)} · ${i.status === 'paid' ? t('dibayar {d}', { d: fmtShort(i.paid_on) }) : t('akhir {d}', { d: fmtShort(i.due_date) })}${cr ? ` · ${t('kredit')} -${RM(cr)}` : ''}</div>
       ${pend ? `<div class="li-sub" style="margin-top:3px"><span class="badge b-info" style="white-space:normal">${t('Bayaran {a} menunggu pengesahan admin', { a: RM(pend) })}</span></div>` : ''}
       ${rej && i.status === 'issued' ? `<div class="li-sub" style="color:var(--bad);margin-top:3px">${t('Bayaran ditolak:')} ${esc(rej.note || t('sila semak bukti dan hantar semula'))}</div>` : ''}</div>
-      <div class="actions">${i.status === 'issued' && balanceOf(i) - pend > 0.001 ? `<button class="btn sm primary" data-action="p-pay" data-id="${i.id}">${t('Bayar')}</button>` : ''}<button class="btn sm" data-action="p-inv" data-id="${i.id}">${ic('file', 'sm')} ${t('Invois')}</button>${conf.map(p => `<button class="btn sm" data-action="p-receipt" data-id="${p.id}">${ic('file', 'sm')} ${t('Resit')}</button>`).join('')}</div></li>`;
+      <div class="actions">${i.status === 'issued' && balanceOf(i) - pend > 0.001 && gw().enabled ? `<button class="btn sm primary" data-action="p-fpx" data-id="${i.id}">${ic('wallet', 'sm')} ${t('Bayar online (FPX)')}</button>` : ''}${i.status === 'issued' && balanceOf(i) - pend > 0.001 ? `<button class="btn sm ${gw().enabled ? '' : 'primary'}" data-action="p-pay" data-id="${i.id}">${gw().enabled ? t('QR / pindahan') : t('Bayar')}</button>` : ''}<button class="btn sm" data-action="p-inv" data-id="${i.id}">${ic('file', 'sm')} ${t('Invois')}</button>${conf.map(p => `<button class="btn sm" data-action="p-receipt" data-id="${p.id}">${ic('file', 'sm')} ${t('Resit')}</button>`).join('')}</div></li>`;
   };
   const cns = T('credit_notes').filter(c => invs.some(i => i.id === c.invoice_id));
   return `${head(t('Yuran'), t('Invois, bayaran dan resit'))}
@@ -447,7 +464,26 @@ PV.yuran = () => {
   ${cns.length ? `<div class="card"><div class="card-head"><div><h3>${t('Nota Kredit')}</h3></div></div><ul class="list">${cns.map(c => `<li class="list-item"><div class="li-main"><div class="li-title">${esc(c.number)} · <span class="num">-${RM(c.amount)}</span></div><div class="li-sub">${esc(byId('invoices', c.invoice_id)?.number || '')} · ${fmtDate(c.issued_on)}${c.reason ? ' · ' + esc(c.reason) : ''}</div></div><button class="btn sm" data-action="p-cn" data-id="${c.id}">${ic('file', 'sm')} ${t('Cetak')}</button></li>`).join('')}</ul></div>` : ''}`;
 };
 
+const gw = () => (S.t.settings || []).find(x => x.key === 'gateway')?.value || {};
+async function gwReturn() {
+  const q = new URLSearchParams(location.search), code = q.get('billcode'); if (!code) return;
+  history.replaceState(null, '', location.pathname + '#yuran');
+  if (S.mode !== 'supabase') return;
+  try { const { data, error } = await S.client.functions.invoke('toyyibpay', { body: { action: 'check', bill_code: code } }); if (error) throw error;
+    if (data?.paid) { toast(t('Bayaran berjaya! Resit tersedia di bawah.')); await loadParent(); render(); }
+    else toast(q.get('status_id') === '3' ? t('Bayaran tidak berjaya / dibatalkan.') : t('Bayaran sedang diproses — status dikemas kini sebentar lagi.'), q.get('status_id') === '3');
+  } catch (e) { console.warn(e); }
+}
 Object.assign(ACTIONS, {
+  'p-fpx': async id => {
+    const inv = byId('invoices', id), due = Math.max(balanceOf(inv) - pendingOf(inv), 0);
+    confirmModal({ title: t('Bayar online (FPX)'), message: `${esc(inv.number)} · <b>${RM(due)}</b><br><span class="muted" style="font-size:12.5px">${t('Anda akan dibawa ke halaman bayaran ToyyibPay (FPX). Selepas bayaran, anda kembali ke portal dan resit dijana automatik.')}${gw().fee_note ? '<br>' + esc(gw().fee_note) : ''}</span>`, ok: t('Teruskan'), onOk: async () => {
+      if (S.mode !== 'supabase') return toast(t('Mod demo: bayaran online tidak tersedia.'));
+      const { data, error } = await S.client.functions.invoke('toyyibpay', { body: { action: 'create', invoice_id: id, return_url: location.origin + location.pathname + '?gw=1' } });
+      if (error || !data?.url) throw new Error(data?.error || error?.message || t('Bayaran online tidak tersedia buat masa ini.'));
+      location.href = data.url;
+    } });
+  },
   'p-inv': id => openInvoice(id), 'p-cn': id => openCreditNote(id),
   'p-receipt': id => { try { openReceipt(id); } catch (e) { toast(friendlyError(e), true); } },
   'p-pay': id => {
@@ -488,12 +524,22 @@ const SK = [['footwork', 'Gerak kaki'], ['strokes', 'Pukulan'], ['tactics', 'Tak
 PV.progres = () => {
   const k = curKid(); if (!k) return head(t('Progres'), '') + noKids();
   const recs = T('progress_records').filter(r => r.student_id === k.id).sort((a, b) => (b.recorded_on || '').localeCompare(a.recorded_on || ''));
+  const ents = T('tournament_entries').filter(e => (e.student_id === k.id || e.partner_id === k.id) && e.status !== 'withdrawn').map(e => { const c = byId('tournament_categories', e.category_id), tn = c && byId('tournaments', c.tournament_id); return { e, c, tn }; })
+    .filter(x => x.tn && (x.tn.status === 'completed' || (x.tn.end_date || x.tn.start_date || '9') < todayISO()));
+  const months = [...new Set([todayISO().slice(0, 7), addDays(todayISO().slice(0, 7) + '-01', -1).slice(0, 7), addDays(todayISO().slice(0, 7) + '-01', -32).slice(0, 7)])];
   return `${head(t('Progres'), t('Penilaian daripada jurulatih (skala 1–5)'))}${kidTabs()}
+  <div class="card card-pad mb"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><div><b>${t('Laporan progres bulanan')}</b><div class="muted" style="font-size:12.5px">${t('Kehadiran, fokus latihan dan penilaian coach — boleh cetak / simpan PDF')}</div></div>
+    <div class="actions">${months.map(m => `<button class="btn sm" data-action="p-report" data-id="${k.id}|${m}">${ic('file', 'sm')} ${esc(new Date(m + '-01T00:00:00').toLocaleDateString({ ms: 'ms-MY', en: 'en-GB', zh: 'zh-CN' }[document.documentElement.lang] || 'ms-MY', { month: 'short', year: 'numeric' }))}</button>`).join('')}</div></div></div>
+  ${ents.length ? `<div class="card mb"><div class="card-head"><div><h3>${t('Sijil kejohanan')}</h3></div></div><ul class="list">${ents.map(x => `<li class="list-item"><div class="li-main"><div class="li-title">${esc(x.tn.name)}</div><div class="li-sub">${esc(x.c.name)}${x.tn.start_date ? ' · ' + fmtShort(x.tn.start_date) : ''}</div></div><button class="btn sm" data-action="p-cert" data-id="${x.e.id}">${ic('award', 'sm')} ${t('Sijil')}</button></li>`).join('')}</ul></div>` : ''}
   ${recs.length ? recs.slice(0, 10).map(r => `<div class="card card-pad mb"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><b>${fmtDate(r.recorded_on)}</b><span class="muted" style="font-size:12px">${esc(r.coach_id ? staffName(r.coach_id) : '')}</span></div>
     ${SK.map(([f, l]) => r[f] ? `<div style="display:flex;align-items:center;gap:10px;font-size:13px;margin:5px 0"><span style="width:84px">${t(l)}</span><div class="bar" style="flex:1"><span style="width:${r[f] * 20}%;background:var(--ok)"></span></div><b class="num">${r[f]}/5</b></div>` : '').join('')}
     ${r.title ? `<div style="margin-top:10px;font-weight:700">${esc(r.title)}</div>` : ''}${r.notes ? `<div class="muted" style="margin-top:6px;font-size:13px;white-space:pre-line">${esc(r.notes)}</div>` : ''}${mediaGrid(r.media)}</div>`).join('') : `<div class="card card-pad"><div class="empty">${t('Belum ada penilaian untuk {name}.', { name: esc(k.full_name) })}</div></div>`}`;
 };
 
+Object.assign(ACTIONS, {
+  'p-report': key => { const [id, m] = key.split('|'); openMonthlyReport(id, m, t); },
+  'p-cert': id => { const e = byId('tournament_entries', id), c = byId('tournament_categories', e.category_id); openCertificates([e], byId('tournaments', c.tournament_id)); },
+});
 /* ===================================================================== AKAUN + NOTIFIKASI */
 const ID_KEYS = { nric: 'No. Kad Pengenalan (NRIC)', passport: 'No. Pasport', army: 'No. Tentera/Polis', brn: 'No. Pendaftaran Syarikat' };
 const idLbl = k => (ID_KEYS[k] ? t(ID_KEYS[k]) : 'ID');
@@ -503,7 +549,7 @@ const taxCard = () => {
   ${x ? `<div style="margin-top:12px;font-size:13.5px;line-height:1.7"><div>${esc(x.legal_name || '—')}</div><div class="muted">${esc(idLbl(x.id_type))}: ${esc(x.id_no || '—')}</div><div class="muted">TIN: ${esc(x.tin || '—')}</div>${x.address ? `<div class="muted">${esc(x.address)}</div>` : ''}</div>` : `<div class="muted" style="margin-top:10px;font-size:13px">${t('Belum diisi. Anda boleh isi sekarang supaya invois terus memaparkan maklumat anda.')}</div>`}</div>`;
 };
 PV.akaun = () => `${head(t('Akaun'), '')}<div class="card card-pad mb"><div class="cell-person">${avatar(S.profile.full_name || S.profile.email)}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
-  <div class="actions" style="margin-top:14px"><button class="btn" data-action="p-pw">${t('Tukar kata laluan')}</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} ${t('Log keluar')}</button></div></div>
+  <div class="actions" style="margin-top:14px">${window.__installPrompt ? `<button class="btn primary" data-action="pwa-install">📱 ${t('Pasang app')}</button>` : ''}<button class="btn" data-action="p-pw">${t('Tukar kata laluan')}</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} ${t('Log keluar')}</button></div></div>
   <div class="card card-pad mb"><b>${t('Tetapan paparan')}</b>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><span>${t('Bahasa')}</span>${langSwitch()}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px"><span>${t('Tema')}</span>${themeSwitch()}</div></div>

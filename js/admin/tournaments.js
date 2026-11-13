@@ -112,7 +112,7 @@ function tabEntries(t, cat) {
     .sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999) || entryLabel(a).localeCompare(entryLabel(b)));
   const locked = matchesOf(cat.id).length > 0, live = entriesOf(cat.id).filter(e => e.status !== 'withdrawn').length;
   return `<div class="card"><div class="card-head" style="flex-wrap:wrap;gap:8px"><div><h3>Peserta — ${esc(cat.name)} <span class="muted">(${live}${cat.max_entries ? '/' + cat.max_entries : ''})</span></h3><div class="sub">${locked ? 'Kumpulan/cabutan sudah dijana. Reset untuk menukar peserta.' : 'Sahkan bayaran — peserta disahkan automatik bila dibayar.'}</div></div>
-    <div class="actions"><button class="btn sm" data-action="tn-export" data-id="${t.id}">${ic('file', 'sm')} Eksport CSV (semua)</button><button class="btn sm primary" data-action="ent-add" data-id="${cat.id}">${ic('plus', 'sm')} Tambah pelajar akademi</button></div></div>
+    <div class="actions"><button class="btn sm" data-action="tn-export" data-id="${t.id}">${ic('file', 'sm')} Eksport CSV (semua)</button><button class="btn sm" data-action="tn-cert" data-id="${cat.id}">${ic('award', 'sm')} Sijil kategori ini</button><button class="btn sm primary" data-action="ent-add" data-id="${cat.id}">${ic('plus', 'sm')} Tambah pelajar akademi</button></div></div>
   <div class="filters" style="padding:0 16px 10px"><label class="field grow">${ic('search', 'sm')}<input placeholder="Cari nama / no. rujukan / kelab / telefon" value="${esc(UI.tnQ || '')}" data-on-change="tn-q"></label>
     <label class="field"><select data-on-change="tn-pay"><option value="">Semua bayaran</option>${Object.entries(PAY).map(([k, [l]]) => `<option value="${k}" ${pf === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
   <div class="table-wrap"><table><thead><tr><th>Pemain</th><th>Penjaga</th><th>Seed</th><th>Status</th><th>Bayaran</th><th></th></tr></thead>
@@ -339,3 +339,9 @@ const catForm = c => `<div class="form-grid">
   ${F('Susunan', 'sort', { type: 'number', value: c?.sort ?? 0 })}
 </div><p class="muted" style="font-size:12px;margin-top:8px">Kelayakan ikut tahun lahir (bukan hari jadi). Borang awam menyekat pemain di luar julat tahun dan jantina.</p>`;
 const catPatch = d => ({ name: d.name.trim(), kind: d.kind, gender: d.gender, age_group: val(d.age_group), max_entries: num(d.max_entries), birth_from: num(d.birth_from), birth_to: num(d.birth_to), fee: num(d.fee), sort: num(d.sort) || 0 });
+
+import { openCertificates } from '../docs2.js';
+ACTIONS['tn-cert'] = catId => { const cat = byId('tournament_categories', catId), tn = byId('tournaments', cat.tournament_id);
+  const L = T('tournament_entries').filter(e => e.category_id === catId && e.status !== 'withdrawn' && e.pay_status !== 'refunded');
+  if (!L.length) return toast('Tiada peserta dalam kategori ini.', true);
+  openCertificates(L, tn); };

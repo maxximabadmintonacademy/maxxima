@@ -36,6 +36,7 @@ export const NAV = [
     { id: 'yuran', label: 'Invois & Bayaran', icon: 'wallet', count: () => T('invoices').filter(i => invStatus(i) === 'overdue').length + pendingPayments().length, red: true },
     { id: 'bilpersonal', label: 'Bil Personal & Walk-in', icon: 'wallet' },
     { id: 'pelarasan', label: 'Pelarasan Bil', icon: 'wallet', count: () => T('billing_adjustments').filter(a => a.status === 'pending').length },
+    { id: 'gaji', label: 'Gaji Coach', icon: 'briefcase' },
     { id: 'perbelanjaan', label: 'Perbelanjaan', icon: 'trend' },
     { id: 'pakej', label: 'Pakej', icon: 'tag', count: () => lowPackages().length + unallocated().length },
   ] },

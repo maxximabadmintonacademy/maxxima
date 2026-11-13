@@ -571,6 +571,7 @@ Object.assign(ACTIONS, {
         ${['active', 'paused'].includes(s.status) ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|${s.status === 'active' ? 'paused' : 'active'}">${s.status === 'active' ? 'Gantung' : 'Aktifkan semula'}</button>` : ''}
         ${s.status !== 'left' ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|left">Berhenti</button>` : `<button type="button" class="btn" data-action="student-status" data-id="${id}|active">Aktifkan semula</button>`}
         <button type="button" class="btn" data-action="adj-add" data-id="${id}" title="Rekod kredit / caj untuk invois akan datang">${ic('wallet', 'sm')} Pelarasan bil</button>
+        <button type="button" class="btn" data-action="st-report" data-id="${id}">${ic('file', 'sm')} Laporan bulanan</button>
         <button type="button" class="btn" data-action="student-merge" data-id="${id}" title="Gabungkan profil berganda (cth. nama pendek) ke profil sebenar">${ic('users', 'sm')} Gabung profil</button>
         <button type="button" class="btn danger-o" data-action="student-del" data-id="${id}">${ic('trash', 'sm')} Padam</button>
       </div>`,
@@ -629,3 +630,6 @@ ACTIONS['parent-acct'] = (id, el) => {
         <div class="actions" style="margin-top:12px">${phone ? `<a class="btn primary" href="${waLink(phone, msg)}" target="_blank" rel="noopener">${ic('msg', 'sm')} Hantar melalui WhatsApp</a>` : ''}<button type="button" class="btn" data-action="copy-remind">Salin mesej</button></div>` }), 60);
     } });
 };
+
+import { openMonthlyReport } from '../docs2.js';
+ACTIONS['st-report'] = id => openModal({ title: 'Laporan Progres Bulanan', submit: 'Buka laporan', body: F('Bulan', 'month', { type: 'month', value: todayISO().slice(0, 7), req: true }), onSubmit: d => openMonthlyReport(id, d.month) });

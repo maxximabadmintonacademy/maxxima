@@ -3,7 +3,7 @@ import { qrSvg } from '../qr.js';
 import { themeSwitch } from '../theme.js';
 import { langSwitch } from '../i18n.js';
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
-import { S, insert, update, remove, saveSetting, inviteUser, rpc } from '../data.js';
+import { S, insert, update, remove, saveSetting, inviteUser, rpc, setting } from '../data.js';
 import { ic, esc, F, num, val, badge, avatar, app, toast, openModal, confirmModal, pageHead, fmtDate, LABEL, $ } from '../ui.js';
 import { T, byId, venueName, progName, academy, billing } from './helpers.js';
 import { LANGS_ALL, ageGroups } from './sessions.js';
@@ -132,6 +132,12 @@ const policyCard = () => { const p = POL(); return `<div class="card card-pad mb
     <li>${p.auto_group ? `Kumpulan (Foundation / Performance / Elite): ≥ ${p.notice_hours} jam → disahkan terus oleh sistem; sesi tidak ditolak.` : `Kumpulan (Foundation / Performance / Elite): ≥ ${p.notice_hours} jam → perlu kelulusan admin; sesi tidak ditolak.`}</li>
     <li>Kurang ${p.notice_hours} jam / tidak hadir → sesi ditolak. Kecemasan + bukti → admin semak; jika lulus, kredit ganti sah ${p.replacement_days} hari.</li>
     <li>Personal: semua permintaan kepada admin. Lewat → court hangus + 50% yuran coach; kecemasan lulus → court sahaja.</li></ul></div>`; };
+const GW = () => ({ enabled: false, provider: 'toyyibpay', sandbox: false, ...(setting('gateway', {}) || {}) });
+const gatewayCard = () => { const g = GW(); return `<div class="card card-pad mb"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="font-size:14.5px">Bayaran online (FPX — ToyyibPay)</h3><button class="btn sm" data-action="gw-edit">${ic('edit', 'sm')} Ubah</button></div>
+  <p class="muted" style="font-size:12.5px;margin-top:6px">${g.enabled ? `<span class="badge b-ok">Aktif</span> Ibu bapa nampak butang "Bayar online (FPX)" pada invois. Bayaran berjaya direkod & disahkan automatik (resit terus tersedia).` : '<span class="badge b-muted">Tidak aktif</span> Ibu bapa hanya bayar melalui QR / pindahan dan muat naik bukti.'}</p>
+  <p class="muted" style="font-size:12px;margin-top:6px">Perlu: akaun ToyyibPay + Edge Function <code>toyyibpay</code> dengan rahsia TOYYIBPAY_SECRET & TOYYIBPAY_CATEGORY (lihat BACA_DULU). Kunci rahsia TIDAK disimpan di sini.</p></div>`; };
+ACTIONS['gw-edit'] = () => { const g = GW(); openModal({ title: 'Bayaran online (ToyyibPay)', submit: 'Simpan', body: `<div class="form-grid">${F('Status', 'enabled', { value: g.enabled ? '1' : '0', opts: [['0', 'Tidak aktif'], ['1', 'Aktif — papar butang bayar online']], full: true })}${F('Caj transaksi', 'fee_note', { value: g.fee_note || '', full: true, ph: 'cth. Caj FPX RM1.00 ditanggung pembayar' })}</div>`,
+  onSubmit: async d => { await saveSetting('gateway', { ...g, enabled: d.enabled === '1', fee_note: d.fee_note || '' }); toast('Tetapan bayaran online disimpan'); app.render(); } }); };
 ACTIONS['pol-edit'] = () => { const p = POL(); openModal({ title: 'Peraturan reschedule & batal', body: `<div class="form-grid">${F('Tempoh notis (jam)', 'notice_hours', { type: 'number', min: 0, value: p.notice_hours })}${F('Tempoh kredit ganti kecemasan (hari)', 'replacement_days', { type: 'number', min: 1, value: p.replacement_days })}${F('Reschedule / batal kumpulan ≥ notis', 'auto_group', { value: p.auto_group ? '1' : '0', opts: [['1', 'Sistem sahkan terus'], ['0', 'Perlu kelulusan admin']], full: true })}</div>`,
   onSubmit: async d => { await saveSetting('policy', { notice_hours: Number(d.notice_hours) || 48, replacement_days: Number(d.replacement_days) || 30, auto_group: d.auto_group === '1' }); toast('Peraturan disimpan'); app.render(); } }); };
 INPUTS['notif-tog'] = async (v, el) => {
@@ -157,6 +163,7 @@ VIEWS.tetapan = () => {
   ${notifCard()}
   ${ageCard()}
   ${policyCard()}
+  ${gatewayCard()}
   <div class="grid g-2 mb">
     <div class="card card-pad"><h3 style="font-size:14.5px;margin-bottom:14px">Profil Akademi</h3>
       <div class="form-grid">

@@ -22,6 +22,7 @@ import './admin/calendar.js';
 import './admin/ops.js';
 import './admin/announce.js';
 import './admin/ops2.js';
+import './admin/auto.js';
 
 const root = () => $('#root');
 const logoSvg = `<img src="assets/logo.png" alt="MBA" class="brand-img">`;
@@ -242,3 +243,8 @@ async function boot() {
   await enter();
 }
 boot();
+
+/* PWA: pasang sebagai app (Android/desktop) + kerja luar talian asas */
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__installPrompt = e; app.render?.(); });
+ACTIONS['pwa-install'] = async () => { const p = window.__installPrompt; if (!p) return toast('Gunakan menu pelayar: "Tambah ke skrin utama" / "Install app".'); p.prompt(); await p.userChoice.catch(() => {}); window.__installPrompt = null; app.render?.(); };

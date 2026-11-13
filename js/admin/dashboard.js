@@ -1,4 +1,5 @@
 import { VIEWS, ACTIONS } from '../registry.js';
+import { S } from '../data.js';
 import { ic, esc, RM, sum, badge, avatar, DAYS, MONTHS, hm, todayISO, addDays, monthKey, monthLabel, fmtShort, pageHead } from '../ui.js';
 import { creditOf, T, byId, venueName, progName, staffName, invStatus, tasks, studentName, progColor, enrolledIn, lowPackages, pkgRemaining, expiringPackages, pendingPayments } from './helpers.js';
 
@@ -36,7 +37,9 @@ VIEWS.dashboard = () => {
   const tourn = T('tournaments').filter(t => ['open', 'closed', 'ongoing'].includes(t.status)).sort((a, b) => (a.start_date || '').localeCompare(b.start_date || '')).slice(0, 3);
   const todo = tasks();
 
-  return `
+  const miss = [...(S.missingTables || [])];
+  const missBox = miss.length ? `<div class="card card-pad mb" style="border-color:var(--warn)"><b>${ic('alert', 'sm')} Sebahagian ciri belum aktif</b><div class="muted" style="font-size:13px;margin-top:4px">Jadual pangkalan data belum wujud: ${miss.map(esc).join(', ')}. Jalankan fail SQL terkini (lihat 00_SEMAK_STATUS.sql) di Supabase → SQL Editor, kemudian muat semula halaman.</div></div>` : '';
+  return `${missBox}
   ${pageHead(`${greet}, Admin 👋`, `${DAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()} · Ringkasan operasi akademi`,
     `<button class="btn" data-action="lead-add">${ic('plus', 'sm')} Lead Baharu</button><a class="btn primary" href="#kemasukan">${ic('userplus', 'sm')} Pendaftaran</a>`)}
 

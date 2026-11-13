@@ -78,13 +78,14 @@ const staffForm = s => `<div class="form-grid">
   ${F('Jenis pekerjaan', 'employment_type', { value: s?.employment_type || '', opts: [['', '—'], ['full_time', 'Sepenuh masa'], ['part_time', 'Sambilan']] })}
   ${F('Asas bayaran', 'pay_basis', { value: s?.pay_basis || '', opts: [['', '—'], ['monthly', 'Bulanan'], ['hourly', 'Per jam']] })}
   ${F('Kadar (RM)', 'pay_rate', { type: 'number', step: '0.01', min: 0, value: s?.pay_rate ?? '' })}
+  ${F('Kadar personal / jam (RM, jika berbeza)', 'rate_personal', { type: 'number', step: '0.01', min: 0, value: s?.rate_personal ?? '' })}
   ${F('Sijil / lesen kejurulatihan', 'certification', { value: s?.certification })}
   ${F('E-mel (untuk log masuk Portal Coach)', 'email', { type: 'email', value: s?.email })}
   <div class="f full">Bahasa pertuturan<div class="langchk">${LANGS_ALL.map(([k, l]) => `<label><input type="checkbox" name="languages" value="${k}" ${(s?.languages || []).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>
   ${F('Kelayakan & pencapaian (cth. BAM Level 2, bekas pemain negeri, juara MSSM)', 'qualifications', { type: 'textarea', value: s?.qualifications, full: true })}
   ${s ? `<label class="f full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="active" value="1" ${s.active ? 'checked' : ''} style="width:auto;height:auto"> Staf aktif</label>` : ''}
 </div>`;
-const staffPatch = (d, edit) => ({ full_name: d.full_name.trim(), position: d.position, phone: val(d.phone), employment_type: val(d.employment_type), pay_basis: val(d.pay_basis), pay_rate: num(d.pay_rate), certification: val(d.certification), email: val((d.email || '').trim()), languages: [].concat(d.languages || []).filter(Boolean), qualifications: val(d.qualifications), active: edit ? d.active === '1' : true });
+const staffPatch = (d, edit) => ({ full_name: d.full_name.trim(), position: d.position, phone: val(d.phone), employment_type: val(d.employment_type), pay_basis: val(d.pay_basis), pay_rate: num(d.pay_rate), rate_personal: num(d.rate_personal), certification: val(d.certification), email: val((d.email || '').trim()), languages: [].concat(d.languages || []).filter(Boolean), qualifications: val(d.qualifications), active: edit ? d.active === '1' : true });
 
 Object.assign(ACTIONS, {
   'staff-add': () => openModal({ title: 'Tambah Staf', submit: 'Tambah', body: staffForm(), onSubmit: async d => { await insert('staff', staffPatch(d)); toast('Staf ditambah'); app.render(); } }),

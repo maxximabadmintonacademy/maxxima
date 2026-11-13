@@ -158,7 +158,7 @@ VIEWS.yuran = () => {
 
   return `
   ${pageHead('Invois & Bayaran', 'Invois pakej, bayaran ibu bapa, pengesahan dan resit.',
-    `<button class="btn" data-action="inv-manual">${ic('plus', 'sm')} Invois Manual</button><button class="btn primary" data-action="sell">${ic('tag', 'sm')} Jual Pakej</button>`)}
+    `<button class="btn" data-action="remind-run" title="Hantar notifikasi peringatan kepada ibu bapa (invois hampir/lepas tarikh akhir)">${ic('bell', 'sm')} Peringatan</button><button class="btn" data-action="inv-monthly">${ic('calendar', 'sm')} Jana Invois Bulanan</button><button class="btn" data-action="inv-manual">${ic('plus', 'sm')} Invois Manual</button><button class="btn primary" data-action="sell">${ic('tag', 'sm')} Jual Pakej</button>`)}
   ${pend.length ? `<div class="card mb" style="border-color:var(--warn)">
     <div class="card-head"><div><h3>Bayaran Menunggu Pengesahan</h3><div class="sub">Dihantar oleh ibu bapa — semak bukti, kemudian sahkan. Resit dijana selepas disahkan.</div></div><span class="badge b-warn">${pend.length}</span></div>
     <ul class="list">${pend.map(p => { const inv = byId('invoices', p.invoice_id); return `<li class="list-item" style="flex-wrap:wrap">${avatar(studentName(inv?.student_id))}
