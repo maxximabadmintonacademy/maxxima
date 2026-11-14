@@ -14,7 +14,7 @@ import { startDomI18n } from '../i18n-dom.js';
 import { langSwitch } from '../i18n.js';
 import { themeSwitch } from '../theme.js';
 import { coachExtraCards } from './v25.js';
-import { CV26, sopCard, sopGate, assignBanner, checkStrip } from './v26.js';
+import { CV26, sopCard, sopGate, assignBanner, checkStrip, sopHtml, ackSopSilent, penaltyCard } from './v26.js';
 
 const CV = {};
 Object.assign(CV, CV26);
@@ -59,7 +59,7 @@ export async function enterCoach() {
   try { await loadCoach(); } catch (e) { console.error(e); $('#view').innerHTML = loadErrorBox(e); return; }
   if (S.mode === 'supabase' ? (S.profile.must_change_pw || !S.profile.tc_accepted_at) : /onboard/.test(location.search)) UI.cob = S.profile.must_change_pw ? 1 : 2;
   subscribeNotifications(n => { if (n?.title) toast('🔔 ' + n.title); liveRender(render); });
-  subscribeTables(['session_assignments', 'coach_checkins', 'attendance', 'class_sessions', 'announcements', 'feedback', 'progress_records', 'trials', 'events', 'booking_requests', 'lesson_plans'], () => { liveRender(render); if (!UI.cob) setTimeout(() => showAnnPopup(), 600); });
+  subscribeTables(['coach_penalties', 'cover_requests', 'session_assignments', 'coach_checkins', 'attendance', 'class_sessions', 'announcements', 'feedback', 'progress_records', 'trials', 'events', 'booking_requests', 'lesson_plans'], () => { liveRender(render); if (!UI.cob) setTimeout(() => showAnnPopup(), 600); });
   window.addEventListener('hashchange', () => { document.body.classList.remove('nav-open'); render(); window.scrollTo(0, 0); });
   render();
   setTimeout(() => { if (!UI.cob && !showTour('coach', false, () => { if (!sopGate()) showAnnPopup(); })) { if (!sopGate()) showAnnPopup(); } }, 900);
@@ -67,7 +67,7 @@ export async function enterCoach() {
 
 /* ---- Onboarding coach: kata laluan → paparan → profil → panduan ---- */
 function onboard() {
-  const st = meStaff(), step = UI.cob, bar = `<div class="chips mb">${['Kata laluan', 'Paparan', 'Profil coach', 'Panduan'].map((l, i) => `<span class="chip ${step === i + 1 ? 'on' : ''}">${i + 1}. ${l}</span>`).join('')}</div>`;
+  const st = meStaff(), step = UI.cob, bar = `<div class="chips mb">${['Kata laluan', 'Paparan', 'Profil coach', 'SOP sesi'].map((l, i) => `<span class="chip ${step === i + 1 ? 'on' : ''}">${i + 1}. ${l}</span>`).join('')}</div>`;
   let b = '';
   if (step === 1) b = `<h3>Tukar kata laluan sementara</h3><div class="form-grid" style="margin-top:12px"><label class="f full">Kata laluan baharu (min. 8 aksara)<input type="password" id="cP1"></label><label class="f full">Ulang kata laluan<input type="password" id="cP2"></label></div><button class="btn primary" style="margin-top:14px" data-action="cob-pw">Simpan & teruskan</button>`;
   if (step === 2) b = `<h3>Bahasa & tema</h3><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><span>Bahasa</span>${langSwitch()}</div><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px"><span>Tema</span>${themeSwitch()}</div><button class="btn primary" style="margin-top:16px" data-action="cob-go" data-id="3">Teruskan</button>`;
@@ -76,13 +76,8 @@ function onboard() {
     <label class="f full" style="margin-top:10px">Kelayakan & pencapaian<textarea id="cQual" placeholder="cth. BAM Level 2, bekas pemain negeri">${esc(st?.qualifications || '')}</textarea></label>
     <label class="f full" style="margin-top:10px">No. telefon<input id="cPhone" value="${esc(st?.phone || '')}"></label>
     <button class="btn primary" style="margin-top:14px" data-action="cob-prof">Simpan & teruskan</button>`;
-  if (step === 4) b = `<h3>Cara guna Portal Coach</h3><ol style="margin:10px 0 0 18px;line-height:1.8;font-size:13.5px">
-      <li>Hari Ini — sesi anda hari ini. Tekan sesi untuk tanda kehadiran (Semua hadir / ikut pelajar) dan tulis nota latihan.</li>
-      <li>Kategori umur (U8/U12/U17) yang diberikan kepada anda ditunjukkan pada setiap sesi, bersama nombor court.</li>
-      <li>Pelajar — tekan nama pelajar untuk lihat maklumat kesihatan dan tambah progres dengan gambar atau video. Ibu bapa akan nampak di portal mereka.</li>
-      <li>Nama pelajar Trial dan nota kesihatan ⚕ dipaparkan dalam panel sesi — sila beri perhatian.</li>
-      <li>Berita & acara akademi dipaparkan di Hari Ini. Notifikasi di ikon loceng.</li></ol>
-    <button class="btn primary" style="margin-top:16px" data-action="cob-done">Mula guna portal</button>`;
+  if (step === 4) b = `<h3>SOP sesi coach</h3><p class="muted" style="font-size:13px;margin:4px 0 12px">Sila baca prosedur sesi. Ibu bapa memberi maklum balas selepas setiap sesi.</p>${sopHtml()}
+    <button class="btn primary" style="margin-top:16px" data-action="cob-done">Saya faham & akan patuh — mula guna portal</button>`;
   return `<div class="page-head"><div><h1>Selamat datang, Coach ${esc((st?.full_name || S.profile.full_name || '').split(' ')[0])} 👋</h1><p>Lengkapkan langkah ringkas ini sebelum mula.</p></div></div>${bar}<div class="card card-pad">${b}</div>`;
 }
 
@@ -136,6 +131,7 @@ CV.akaun = () => { const me = st(); return `${head('Akaun', '')}<div class="card
   ${me ? `<p class="muted" style="margin-top:10px;font-size:13px">Bahasa: ${(me.languages || []).map(langName).join(', ') || '—'}${me.qualifications ? '<br>Kelayakan: ' + esc(me.qualifications) : ''}</p>` : ''}
   <div class="actions" style="margin-top:14px">${me ? `<label class="btn" style="cursor:pointer">📷 ${me.photo_path ? 'Tukar gambar profil' : 'Tambah gambar profil'}<input type="file" accept="image/*" style="display:none" data-on-change="c-photo"></label>` : ''}${'Notification' in window && Notification.permission === 'default' ? '<button class="btn" data-action="notif-perm">🔔 Hidupkan notifikasi</button>' : ''}<button class="btn" data-action="tour-open" data-id="coach">📖 Panduan app</button><a class="btn" href="#sop">📋 SOP sesi</a><button class="btn" data-action="c-pw">Tukar kata laluan</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} Log keluar</button></div></div>
   ${coachExtraCards(me)}
+  ${penaltyCard()}
   ${T('feedback').length ? `<div class="card mb"><div class="card-head"><div><h3>Maklum balas ibu bapa</h3><div class="sub">Untuk sesi anda</div></div><b>${(T('feedback').reduce((n, f) => n + f.rating, 0) / T('feedback').length).toFixed(1)} ★</b></div><ul class="list">${T('feedback').slice().sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 10).map(f => `<li class="list-item"><div class="li-main"><div class="li-title"><span style="color:#f5b301">${'★'.repeat(f.rating)}</span><span style="color:#d1d5db">${'★'.repeat(5 - f.rating)}</span> ${esc(studentName(f.student_id) || '')}</div>${f.comment ? `<div class="li-sub">“${esc(f.comment)}”</div>` : ''}<div class="li-sub">${fmtShort((f.created_at || '').slice(0, 10))}</div></div></li>`).join('')}</ul></div>` : ''}
   <div class="card card-pad"><b>Tetapan paparan</b>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><span>Bahasa</span>${langSwitch()}</div>
@@ -150,7 +146,7 @@ Object.assign(ACTIONS, {
     try { if (S.mode === 'supabase') await rpc('coach_update_self', { p_langs: langs, p_quals: q, p_phone: ph }); const st = meStaff(); if (st) Object.assign(st, { languages: langs, qualifications: q || null, phone: ph || st.phone }); UI.cob = 4; render(); }
     catch (e) { toast(friendlyError(e), true); }
   },
-  'cob-done': async () => { try { if (S.mode === 'supabase') await rpc('user_onboard_done'); S.profile.must_change_pw = false; S.profile.tc_accepted_at = new Date().toISOString(); UI.cob = 0; renderShell(); render(); toast('Selamat bertugas!'); setTimeout(() => showTour('coach'), 500); } catch (e) { toast(friendlyError(e), true); } },
+  'cob-done': async () => { try { if (S.mode === 'supabase') await rpc('user_onboard_done'); await ackSopSilent(); S.profile.must_change_pw = false; S.profile.tc_accepted_at = new Date().toISOString(); UI.cob = 0; renderShell(); render(); toast('Selamat bertugas!'); setTimeout(() => showTour('coach'), 500); } catch (e) { toast(friendlyError(e), true); } },
   /* Profil pelajar + progres bergambar/video */
   'c-student': id => {
     const x = byId('students', id), recs = T('progress_records').filter(r => r.student_id === id).sort((a, b) => (b.recorded_on || '').localeCompare(a.recorded_on || '')).slice(0, 8);

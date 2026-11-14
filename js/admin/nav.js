@@ -7,6 +7,7 @@ import { sessionGaps } from './sessions.js';
 export const NAV = [
   { group: 'Utama', items: [
     { id: 'dashboard', label: 'Dashboard', icon: 'home' },
+    { id: 'bulanan', label: 'Laporan Bulanan', icon: 'file' },
     { id: 'persediaan', label: 'Persediaan', icon: 'grid', count: () => setupGaps().length },
     { id: 'semak', label: 'Perlu Semak', icon: 'alert', count: () => reviewCount(), red: true },
     { id: 'padanan', label: 'Padankan Nama', icon: 'users', count: () => (S.t.import_matches ? new Set(S.t.import_matches.map(m => m.raw_name.toLowerCase())).size : 0) },
@@ -18,6 +19,7 @@ export const NAV = [
     { id: 'kemasukan', label: 'Pendaftaran', icon: 'userplus', count: () => T('students').filter(s => ['pending', 'awaiting_payment'].includes(s.status)).length },
     { id: 'pelajar', label: 'Senarai Pelajar', icon: 'users' },
     { id: 'tempahan', label: 'Tempahan', icon: 'calendar', count: () => T('booking_requests').filter(b => b.status === 'new').length, red: true },
+    { id: 'importsesi', label: 'Import Sesi Invois', icon: 'calendar', count: () => T('session_import').filter(r => r.state === 'open').length },
   ] },
   { group: 'Pemasaran & Acara', items: [
     { id: 'berita', label: 'Pengumuman', icon: 'msg' },
@@ -44,7 +46,7 @@ export const NAV = [
   ] },
   { group: 'Pasukan', items: [
     { id: 'coach', label: 'Coach', icon: 'award' },
-    { id: 'checkin', label: 'Check-in & Tugasan', icon: 'check', count: () => T('session_assignments').filter(a => ['rejected', 'expired'].includes(a.status) && !a.seen_at).length, red: true },
+    { id: 'checkin', label: 'Check-in & Tugasan', icon: 'check', count: () => T('session_assignments').filter(a => ['rejected', 'expired'].includes(a.status) && !a.seen_at).length + T('cover_requests').filter(r => r.status === 'open').length, red: true },
     { id: 'pelanlatihan', label: 'Pelan Latihan', icon: 'check' },
     { id: 'hr', label: 'HR & Staf', icon: 'briefcase', count: () => T('leave_requests').filter(l => l.status === 'pending').length },
   ] },

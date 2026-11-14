@@ -629,6 +629,7 @@ const D = {
   'Notifikasi disekat dalam tetapan telefon — peringatan hanya dalam app (ikon loceng).': ['Notifications are blocked in phone settings — reminders only in the app (bell icon).', '手机设置已阻止通知——提醒仅在应用内（铃铛图标）。'],
   'Tekan "Hidupkan notifikasi" di atas supaya peringatan sampai ke telefon.': ['Tap "Turn on notifications" above so reminders reach your phone.', '请点击上方“开启通知”，以便手机收到提醒。'],
   'Tetapan disimpan': ['Settings saved', '设置已保存'],
+  'Notis privasi': ['Privacy notice', '隐私声明'],
 };
 
 /* t('teks BM', { n: 3 }) -> teks dalam bahasa semasa; force = paksa bahasa tertentu (untuk dokumen) */

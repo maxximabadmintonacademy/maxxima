@@ -109,7 +109,9 @@ export function payroll(M) {
     const rate = Number(st.pay_rate || 0), rp = Number(st.rate_personal || st.pay_rate || 0);
     const pay = st.pay_basis === 'monthly' ? rate : st.pay_basis === 'hourly' ? r.gH * rate + r.pH * rp : null;
     const paid = T('expenses').find(e => e.staff_id === st.id && e.category === 'coach' && e.reference === 'GAJI-' + M);
-    return { st, ...r, rate, rp, pay, paid };
+    const pen = T('coach_penalties').filter(p => p.staff_id === st.id && p.status === 'approved' && (p.session_date || '').startsWith(M)).reduce((n, p) => n + Number(p.amount || 0), 0);
+    const gross = pay; const net = pay == null ? null : Math.max(0, pay - pen);
+    return { st, ...r, rate, rp, gross, pen, pay: net, paid };
   }).filter(x => x.list.length || x.st.pay_basis === 'monthly').sort((a, b) => a.st.full_name.localeCompare(b.st.full_name));
 }
 VIEWS.gaji = () => {
@@ -123,7 +125,7 @@ VIEWS.gaji = () => {
   <div class="card"><div class="table-wrap"><table class="table"><thead><tr><th>Coach</th><th class="num">Sesi kumpulan</th><th class="num">Jam kumpulan</th><th class="num">Sesi personal</th><th class="num">Jam personal</th><th>Kadar</th><th class="num">Bayaran</th><th></th></tr></thead><tbody>
   ${L.map(x => `<tr><td><b>${esc(x.st.full_name)}</b></td><td class="num">${x.gN}</td><td class="num">${x.gH.toFixed(1)}</td><td class="num">${x.pN}</td><td class="num">${x.pH.toFixed(1)}</td>
     <td style="font-size:12px">${x.st.pay_basis === 'monthly' ? RM(x.rate) + ' / bulan' : x.st.pay_basis === 'hourly' ? RM(x.rate) + ' / jam' + (x.st.rate_personal ? ` · personal ${RM(x.rp)}` : '') : '<span style="color:var(--warn)">belum ditetapkan</span>'}</td>
-    <td class="num"><b>${x.pay == null ? '—' : RM(x.pay)}</b></td>
+    <td class="num"><b>${x.pay == null ? '—' : RM(x.pay)}</b>${x.pen ? `<div style="font-size:11.5px;color:var(--bad)">− ${RM(x.pen)} penalti</div><div class="muted" style="font-size:11px">kasar ${RM(x.gross)}</div>` : ''}</td>
     <td><div class="actions"><button class="btn sm" data-action="pay-detail" data-id="${x.st.id}">Butiran</button>${x.paid ? '<span class="badge b-ok">Dibayar</span>' : x.pay ? `<button class="btn sm primary" data-action="pay-record" data-id="${x.st.id}">Rekod bayaran</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="8" class="empty">Tiada sesi untuk bulan ini.</td></tr>'}
   </tbody></table></div></div>`;
 };
@@ -133,11 +135,11 @@ Object.assign(ACTIONS, {
     openModal({ title: `Butiran sesi — ${esc(x.st.full_name)}`, cancel: 'Tutup', wide: true, body: `<table class="table"><thead><tr><th>Tarikh</th><th>Masa</th><th>Kelas</th><th>Jenis</th><th class="num">Jam</th></tr></thead><tbody>${x.list.sort((a, b) => a.s.session_date.localeCompare(b.s.session_date)).map(r => `<tr><td>${fmtShort(r.s.session_date)}</td><td>${sTime(r.s, r.c).join('–')}</td><td>${esc(progName(r.c.programme_id))}${r.pers ? ' · ' + esc(T('attendance').filter(a => a.session_id === r.s.id).map(a => studentName(a.student_id)).join(', ')) : ''}</td><td>${r.pers ? 'Personal' : 'Kumpulan'}</td><td class="num">${r.h.toFixed(2)}</td></tr>`).join('')}</tbody></table>` }); },
   'pay-record': id => { const M = UI.payM || todayISO().slice(0, 7), x = payroll(M).find(r => r.st.id === id);
     confirmModal({ title: 'Rekod bayaran gaji?', message: `${esc(x.st.full_name)} · ${esc(monthLabel(M + '-01'))} · ${RM(x.pay)} — direkod dalam Perbelanjaan (kategori Coach).`, ok: 'Rekod', onOk: async () => {
-      await insert('expenses', { spent_on: todayISO(), category: 'coach', description: `Gaji coach ${monthLabel(M + '-01')} — ${x.st.full_name} (${x.gN + x.pN} sesi, ${(x.gH + x.pH).toFixed(1)} jam)`, amount: Math.round(x.pay * 100) / 100, staff_id: id, reference: 'GAJI-' + M });
+      await insert('expenses', { spent_on: todayISO(), category: 'coach', description: `Gaji coach ${monthLabel(M + '-01')} — ${x.st.full_name} (${x.gN + x.pN} sesi, ${(x.gH + x.pH).toFixed(1)} jam)${x.pen ? ` · tolak penalti RM${x.pen}` : ''}`, amount: Math.round(x.pay * 100) / 100, staff_id: id, reference: 'GAJI-' + M });
       toast('Bayaran gaji direkod'); app.render(); } }); },
   'pay-csv': () => { const M = UI.payM || todayISO().slice(0, 7), L = payroll(M);
     const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [['Coach', 'Sesi kumpulan', 'Jam kumpulan', 'Sesi personal', 'Jam personal', 'Asas', 'Kadar', 'Kadar personal', 'Bayaran', 'Status'].map(q).join(','),
-      ...L.map(x => [x.st.full_name, x.gN, x.gH.toFixed(2), x.pN, x.pH.toFixed(2), x.st.pay_basis || '', x.rate, x.rp, x.pay == null ? '' : x.pay.toFixed(2), x.paid ? 'Dibayar' : ''].map(q).join(','))].join('\n');
+    const csv = [['Coach', 'Sesi kumpulan', 'Jam kumpulan', 'Sesi personal', 'Jam personal', 'Asas', 'Kadar', 'Kadar personal', 'Kasar', 'Penalti', 'Bayaran', 'Status'].map(q).join(','),
+      ...L.map(x => [x.st.full_name, x.gN, x.gH.toFixed(2), x.pN, x.pH.toFixed(2), x.st.pay_basis || '', x.rate, x.rp, x.gross == null ? '' : x.gross.toFixed(2), x.pen ? x.pen.toFixed(2) : '', x.pay == null ? '' : x.pay.toFixed(2), x.paid ? 'Dibayar' : ''].map(q).join(','))].join('\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' })); a.download = `gaji-coach-${M}.csv`; a.click(); },
 });

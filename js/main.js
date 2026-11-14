@@ -27,6 +27,9 @@ import './admin/v22.js';
 import './admin/scoring.js';
 import './admin/v25.js';
 import './admin/v26.js';
+import './admin/v28.js';
+import './admin/v29.js';
+import './admin/v30.js';
 
 const root = () => $('#root');
 const logoSvg = `<img src="assets/logo.png" alt="MBA" class="brand-img">`;

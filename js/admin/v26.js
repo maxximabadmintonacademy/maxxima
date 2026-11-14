@@ -6,6 +6,8 @@ import { T, byId, staffName, venueName, progName } from './helpers.js';
 import { calItems, sTime, sCoach, groupsOf } from './sessions.js';
 import { sop } from '../coach/v26.js';
 
+/** Tab tambahan (cth. Penalti dari v29). */
+export const CK_TABS = {};
 const fmtT = iso => new Date(iso).toLocaleTimeString('ms-MY', { hour: 'numeric', minute: '2-digit' });
 const ST = { pending: ['Menunggu', 'b-warn'], accepted: ['Diterima', 'b-ok'], rejected: ['Ditolak', 'b-bad'], expired: ['Tiada respons', 'b-bad'], cancelled: ['Dibatalkan', 'b-muted'] };
 const asgLabel = a => { const s = byId('class_sessions', a.session_id), c = byId('classes', a.class_id || s?.class_id); if (!c) return '—';
@@ -13,12 +15,16 @@ const asgLabel = a => { const s = byId('class_sessions', a.session_id), c = byId
     : `${s ? DAYS[new Date(s.session_date + 'T00:00').getDay()] + ', ' + fmtShort(s.session_date) + ' ' + sTime(s, c)[0] : ''} · ${progName(c.programme_id)} · ${venueName(c.venue_id)}${a.kind === 'group' ? ' · kumpulan' : ''}`; };
 
 VIEWS.checkin = () => {
-  const tab = UI.ckTab || 'hari', today = todayISO();
+  const nCov = T('cover_requests').filter(r => r.status === 'open').length, today = todayISO();
+  const tab = UI.ckTab || (nCov ? 'ganti' : 'hari');
   const nBad = T('session_assignments').filter(a => ['rejected', 'expired'].includes(a.status) && !a.seen_at).length;
-  const tabs = [['hari', 'Check-in hari ini'], ['minggu', '7 hari lepas'], ['tugasan', `Tugasan sesi${nBad ? ` (${nBad})` : ''}`], ['sop', 'SOP sesi']];
+  const nPen = T('coach_penalties').filter(x => ['pending', 'appealed'].includes(x.status)).length;
+  const tabs = [['ganti', `Ganti coach${nCov ? ` (${nCov})` : ''}`], ['hari', 'Check-in hari ini'], ...(CK_TABS.penalti ? [['penalti', `Penalti${nPen ? ` (${nPen})` : ''}`]] : []), ['minggu', '7 hari lepas'], ['tugasan', `Tugasan sesi${nBad ? ` (${nBad})` : ''}`], ['sop', 'SOP sesi']];
   const head = pageHead('Check-in & Tugasan Coach', 'Ketepatan masa coach, gambar check in, tugasan terima / tolak, dan SOP sesi.', `<button class="btn" data-action="ck-run">Jalankan peringatan sekarang</button>`);
   const tabBar = `<div class="chips">${tabs.map(([k, l]) => `<button class="chip ${tab === k ? 'on' : ''}" data-action="ck-tab" data-id="${k}">${l}</button>`).join('')}</div>`;
   if (tab === 'tugasan') return head + tabBar + asgTab();
+  if (tab === 'ganti') return head + tabBar + coverTab();
+  if (CK_TABS[tab]) return head + tabBar + CK_TABS[tab]();
   if (tab === 'sop') return head + tabBar + sopTab();
   const from = tab === 'hari' ? today : addDays(today, -7), to = tab === 'hari' ? today : addDays(today, -1);
   const items = calItems(from, to).filter(x => x.s?.status !== 'cancelled');
@@ -50,6 +56,31 @@ function asgTab() {
       <td style="font-size:12px">${new Date(a.assigned_at).toLocaleString('ms-MY', { dateStyle: 'short', timeStyle: 'short' })}</td><td style="font-size:12px">${a.responded_at ? new Date(a.responded_at).toLocaleString('ms-MY', { dateStyle: 'short', timeStyle: 'short' }) : '—'}${a.reason ? `<div>${esc(a.reason)}</div>` : ''}</td>
       <td style="white-space:nowrap">${a.session_id ? `<button class="btn sm" data-action="sess-open" data-id="${a.session_id}">Buka sesi</button> ` : ''}${bad && !a.seen_at ? `<button class="btn sm" data-action="asg-seen" data-id="${a.id}">Selesai</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">Belum ada tugasan.</td></tr>'}</tbody></table></div></div>`;
 }
+function coverTab() {
+  const L = T('cover_requests').slice().sort((a, b) => (a.status === 'open') === (b.status === 'open') ? (b.created_at || '').localeCompare(a.created_at || '') : a.status === 'open' ? -1 : 1).slice(0, 80);
+  const bad = T('session_assignments').filter(a => ['rejected', 'expired'].includes(a.status) && !a.seen_at && a.session_id);
+  const row = (sid, who, why, extra, btns) => { const s = byId('class_sessions', sid), c = byId('classes', s?.class_id); if (!s || !c) return '';
+    const [a, b] = sTime(s, c), soon = new Date(`${s.session_date}T${a}:00`) - Date.now() < 864e5;
+    return `<div class="cov-row ${soon ? 'urgent' : ''}"><div style="flex:1;min-width:220px"><b>${DAYS[new Date(s.session_date + 'T00:00').getDay()]}, ${fmtShort(s.session_date)} · ${a}–${b}</b>${soon ? ' <span class="badge b-bad">kurang 24 jam</span>' : ''}${s.status === 'cancelled' ? ' <span class="badge b-muted">dibatalkan</span>' : ''}
+      <div style="font-size:13px">${esc(progName(c.programme_id))} · ${esc(venueName(c.venue_id))}</div><div class="muted" style="font-size:12.5px">${who}${why ? ' — ' + esc(why) : ''}${extra}</div></div><div class="actions">${btns}</div></div>`; };
+  const open = L.filter(r => r.status === 'open'), done = L.filter(r => r.status !== 'open').slice(0, 20);
+  return `<p class="muted" style="font-size:12.5px;margin-bottom:10px">Bila coach tekan "Tidak dapat hadir", atau menolak tugasan, sesi muncul di sini. Pilih <b>Cari pengganti</b> (coach baharu perlu terima dalam 1 jam) atau <b>Batal sesi</b> (ibu bapa dimaklumkan automatik).</p>
+  <div class="card card-pad mb">${[...open.map(r => row(r.session_id, `🚨 ${esc(staffName(r.staff_id))} tidak dapat hadir`, r.reason, '', `<button class="btn sm primary" data-action="cov-find" data-id="${r.session_id}|${r.id}">Cari pengganti</button><button class="btn sm" data-action="cov-cancel" data-id="${r.session_id}|${r.id}">Batal sesi</button>`)),
+      ...bad.map(a => row(a.session_id, `${a.status === 'rejected' ? '❌' : '⏰'} ${esc(staffName(a.staff_id))} ${a.status === 'rejected' ? 'menolak tugasan' : 'tiada respons'}`, a.reason, '', `<button class="btn sm primary" data-action="cov-find" data-id="${a.session_id}|asg:${a.id}">Cari pengganti</button><button class="btn sm" data-action="cov-cancel" data-id="${a.session_id}|asg:${a.id}">Batal sesi</button><button class="btn sm" data-action="asg-seen" data-id="${a.id}">Abaikan</button>`))].join('') || '<div class="empty">Tiada sesi memerlukan pengganti. 👍</div>'}</div>
+  ${done.length ? `<h3 style="font-size:14px;margin:6px 0 8px">Selesai</h3><div class="card card-pad">${done.map(r => row(r.session_id, `${esc(staffName(r.staff_id))}`, r.reason, ` · ${r.status === 'covered' ? `✓ diganti oleh ${esc(staffName(r.substitute_id))}` : r.status === 'cancelled' ? '✕ sesi dibatalkan' : 'ditarik balik'}`, '')).join('')}</div>` : ''}`;
+}
+async function resolveCover(ref, patch) {
+  if (ref.startsWith('asg:')) return update('session_assignments', ref.slice(4), { seen_at: new Date().toISOString() });
+  return update('cover_requests', ref, { ...patch, resolved_at: new Date().toISOString() });
+}
+async function candidates(sid) {
+  if (S.mode === 'supabase') return (await rpc('admin_find_substitutes', { p_session: sid })) || [];
+  const s = byId('class_sessions', sid), c = byId('classes', s.class_id), cur = sCoach(s, c), dow = new Date(s.session_date + 'T00:00').getDay(), [a, b] = sTime(s, c);
+  return T('staff').filter(x => x.active && x.id !== cur).map(x => ({ id: x.id, name: x.full_name, position: x.position, part_time: x.employment_type === 'part_time', has_account: !!x.profile_id,
+    avail_set: !!(x.availability || []).length, available: (x.availability || []).some(v => v.d === dow && v.from <= a && v.to >= b),
+    clash: calItems(s.session_date, s.session_date).some(it => it.s?.id !== sid && sCoach(it.s, it.c) === x.id && sTime(it.s, it.c)[0] < b && sTime(it.s, it.c)[1] > a) ? 'Ada sesi lain pada masa sama' : null }))
+    .sort((p, q) => !!p.clash - !!q.clash || q.available - p.available || p.name.localeCompare(q.name));
+}
 function sopTab() {
   const o = sop(), coaches = T('staff').filter(s => s.active && s.profile_id);
   return `<div class="grid g-2"><div class="card card-pad"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:14.5px">SOP sesi (versi ${o.version})</h3><button class="btn sm" data-action="sop-edit">Ubah</button></div>
@@ -73,4 +104,34 @@ Object.assign(ACTIONS, {
           return { icon: m ? m[1] : '', title: (m ? m[2] : first).trim(), body: rest.join('\n').trim() }; });
         if (!steps.length) throw new Error('Sekurang-kurangnya satu langkah.');
         await saveSetting('coach_sop', { version: d.reack === '1' ? o.version + 1 : o.version, steps }); toast('SOP disimpan'); app.render(); } }); },
+});
+
+Object.assign(ACTIONS, {
+  'cov-find': async raw => {
+    const [sid, ref] = raw.split('|'), s = byId('class_sessions', sid), c = byId('classes', s.class_id), [a, b] = sTime(s, c);
+    const req = ref.startsWith('asg:') ? null : byId('cover_requests', ref), absent = req?.staff_id || byId('session_assignments', ref.slice(4))?.staff_id;
+    const list = await candidates(sid);
+    openModal({ title: 'Cari coach pengganti', wide: true, submit: 'Tetapkan pengganti', body: `<p style="font-size:13.5px;margin-bottom:10px"><b>${DAYS[new Date(s.session_date + 'T00:00').getDay()]}, ${fmtShort(s.session_date)} · ${a}–${b}</b> · ${esc(progName(c.programme_id))} · ${esc(venueName(c.venue_id))}</p>
+      <div class="sub-list">${list.map((x, i) => `<label class="sub-row ${x.clash || x.on_leave ? 'dim' : ''}"><input type="radio" name="sub" value="${x.id}" ${i === 0 && !x.clash ? 'checked' : ''}>
+        <div style="flex:1"><b>${esc(x.name)}</b> <span class="muted" style="font-size:12px">${esc(x.position || '')}${x.part_time ? ' · sambilan' : ''}</span>
+        <div style="font-size:12px">${x.clash ? `<span style="color:var(--bad)">⚠️ ${esc(x.clash)}</span>` : x.on_leave ? '<span style="color:var(--bad)">Bercuti</span>' : x.available ? '<span style="color:var(--ok)">✓ Tersedia pada masa ini</span>' : x.avail_set ? '<span class="muted">Di luar masa tersedia</span>' : '<span class="muted">Ketersediaan belum diisi</span>'}${x.has_account ? '' : ' · <span class="muted">tiada akaun app (hubungi melalui WhatsApp)</span>'}</div></div></label>`).join('') || '<div class="empty">Tiada coach lain.</div>'}</div>
+      <p class="muted" style="font-size:12px;margin-top:10px">Coach pengganti menerima notifikasi dan perlu <b>Terima / Tolak dalam 1 jam</b>.</p>`,
+      onSubmit: async d => { if (!d.sub) throw new Error('Pilih coach pengganti.');
+        const grp = absent && groupsOf(sid).find(g => g.coach_id === absent);
+        if (grp) await update('session_groups', grp.id, { coach_id: d.sub }); else await update('class_sessions', sid, { coach_id: d.sub });
+        await resolveCover(ref, { status: 'covered', substitute_id: d.sub, resolved_note: 'Pengganti: ' + staffName(d.sub) });
+        if (S.mode === 'supabase' && absent) { try { await rpc('admin_notify_staff', { p_staff: [absent], p_title: 'Pengganti ditetapkan', p_body: `${staffName(d.sub)} akan menggantikan anda: ${fmtShort(s.session_date)} ${a} · ${progName(c.programme_id)}.`, p_link: 'hari' }); } catch { /* abaikan */ } }
+        toast(`${staffName(d.sub)} ditetapkan — menunggu pengesahan coach (1 jam)`); app.render(); } });
+  },
+  'cov-cancel': raw => {
+    const [sid, ref] = raw.split('|'), s = byId('class_sessions', sid), c = byId('classes', s.class_id), req = ref.startsWith('asg:') ? null : byId('cover_requests', ref);
+    openModal({ title: 'Batalkan sesi', submit: 'Batalkan & maklumkan', body: `<p style="font-size:13.5px;margin-bottom:10px">${fmtShort(s.session_date)} ${sTime(s, c)[0]} · ${esc(progName(c.programme_id))} · ${esc(venueName(c.venue_id))}</p>
+      <label class="f full">Sebab kepada ibu bapa<input name="reason" value="Coach tidak dapat hadir — sesi ganti akan diatur"></label>
+      <p class="muted" style="font-size:12.5px;margin-top:8px">Ibu bapa pelajar sesi ini dimaklumkan automatik. Sesi tidak ditolak daripada pakej mereka.</p>`,
+      onSubmit: async d => { await update('class_sessions', sid, { status: 'cancelled', cancel_reason: (d.reason || '').trim() || 'Coach tidak dapat hadir' });
+        await resolveCover(ref, { status: 'cancelled', resolved_note: d.reason });
+        const who = req?.staff_id || byId('session_assignments', ref.slice(4))?.staff_id;
+        if (S.mode === 'supabase' && who) { try { await rpc('admin_notify_staff', { p_staff: [who], p_title: 'Sesi dibatalkan', p_body: `${fmtShort(s.session_date)} ${sTime(s, c)[0]} · ${progName(c.programme_id)} dibatalkan oleh admin.`, p_link: 'hari' }); } catch { /* abaikan */ } }
+        toast('Sesi dibatalkan — ibu bapa dimaklumkan'); app.render(); } });
+  },
 });

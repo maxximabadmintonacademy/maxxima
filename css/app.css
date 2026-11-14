@@ -503,3 +503,31 @@ tr.sel td{background:var(--brand-soft,#eef4ff)}
 input.switch{appearance:none;-webkit-appearance:none;width:44px;height:26px;border-radius:20px;background:var(--line,#d6dbe6);position:relative;cursor:pointer;flex:none;transition:.2s;border:0}
 input.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.2s}
 input.switch:checked{background:var(--ok,#16a34a)}input.switch:checked::after{left:21px}
+.ck-strip.quiet{background:transparent;justify-content:flex-end;padding:4px 10px}.ck-btns{display:flex;gap:6px;flex-wrap:wrap}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted);text-decoration:underline}
+/* v28: ganti coach */
+.cov-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--line)}.cov-row:last-child{border-bottom:0}
+.cov-row.urgent{box-shadow:inset 4px 0 0 var(--bad);padding-left:12px}
+.sub-list{display:flex;flex-direction:column;gap:6px;max-height:52vh;overflow:auto}
+.sub-row{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;cursor:pointer}.sub-row input{width:auto;height:auto;margin-top:4px}
+.sub-row:has(input:checked){border-color:var(--brand);background:var(--brand-soft,#eef4ff)}.sub-row.dim{opacity:.6}
+/* v28: laporan bulanan */
+.rp-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.rp-tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}.rp-tile small{display:block;color:var(--muted);font-size:12px}.rp-tile b{display:block;font-size:24px;margin:2px 0}.rp-tile b small{display:inline;font-size:13px}
+.rp-d{font-size:12px;color:var(--muted)}.rp-d.up{color:var(--ok)}.rp-d.down{color:var(--bad)}
+.rp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}.rp-sec h3{font-size:15px;margin-bottom:10px}.rp-sec h4{font-size:12.5px;color:var(--muted);margin:14px 0 6px}
+.rp-act{border-color:var(--warn);background:var(--warn-soft,#fff8e6);margin-bottom:14px}.rp-act ol{margin:6px 0 0;padding-left:20px;line-height:1.65;font-size:13.5px}
+.rp-t{width:100%;min-width:0;border-collapse:collapse;font-size:13.5px}.rp-t td{padding:6px 0;border-bottom:1px solid var(--line)}.rp-t td:last-child{text-align:right}
+.rp-bars{display:grid;gap:6px}.rp-bar{display:grid;grid-template-columns:minmax(90px,150px) 1fr 80px;gap:10px;align-items:center;font-size:12.5px}.rp-bar i{display:block;height:9px;border-radius:5px;background:var(--brand,#1d4ed8)}.rp-bar b{text-align:right}
+.rp-funnel div{width:var(--w);min-width:150px;background:var(--brand-soft,#eef4ff);border-radius:8px;padding:7px 10px;margin-bottom:5px;display:flex;justify-content:space-between;font-size:13px}
+.rp-fb{padding-left:16px;margin:0;font-size:13px;line-height:1.6}
+@media (max-width:900px){.rp-tiles{grid-template-columns:1fr 1fr}.rp-grid{grid-template-columns:1fr}}
+.rp-grid>*{min-width:0}.rp-bar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* v30: import sesi invois */
+.im-bar{display:flex;flex-direction:column;gap:10px}.im-opt{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--muted)}.im-opt input{width:auto;height:auto;margin-top:2px}
+.im-table td{vertical-align:top}.im-table select,.im-table input[type=time]{font:inherit;font-size:12.5px;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);max-width:170px}
+.im-table input[type=time]{width:92px}.im-table .bad{border-color:var(--bad);background:var(--bad-soft,#fff1f1)}.im-table tr.warn td{background:#fffaf0}
+.im-table details summary{cursor:pointer;font-size:11.5px}
+.im-table tr:not(.im-sub) td{border-bottom:0;padding-bottom:4px}.im-table tr.im-sub td{padding-top:0;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)}
+.im-table tr.im-sub td>div{display:inline;margin-left:8px}.im-table tr.im-sub details{display:inline-block;margin-left:8px}
+.im-table{min-width:0}.im-table select{max-width:150px}

@@ -63,7 +63,7 @@ const T = {
     errs: { child: 'Isi nama pelajar.', phone: 'Isi no. WhatsApp yang betul (cth. 012-345 6789).', consent: 'Tandakan persetujuan di bawah.', email: 'Isi e-mel untuk pertanyaan antarabangsa.', net: 'Tidak dapat menghantar. Semak internet atau WhatsApp admin.' },
     doneT: 'Permintaan diterima', doneL: 'Admin akan WhatsApp anda untuk sahkan tarikh dan masa. Simpan nombor rujukan ini.', doneWa: 'Hantar juga di WhatsApp', doneNew: 'Hantar borang lain',
     waMsg: (r, f) => `Salam admin Maxxima, saya baru hantar borang (Ruj ${r}). Pelajar: ${f.child_name}${f.child_age ? ', ' + f.child_age + ' thn' : ''}. Lokasi: ${f.venue || '-'}.`,
-    footTag: 'Asas yang kukuh. Laluan yang jelas.', footLinks: 'Pautan', footContact: 'Hubungi', portal: 'Portal ibu bapa & coach', tn: 'Kejohanan', terms: 'Terma & syarat',
+    footTag: 'Asas yang kukuh. Laluan yang jelas.', footLinks: 'Pautan', footContact: 'Hubungi', portal: 'Portal ibu bapa & coach', tn: 'Kejohanan', terms: 'Terma & syarat', privacy: 'Notis privasi', privLink: 'Baca notis privasi',
     slotPick: (d, t, v) => `Slot dipilih: ${d} ${t}, ${v}`,
   },
   en: {
@@ -116,7 +116,7 @@ const T = {
     errs: { child: 'Enter the student’s name.', phone: 'Enter a valid WhatsApp number (e.g. +60 12-345 6789).', consent: 'Tick the consent box below.', email: 'Enter an email for international enquiries.', net: 'Could not send. Check your connection or WhatsApp us.' },
     doneT: 'Request received', doneL: 'Admin will WhatsApp you to confirm the date and time. Keep this reference number.', doneWa: 'Also send on WhatsApp', doneNew: 'Send another form',
     waMsg: (r, f) => `Hi Maxxima admin, I just sent the form (Ref ${r}). Student: ${f.child_name}${f.child_age ? ', ' + f.child_age + ' yrs' : ''}. Venue: ${f.venue || '-'}.`,
-    footTag: 'Strong fundamentals. A clear path forward.', footLinks: 'Links', footContact: 'Contact', portal: 'Parent & coach portal', tn: 'Tournaments', terms: 'Terms & conditions',
+    footTag: 'Strong fundamentals. A clear path forward.', footLinks: 'Links', footContact: 'Contact', portal: 'Parent & coach portal', tn: 'Tournaments', terms: 'Terms & conditions', privacy: 'Privacy notice', privLink: 'Read the privacy notice',
     slotPick: (d, t, v) => `Chosen slot: ${d} ${t}, ${v}`,
   },
   zh: {
@@ -169,7 +169,7 @@ const T = {
     errs: { child: '请填写学员姓名。', phone: '请填写正确的 WhatsApp 号码。', consent: '请勾选下方同意框。', email: '海外咨询请填写电邮。', net: '无法发送，请检查网络或 WhatsApp 联系我们。' },
     doneT: '申请已收到', doneL: '管理员会通过 WhatsApp 联系您确认日期和时间。请保存此参考号码。', doneWa: '同时通过 WhatsApp 发送', doneNew: '再填写一份',
     waMsg: (r, f) => `您好 Maxxima，我刚提交了表格（参考号 ${r}）。学员：${f.child_name}${f.child_age ? '，' + f.child_age + '岁' : ''}。场地：${f.venue || '-'}。`,
-    footTag: '扎实基础，清晰路线。', footLinks: '链接', footContact: '联系', portal: '家长与教练门户', tn: '比赛', terms: '条款与条件',
+    footTag: '扎实基础，清晰路线。', footLinks: '链接', footContact: '联系', portal: '家长与教练门户', tn: '比赛', terms: '条款与条件', privacy: '隐私声明', privLink: '阅读隐私声明',
     slotPick: (d, t, v) => `已选时段：${d} ${t}，${v}`,
   },
 };
@@ -264,7 +264,7 @@ function page() {
 
 <footer><div class="wrap">
   <div><a class="brand" href="#" style="color:#fff"><img src="assets/logo.png" alt=""><span>MAXXIMA</span></a><p style="margin-top:10px">${l.footTag}</p></div>
-  <div><b>${l.footLinks}</b><ul><li><a href="index.html">${l.portal}</a></li><li><a href="tournament.html">${l.tn}</a></li><li><a href="assets/terms/">${l.terms}</a></li></ul></div>
+  <div><b>${l.footLinks}</b><ul><li><a href="index.html">${l.portal}</a></li><li><a href="tournament.html">${l.tn}</a></li><li><a href="privacy.html?lang=${LANG}">${l.privacy}</a></li></ul></div>
   <div><b>${l.footContact}</b><ul><li><a href="https://wa.me/${WA}" data-track="cta_wa">WhatsApp +60 12-496 5324</a></li><li><a href="mailto:maxxima.academy@gmail.com">maxxima.academy@gmail.com</a></li>
     <li><a href="https://instagram.com/maxximaba" target="_blank" rel="noopener">Instagram @maxximaba</a></li><li><a href="https://www.tiktok.com/@maxximaba" target="_blank" rel="noopener">TikTok @maxximaba</a></li></ul></div>
 </div><div class="wrap" style="display:block;margin-top:26px;font-size:12.5px;opacity:.7">© ${new Date().getFullYear()} Maxxima Badminton Academy · Malaysia (GMT+8)</div></footer>
@@ -305,7 +305,7 @@ function formHtml() {
     <label class="f ${intl ? 'full' : ''}">${fl.level}<select name="experience">${fl.levels.map(([k, n]) => `<option value="${k}" ${F.experience === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
     ${intl ? '' : `<label class="f full">${fl.times}<input name="pref_times" value="${v('pref_times')}" placeholder="${fl.timesPh}"></label>`}
     <label class="f full">${fl.notes}<textarea name="notes" placeholder="${fl.notesPh}">${v('notes')}</textarea></label>
-    <label class="consent"><input type="checkbox" name="consent" ${F.consent ? 'checked' : ''}> <span>${fl.consent}</span></label>
+    <label class="consent"><input type="checkbox" name="consent" ${F.consent ? 'checked' : ''}> <span>${fl.consent} <a href="privacy.html?lang=${LANG}" target="_blank" rel="noopener">${l.privLink}</a></span></label>
     <div class="err" id="ferr" role="alert"></div>
     <button class="btn btn-n" style="grid-column:1/-1" ${BUSY ? 'disabled' : ''}>${BUSY ? fl.sending : fl.submit}</button>
   </form>`;

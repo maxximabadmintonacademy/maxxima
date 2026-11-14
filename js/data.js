@@ -16,7 +16,7 @@ export const S = {
 export const ADMIN_TABLES = [
   'settings', 'venues', 'programmes', 'packages', 'student_packages', 'notifications', 'staff', 'profiles', 'parent_tax_info', 'invoice_items', 'expenses', 'leads', 'trials', 'students',
   'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'invoices', 'payments', 'credit_notes', 'guardians', 'student_programmes',
-  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills', 'feedback', 'package_requests', 'staff_private', 'coach_checkins', 'session_assignments', 'site_stats',
+  'leave_requests', 'tournaments', 'tournament_categories', 'tournament_entries', 'tournament_matches', 'session_groups', 'booking_requests', 'announcements', 'tournament_stats', 'tournament_draw_log', 'billing_adjustments', 'jersey_batches', 'jersey_orders', 'content_items', 'events', 'class_offers', 'courses', 'course_lessons', 'lesson_plans', 'waitlist', 'gateway_bills', 'feedback', 'package_requests', 'staff_private', 'coach_checkins', 'session_assignments', 'site_stats', 'cover_requests', 'coach_penalties', 'session_import',
 ];
 const WINDOWED = new Set(['class_sessions', 'attendance']);   // hanya 90 hari terakhir + akan datang
 const WINDOW_DAYS = 90;
@@ -126,7 +126,7 @@ export async function loadParent() {
 }
 
 /* Portal coach: RLS hanya memulangkan kelas, sesi dan pelajar yang coach itu ajar. */
-const COACH_TABLES = ['courses', 'course_lessons', 'lesson_plans', 'events', 'announcements', 'trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests', 'feedback', 'staff_private', 'coach_checkins', 'session_assignments'];
+const COACH_TABLES = ['courses', 'course_lessons', 'lesson_plans', 'events', 'announcements', 'trials', 'settings', 'venues', 'programmes', 'staff', 'notifications', 'students', 'classes', 'class_enrolments', 'class_sessions', 'attendance', 'progress_records', 'session_groups', 'leave_requests', 'feedback', 'staff_private', 'coach_checkins', 'session_assignments', 'cover_requests', 'coach_penalties'];
 export async function loadCoach() {
   if (S.mode === 'demo') { if (!S.demo) S.demo = (await import('./demo-seed.js')).makeSeed(); S.t = S.demo; return; }
   const since = addDays(todayISO(), -WINDOW_DAYS), next = {};

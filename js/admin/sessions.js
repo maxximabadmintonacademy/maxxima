@@ -204,6 +204,9 @@ export async function moveSession(sid, { date, start, end, court, notify }) {
       await update('class_sessions', s.id, { status: 'cancelled', cancel_reason: 'Dipindah ke ' + newLbl });
     }
   }
+  // coach turut dimaklumkan (sesi dipindah)
+  if (notify && S.mode === 'supabase') { const cs = [...new Set([sCoach(target, c), ...groupsOf(target.id).map(g => g.coach_id)].filter(Boolean))];
+    if (cs.length) { try { await rpc('admin_notify_staff', { p_staff: cs, p_title: 'Sesi dipindahkan', p_body: `${progName(c.programme_id)} · ${venueName(c.venue_id)}: ${oldLbl} → ${newLbl}`, p_link: 'hari' }); } catch (e) { console.warn(e); } } }
   if (notify && roster.length && S.mode === 'supabase') {
     try { await rpc('admin_notify_parents', { p_students: roster, p_title: 'Sesi dipindahkan', p_body: `${progName(c.programme_id)} · ${venueName(c.venue_id)}: ${oldLbl} → ${newLbl}`, p_link: 'jadual' }); } catch (e) { console.warn(e); toast('Sesi dipindah, tetapi notifikasi gagal: ' + e.message, true); }
   }
