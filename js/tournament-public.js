@@ -21,8 +21,12 @@ const hm = v => (v ? String(v).slice(0, 5) : '');
 const RM = n => 'RM' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const pubUrl = p => !p ? '' : /^https?:/.test(p) ? p : `${CONFIG.SUPABASE_URL}/storage/v1/object/public/public-media/${p}`;
 const wa = (phone, text) => `https://wa.me/${String(phone || '').replace(/\D/g, '').replace(/^0/, '60')}?text=${encodeURIComponent(text)}`;
+document.addEventListener('click', async e => { const b = e.target.closest('[data-copy]'); if (!b) return;
+  try { await navigator.clipboard.writeText(b.dataset.copy); } catch { const x = document.createElement('textarea'); x.value = b.dataset.copy; document.body.append(x); x.select(); document.execCommand('copy'); x.remove(); }
+  b.textContent = t('Disalin ✓'); setTimeout(() => (b.textContent = t('Salin')), 1800); });
 let client = null, INFO = null, RES = null, F = { step: 1 }, LOOK = null, FEED = [], ME = null;
 
+const QD04 = { model: 'QD04', head: ['4XS', '3XS', '2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '5XL', '7XL'], rows: [['Bahu', '13', '13.5', '15', '16', '17', '18', '19', '20', '21', '22', '24', '26'], ['Dada', '31', '33', '34', '36', '38', '40', '42', '44', '46', '48', '52', '56'], ['Lengan', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11.5', '12'], ['Panjang', '19', '20.5', '24', '25', '26', '27', '28', '29', '30', '31', '33', '35']], note: 'Ukuran boleh berbeza ±5%.' };
 const rpc = async (fn, args) => { if (demo) return demoRpc(fn, args); const { data, error } = await client.rpc(fn, args); if (error) throw error; return data; };
 const track = k => { try { if (!demo && sessionStorage.getItem('tn_' + k + slug) !== '1') { sessionStorage.setItem('tn_' + k + slug, '1'); rpc('public_tn_track', { p_slug: slug, p_kind: k }); } } catch { /* abaikan */ } };
 
@@ -56,7 +60,7 @@ function page() {
   const contact = T.contact_phone ? wa(T.contact_phone, t('Hi, saya ingin bertanya tentang {n}', { n: T.name })) : '';
   return `
   <header class="topbar"><div class="wrap"><a class="brand" href="#top"><img src="assets/logo.png" alt=""><span>${esc(T.academy || 'Maxxima')}</span></a>
-    <nav><a href="#kategori">${t('Kategori')}</a>${(T.shirt_sizes || []).length ? `<a href="#jersi">${t('Jersi')}</a>` : ''}<a href="#format">${t('Format')}</a>${rules.length ? `<a href="#peraturan">${t('Peraturan')}</a>` : ''}${showRes ? `<a href="#keputusan">${T.status === 'open' || T.status === 'closed' ? t('Cabutan') : t('Keputusan')}</a>` : ''}<a href="#peserta">${t('Portal peserta')}</a><a href="#semak">${t('Semak status')}</a>${open ? `<a class="cta" href="#daftar" data-reg>${t('Daftar')}</a>` : ''}</nav>
+    <nav><a href="#kategori">${t('Kategori')}</a>${(T.shirt_sizes || []).length ? `<a href="#jersi">${t('Jersi')}</a>` : ''}${T.pay_note || T.pay_qr_path ? `<a href="#bayaran">${t('Bayaran')}</a>` : ''}<a href="#format">${t('Format')}</a>${rules.length ? `<a href="#peraturan">${t('Peraturan')}</a>` : ''}${showRes ? `<a href="#keputusan">${T.status === 'open' || T.status === 'closed' ? t('Cabutan') : t('Keputusan')}</a>` : ''}<a href="#peserta">${t('Portal peserta')}</a><a href="#semak">${t('Semak status')}</a>${open ? `<a class="cta" href="#daftar" data-reg>${t('Daftar')}</a>` : ''}</nav>
     <div class="langsw2">${LANGS.map(([c, l]) => `<button type="button" class="${c === getLang() ? 'on' : ''}" data-lang="${c}">${l}</button>`).join('')}</div></div></header>
   ${T.notice ? `<div class="notice"><div class="wrap"><span class="tag">${t('NOTIS')}</span><span>${esc(T.notice)}</span>${contact ? `<a href="${contact}" target="_blank" rel="noopener">${t('Hubungi admin')}</a>` : ''}</div></div>` : ''}
   <section class="hero" id="top"><div class="wrap"><div>
@@ -95,12 +99,18 @@ function page() {
       <div class="box"><p>${T.shirt_free && T.early_deadline ? t('Satu jersi untuk setiap penyertaan yang didaftar DAN dibayar penuh sebelum {d}, 11:59 malam. Pendaftaran selepas tarikh ini tidak mendapat jersi.', { d: fd(T.early_deadline) }) : t('Jersi acara tersedia.')}</p>
       <p style="margin-top:8px"><b>${t('Saiz yang dipilih adalah muktamad dan tidak boleh ditukar.')}</b></p>
       <div class="szs">${T.shirt_sizes.map(z => `<span>${esc(z)}</span>`).join('')}</div>
-      ${T.size_chart_path ? `<a class="b out" href="${pubUrl(T.size_chart_path)}" target="_blank" rel="noopener">📏 ${t('Lihat carta saiz')}</a>` : ''}</div></div>
+      ${T.size_chart_path ? `<a class="b out" href="${pubUrl(T.size_chart_path)}" target="_blank" rel="noopener">📏 ${t('Lihat carta saiz')}</a>` : ''}</div>${sizeChart()}</div>
       ${(T.jersey_images || []).length ? `<div class="jer-imgs">${T.jersey_images.map(p => `<img src="${pubUrl(p)}" alt="${t('Jersi')}" loading="lazy">`).join('')}</div>` : ''}</div></section>` : ''}
 
   ${dates.length ? `<section class="sec wrap" id="tarikh"><h2>${t('Tarikh penting')}</h2><div class="box"><div class="tl">${dates.map(([d, l, k]) => `<div class="${k || ''}"><b>${fd(d)}</b><span>${esc(l)}</span></div>`).join('')}</div></div></section>` : ''}
 
   ${rules.length ? `<section class="sec wrap rules" id="peraturan"><h2>${t('Peraturan')}</h2><div class="jump">${rules.map((r, i) => `<a href="#r${i}">${esc(r.h)}</a>`).join('')}</div>${rules.map((r, i) => `<details id="r${i}" ${i === 0 ? 'open' : ''}><summary>${esc(r.h)}</summary><ul>${r.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`).join('')}</section>` : ''}
+
+  ${T.pay_note || T.pay_qr_path ? `<section class="sec wrap" id="bayaran"><h2>${t('Yuran & bayaran')}</h2><div class="jer"><div class="box">
+    <div class="fees">${[...new Set((INFO.cats || []).map(c => Number(c.fee || 0)))].length > 1 ? (INFO.cats || []).map(c => `<div><span>${esc(c.name)}</span><b>${RM(c.fee)}</b></div>`).join('') : `<div><span>${t('Yuran penyertaan setiap kategori')}</span><b>${RM((INFO.cats || [])[0]?.fee ?? T.entry_fee)}</b></div>`}</div>
+    <ol class="paysteps"><li>${t('Daftar dan simpan no. rujukan anda.')}</li><li>${t('Bayar ke akaun di sebelah — guna no. rujukan sebagai rujukan bayaran.')}</li><li>${t('Muat naik bukti bayaran di "Semak status & bayaran".')}</li></ol>
+    ${T.registration_deadline ? `<p class="muted" style="font-size:13px;margin-top:8px">${t('Pendaftaran & bayaran ditutup {d}.', { d: fd(T.registration_deadline) })}</p>` : ''}</div>
+    <div>${payBox('', null)}</div></div></section>` : ''}
 
   <section class="sec wrap" id="daftar"><h2>${t('Cara mendaftar')}</h2>
     <div class="cards steps3" style="margin-bottom:16px"><div class="box"><span class="step-n">1</span><div><h3>${t('Isi borang')}</h3><p>${t('Butiran pemain, No. IC / MyKid, kategori, WhatsApp & e-mel penjaga.')}</p></div></div>
@@ -116,10 +126,28 @@ function page() {
 }
 
 const STEPS = () => [t('Pemain'), t('Penjaga'), t('Jersi'), t('Semak')];
+/** Butiran bayaran: setiap baris arahan bayaran; no. akaun (8+ digit) dan no. rujukan boleh disalin dengan satu tekan. */
+const copyBtn = v => `<button type="button" class="cp" data-copy="${esc(v)}">${t('Salin')}</button>`;
+function payLines() {
+  const T = INFO.t;
+  return String(T.pay_note || '').split('\n').map(x => x.trim()).filter(Boolean).map(l => { const n = (l.match(/\d[\d\s-]{6,}\d/) || [])[0];
+    return `<div class="pl${n && n.replace(/\D/g, '').length >= 8 ? ' acc' : ''}"><span>${esc(l)}</span>${n && n.replace(/\D/g, '').length >= 8 ? copyBtn(n.replace(/\D/g, '')) : ''}</div>`; }).join('');
+}
 function payBox(ref, fee) {
   const T = INFO.t, pay = T.pay || {}, qr = T.pay_qr_path ? pubUrl(T.pay_qr_path) : pay.qr_url || '';
-  return `${T.pay_note ? `<div class="hint" style="text-align:left;margin-top:10px;white-space:pre-line">${esc(T.pay_note)}</div>` : ''}${qr ? `<img class="payqr" src="${esc(qr)}" alt="QR">` : ''}
-    <p class="muted" style="font-size:13px;margin-top:8px">${t('Jumlah')}: <b>${RM(fee)}</b> · ${t('Rujukan bayaran')}: <b>${esc(ref)}</b></p>`;
+  return `<div class="paybox">${T.pay_note ? `<div class="pls">${payLines()}</div>` : ''}${qr ? `<img class="payqr" src="${esc(qr)}" alt="QR DuitNow">` : ''}
+    ${fee != null ? `<div class="pl"><span>${t('Jumlah')}: <b>${RM(fee)}</b></span></div>` : ''}${ref ? `<div class="pl ref"><span>${t('Rujukan bayaran')}: <b>${esc(ref)}</b></span>${copyBtn(ref)}</div>` : `<div class="pl ref"><span>${t('Rujukan bayaran')}: <b>${t('no. pendaftaran anda')}</b></span></div>`}
+    ${T.shirt_free && T.early_deadline ? `<div class="pl note"><span>${t('Bayar penuh sebelum {d} untuk dapat jersi percuma.', { d: fd(T.early_deadline) })}</span></div>` : ''}</div>`;
+}
+const SZ_LABEL = { 'Bahu': () => t('Bahu'), 'Dada': () => t('Dada'), 'Lengan': () => t('Lengan'), 'Panjang': () => t('Panjang') };
+/** Carta saiz (inci) — lajur saiz dipilih ditonjolkan. */
+function sizeChart(sel) {
+  const c = INFO.t.size_chart; if (!c || !(c.head || []).length) return '';
+  const hi = c.head.indexOf(sel);
+  return `<div class="szc"><div class="szc-h"><b>📏 ${t('Carta saiz')}${c.model ? ' · ' + esc(c.model) : ''}</b><span>${t('ukuran baju dalam inci')}</span></div>
+    <div class="szc-w"><table><thead><tr><th>${t('Saiz')}</th>${c.head.map((h, i) => `<th class="${i === hi ? 'on' : ''}">${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${(c.rows || []).map(r => `<tr><th>${esc((SZ_LABEL[r[0]] || (() => r[0]))())}</th>${c.head.map((_, i) => `<td class="${i === hi ? 'on' : ''}">${esc(r[i + 1] ?? '—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <p>${t('Cara pilih: letak baju-T pemain yang muat di atas meja, ukur dari ketiak ke ketiak dan darab 2 untuk dada, kemudian bandingkan dengan carta. Jika antara dua saiz, pilih yang lebih besar.')}${c.note ? ' ' + esc(t(c.note)) : ''}</p></div>`;
 }
 function form() {
   const T = INFO.t, cats = INFO.cats || [], s = F.step, v = F;
@@ -142,10 +170,11 @@ function form() {
     <label class="f full">${t('Nama penjaga')}<input name="guardian_name" value="${esc(v.guardian_name || '')}" maxlength="120"></label>
     <label class="f">${t('No. WhatsApp penjaga')}<input name="guardian_phone" inputmode="tel" value="${esc(v.guardian_phone || '')}" placeholder="012-3456789"></label>
     <label class="f">${t('E-mel (untuk sijil digital)')}<input name="guardian_email" type="email" value="${esc(v.guardian_email || '')}"></label></div>`;
-  if (s === 3) body = (T.shirt_sizes || []).length ? `<p class="muted" style="font-size:13px;margin-bottom:10px">${T.shirt_free && T.early_deadline ? t('Jersi percuma untuk pendaftaran yang lengkap dan dibayar penuh sebelum {d}.', { d: fd(T.early_deadline) }) + ' ' : ''}${t('Saiz muktamad selepas dihantar.')}${T.size_chart_path ? ` <a href="${pubUrl(T.size_chart_path)}" target="_blank" rel="noopener">${t('Lihat carta saiz')}</a>` : ''}</p><div class="sizes">${T.shirt_sizes.map(z => `<label><input type="radio" name="shirt_size" value="${esc(z)}" ${v.shirt_size === z ? 'checked' : ''}><span>${esc(z)}</span></label>`).join('')}</div>` : `<p class="muted">${t('Tiada jersi untuk kejohanan ini.')}</p>`;
+  if (s === 3) body = (T.shirt_sizes || []).length ? `<p class="muted" style="font-size:13px;margin-bottom:10px">${T.shirt_free && T.early_deadline ? t('Jersi percuma untuk pendaftaran yang lengkap dan dibayar penuh sebelum {d}.', { d: fd(T.early_deadline) }) + ' ' : ''}${t('Saiz muktamad selepas dihantar.')}${T.size_chart_path ? ` <a href="${pubUrl(T.size_chart_path)}" target="_blank" rel="noopener">${t('Lihat carta saiz')}</a>` : ''}</p><div class="sizes">${T.shirt_sizes.map(z => `<label><input type="radio" name="shirt_size" value="${esc(z)}" ${v.shirt_size === z ? 'checked' : ''}><span>${esc(z)}</span></label>`).join('')}</div>${sizeChart(v.shirt_size)}` : `<p class="muted">${t('Tiada jersi untuk kejohanan ini.')}</p>`;
   if (s === 4) { const c = cats.find(x => x.id === v.category_id); body = `<div class="dates">
     <div><b>${t('Pemain')}</b><span>${esc(v.player_name)} · ${v.birth_year} · ${v.gender === 'boy' ? t('Lelaki') : t('Perempuan')}${v.ic ? ' · IC ******-**-' + esc(String(v.ic).replace(/\D/g, '').slice(-4)) : ''}</span></div><div><b>${t('Kategori')}</b><span>${esc(c?.name || '')} · ${RM(c?.fee)}</span></div>
     <div><b>${t('Penjaga')}</b><span>${esc(v.guardian_name || '')} · ${esc(v.guardian_phone)}${v.guardian_email ? ' · ' + esc(v.guardian_email) : ''}</span></div>${v.shirt_size ? `<div><b>${t('Jersi')}</b><span>${esc(v.shirt_size)}</span></div>` : ''}</div>
+    ${T.pay_note || T.pay_qr_path ? `<h4 style="margin:16px 0 4px;font-size:14px">${t('Bayaran selepas hantar')}</h4>${payBox('', c?.fee)}` : ''}
     <label class="consent" style="display:flex;gap:8px;margin-top:14px;font-size:13px"><input type="checkbox" name="agree" style="width:auto;height:auto" ${v.agree ? 'checked' : ''}> <span>${t('Saya mengesahkan maklumat adalah benar, pemain layak mengikut peraturan, dan bersetuju dengan peraturan kejohanan. Yuran tidak dikembalikan selepas pendaftaran lengkap.')}</span></label>`; }
   return `<form id="tnf" novalidate>${bar}${body}<div style="display:flex;gap:8px;margin-top:16px">${s > 1 ? `<button type="button" class="b out" data-back>${t('Kembali')}</button>` : ''}<button type="submit" class="b dark" style="flex:1;justify-content:center">${s < 4 ? t('Teruskan') : t('Hantar pendaftaran')}</button></div></form>`;
 }
@@ -240,6 +269,7 @@ function render() {
   document.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => { F.category_id = b.dataset.pick; const c = INFO.cats.find(x => x.id === b.dataset.pick); if (c?.gender === 'boys') F.gender = 'boy'; if (c?.gender === 'girls') F.gender = 'girl'; F.step = 1; F.done = null; track('register_click'); render(); $('#daftar').scrollIntoView({ behavior: 'smooth' }); }));
   const f = $('#tnf');
   if (f) {
+    f.querySelectorAll('input[name=shirt_size]').forEach(x => x.addEventListener('change', () => { readForm(); const c = f.querySelector('.szc'); if (c) c.outerHTML = sizeChart(F.shirt_size); }));
     f.querySelectorAll('select[name=birth_year],select[name=gender]').forEach(x => x.addEventListener('change', () => { readForm(); render(); $('#tnf').scrollIntoView({ block: 'center' }); }));
     f.querySelector('input[name=ic]')?.addEventListener('change', e => { const d = e.target.value.replace(/\D/g, ''); if (d.length === 12) { const yy = Number(d.slice(0, 2)), y = (yy > (new Date().getFullYear() % 100) ? 1900 : 2000) + yy; readForm(); F.ic = d; F.birth_year = y; if (!F.gender) F.gender = Number(d.slice(-1)) % 2 ? 'boy' : 'girl'; render(); } });
     f.querySelector('[data-back]')?.addEventListener('click', () => { readForm(); F.step--; render(); $('#daftar').scrollIntoView(); });
@@ -284,7 +314,7 @@ function render() {
 const DEMO_DB = { entries: [] };
 function demoRpc(fn, a) {
   const y = new Date().getFullYear();
-  const info = { ok: true, t: { name: 'Bukit Raja Badminton Challenge 2026', start_date: `${y}-12-12`, start_time: '13:00', end_time: '21:00', venue: 'GoTeam Sports Complex', venue_area: 'Bukit Raja', entry_fee: 150, status: 'open', registration_deadline: `${y}-12-04`, early_deadline: `${y}-11-30`, list_date: `${y}-12-05`, protest_end: `${y}-12-10`, format: 'rr_groups', group_size: 4, points_to: 20, shirt_free: true, shirt_sizes: ['3XS', '2XS', 'XS', 'S', 'M', 'L', 'XL'], prizes: 'Johan: raket + pingat + sijil\nNaib johan: beg + pingat + sijil\nTempat 3 & 4: pingat + sijil', rules: '# Kelayakan\nKelayakan ikut tahun lahir\nPemain negeri/kebangsaan tidak layak\n# Pemarkahan\nSatu game hingga 20 mata, tiada deuce', pay_note: 'DuitNow / Maybank 5xxxxxxxxx (Maxxima Badminton Academy)\nRujukan: no. pendaftaran anda', contact_phone: '0123351291', notice: 'TARIKH BAHARU: Sabtu, 12 Disember 2026 (asal 7 November 2026). Masa dan tempat tidak berubah.', description: 'Kejohanan round robin perseorangan junior untuk pemain bukan negeri.', scoring_note: 'Satu game hingga 20 mata, tanpa deuce — pada 19–19, mata seterusnya menang.', eligibility_note: 'Pemain negeri / kebangsaan tidak layak.', group_link: 'https://chat.whatsapp.com/demo', academy: 'Maxxima Badminton Academy' },
+  const info = { ok: true, t: { name: 'Bukit Raja Badminton Challenge 2026', start_date: `${y}-12-12`, start_time: '13:00', end_time: '21:00', venue: 'GoTeam Sports Complex', venue_area: 'Bukit Raja', entry_fee: 150, status: 'open', registration_deadline: `${y}-12-04`, early_deadline: `${y}-11-30`, list_date: `${y}-12-05`, protest_end: `${y}-12-10`, format: 'rr_groups', group_size: 4, points_to: 20, shirt_free: true, shirt_sizes: ['4XS', '3XS', '2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL', '7XL'], prizes: 'Johan: raket + pingat + sijil\nNaib johan: beg + pingat + sijil\nTempat 3 & 4: pingat + sijil', rules: '# Kelayakan\nKelayakan ikut tahun lahir\nPemain negeri/kebangsaan tidak layak\n# Pemarkahan\nSatu game hingga 20 mata, tiada deuce', pay_note: 'Maybank\n5142-0866-3231\nMuhaimin Badminton Academy', size_chart: QD04, contact_phone: '0123351291', notice: 'TARIKH BAHARU: Sabtu, 12 Disember 2026 (asal 7 November 2026). Masa dan tempat tidak berubah.', description: 'Kejohanan round robin perseorangan junior untuk pemain bukan negeri.', scoring_note: 'Satu game hingga 20 mata, tanpa deuce — pada 19–19, mata seterusnya menang.', eligibility_note: 'Pemain negeri / kebangsaan tidak layak.', group_link: 'https://chat.whatsapp.com/demo', academy: 'Maxxima Badminton Academy' },
     cats: [{ id: 'c1', name: 'Singles Under 8 (Boys & Girls)', gender: 'mixed', birth_from: 2018, girls_from: 2017, birth_to: null, max: 16, fee: 150, taken: 5 }, { id: 'c2', name: "Boys' Singles Under 12", gender: 'boys', birth_from: 2014, birth_to: null, max: 16, fee: 150, taken: 16 }, { id: 'c3', name: "Girls' Singles Under 12", gender: 'girls', birth_from: 2014, birth_to: null, max: 16, fee: 150, taken: 3 }] };
   if (fn === 'public_tn_info') return info;
   if (fn === 'public_tn_results') return { entries: [], matches: [] };

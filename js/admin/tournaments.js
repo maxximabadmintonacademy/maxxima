@@ -66,6 +66,10 @@ const tnForm = t => `<div class="form-grid">
   <label class="f">Carta saiz jersi${t?.size_chart_path ? ' — ada' : ''}<input type="file" name="size_chart" accept="image/*"></label>
   <label class="f full">Gambar jersi (depan / belakang — pilih semula untuk ganti)${(t?.jersey_images || []).length ? ` — ${t.jersey_images.length} gambar` : ''}<input type="file" name="jersey_imgs" accept="image/*" multiple></label>
   <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="shirt_free" value="1" ${t?.shirt_free ? 'checked' : ''} style="width:auto;height:auto"> Jersi percuma (jika daftar & bayar sebelum akhir daftar awal)</label>
+  <label class="f full">Carta saiz (inci) — baris pertama = saiz, baris lain = Bahu / Dada / Lengan / Panjang; pisah dengan |
+    <textarea name="size_chart_txt" rows="5" style="font-family:ui-monospace,monospace;font-size:12px" placeholder="Saiz | 4XS | 3XS | 2XS | ...
+Bahu | 13 | 13.5 | 15 | ...">${esc(chartToText(t?.size_chart))}</textarea>
+    <span class="hint">Dipaparkan sebagai jadual di halaman awam & langkah Jersi borang. <button type="button" class="btn sm ghost" data-action="tn-qd04">Isi carta QD04 (quick dry)</button></span></label>
   ${F('Saiz jersi (pisah koma)', 'shirt_sizes', { value: (t?.shirt_sizes || []).join(', '), full: true, ph: '4XS, 3XS, 2XS, XS, S, M, L, XL, 2XL, 3XL' })}
   ${F('Hadiah', 'prizes', { type: 'textarea', value: t?.prizes, full: true, ph: 'Johan: raket + pingat + sijil\nNaib johan: beg + pingat + sijil' })}
   ${F('Peraturan (satu perkara setiap baris; baris bermula "# " = tajuk bahagian)', 'rules', { type: 'textarea', value: t?.rules, full: true })}
@@ -74,11 +78,20 @@ const tnForm = t => `<div class="form-grid">
   ${F('E-mel penganjur', 'contact_email', { type: 'email', value: t?.contact_email })}
   ${F('Keterangan ringkas', 'description', { type: 'textarea', value: t?.description, full: true })}
 </div>`;
+const QD04_TXT = 'Saiz | 4XS | 3XS | 2XS | XS | S | M | L | XL | 2XL | 3XL | 5XL | 7XL\nBahu | 13 | 13.5 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 24 | 26\nDada | 31 | 33 | 34 | 36 | 38 | 40 | 42 | 44 | 46 | 48 | 52 | 56\nLengan | 6 | 6.5 | 7 | 7.5 | 8 | 8.5 | 9 | 9.5 | 10 | 10.5 | 11.5 | 12\nPanjang | 19 | 20.5 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 33 | 35';
+function chartToText(c) { return c && (c.head || []).length ? [['Saiz', ...c.head], ...(c.rows || [])].map(r => r.join(' | ')).join('\n') : ''; }
+function textToChart(txt) {
+  const L = String(txt || '').split('\n').map(l => l.split(/\s*[|\t]\s*/).map(x => x.trim())).filter(r => r.some(Boolean));
+  if (L.length < 2) return null;
+  const head = L[0].slice(1).filter(Boolean);
+  return { model: String(txt).trim() === QD04_TXT ? 'QD04' : '', head, rows: L.slice(1).map(r => [r[0], ...head.map((_, i) => r[i + 1] || '')]) };
+}
+ACTIONS['tn-qd04'] = () => { const ta = document.querySelector('#modal [name=size_chart_txt]'); if (ta) { ta.value = QD04_TXT; ta.focus(); } };
 const tnPatch = d => ({ name: d.name.trim(), venue_id: val(d.venue_id), venue_note: val(d.venue_note), start_date: val(d.start_date), end_date: val(d.end_date), start_time: val(d.start_time), end_time: val(d.end_time),
   registration_deadline: val(d.registration_deadline), entry_fee: num(d.entry_fee) || 0, status: d.status, description: val(d.description), format: d.format || 'knockout', group_size: num(d.group_size) || 4, points_to: num(d.points_to) || 21,
   early_deadline: val(d.early_deadline), list_date: val(d.list_date), protest_end: val(d.protest_end), public_page: d.public_page === '1', slug: val(String(d.slug || '').toLowerCase().replace(/[^a-z0-9-]/g, '')),
   shirt_free: d.shirt_free === '1', shirt_sizes: String(d.shirt_sizes || '').split(',').map(x => x.trim()).filter(Boolean), prizes: val(d.prizes), rules: val(d.rules), pay_note: val(d.pay_note), contact_phone: val(d.contact_phone), contact_email: val(d.contact_email),
-  notice: val(d.notice), eligibility_note: val(d.eligibility_note), scoring_note: val(d.scoring_note), group_link: val(d.group_link), live_feed: d.live_feed === '1', draw_public: d.draw_public === '1', cert_ready: d.cert_ready === '1' });
+  size_chart: textToChart(d.size_chart_txt), notice: val(d.notice), eligibility_note: val(d.eligibility_note), scoring_note: val(d.scoring_note), group_link: val(d.group_link), live_feed: d.live_feed === '1', draw_public: d.draw_public === '1', cert_ready: d.cert_ready === '1' });
 const withPoster = async (d, row) => {
   if (d.poster && d.poster.size) row.poster_path = await uploadMedia('public-media', 'tournament', d.poster, { maxMB: 10 });
   if (d.pay_qr && d.pay_qr.size) row.pay_qr_path = await uploadMedia('public-media', 'tournament', d.pay_qr, { maxMB: 5 });
