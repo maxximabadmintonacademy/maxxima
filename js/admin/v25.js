@@ -1,3 +1,4 @@
+import { openMerge } from './merge.js';
 // v25: arkib (pelajar, leads, kejohanan), tetapan sijil & tandatangan, ketersediaan + maklumat peribadi coach,
 // paksa tukar kata laluan sementara (admin / urus setia).
 import { VIEWS, ACTIONS } from '../registry.js';
@@ -16,6 +17,7 @@ const nowISO = () => new Date().toISOString();
 Object.assign(ACTIONS, {
   'st-sel': id => { const s = (UI.stSel ||= new Set()); s.has(id) ? s.delete(id) : s.add(id); app.render(); },
   'st-sel-all': ids => { const s = (UI.stSel ||= new Set()), list = String(ids || '').split(',').filter(Boolean), all = list.every(i => s.has(i)); list.forEach(i => (all ? s.delete(i) : s.add(i))); app.render(); },
+  'st-merge-sel': () => openMerge([...(UI.stSel || [])], { after: () => { UI.stSel = new Set(); } }),
   'st-sel-clear': () => { UI.stSel = new Set(); app.render(); },
   'st-bulk': kind => {
     const ids = [...(UI.stSel || [])]; if (!ids.length) return;

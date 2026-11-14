@@ -3,6 +3,7 @@ import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, refresh, rpc, setting, saveSetting } from '../data.js';
 import { ic, esc, F, val, RM, UI, app, toast, openModal, confirmModal, pageHead, hm, todayISO, addDays, parseISO, fmtDate, fmtShort, DAYS, LABEL, monthLabel, badge, avatar } from '../ui.js';
 import { T, byId, venueName, progName, staffName, studentName, livePackages, ageOf } from './helpers.js';
+import { openMerge } from './merge.js';
 import { ensureSession, sTime, sHours, isPersonal, openSession } from './sessions.js';
 
 /* =====================================================================
@@ -250,16 +251,17 @@ VIEWS.padanan = () => {
   return `${pageHead('Padankan Nama', `${T('import_matches').length} rekod kehadiran import WhatsApp (2026) menunggu nama dipadankan dengan pelajar · ${groups.size} nama`)}
   <div class="card card-pad mb"><div class="filters"><label class="field grow">${ic('search', 'sm')}<input placeholder="Cari nama dalam chat…" value="${esc(UI.mqQ || '')}" data-on-change="mq-q"></label></div>
   <p class="muted" style="font-size:12.5px;margin-top:8px">Pilih pelajar sebenar untuk setiap nama dalam chat. Semua tarikh dengan nama yang sama dimasukkan sekali gus sebagai kehadiran (sesi dicipta jika belum ada). "Abaikan" untuk nama yang bukan pelajar / pelajar yang sudah berhenti.</p></div>
-  <div class="card"><ul class="list">${rows.slice(0, 80).map(g => { const m = g[0], sg = suggest(m.raw_name), ds = g.map(x => x.d).sort(), open = UI.mqOpen === m.id;
+  <div class="card"><ul class="list">${rows.slice(0, 80).map(g => { const m = g[0], sel = mqSel(m.id), sg = suggest(m.raw_name), cands = [...sg, ...[...sel].filter(id => !sg.some(x => x.id === id)).map(id => byId('students', id)).filter(Boolean)], ds = g.map(x => x.d).sort(), open = UI.mqOpen === m.id;
     const info = x => [progName(x.programme_id), venueName(x.venue_id), x.birth_date ? ageOf(x.birth_date) + ' thn' : '', x.guardian_name, x.status !== 'active' ? LABEL[x.status] || x.status : ''].filter(v => v && v !== '—').join(' · ');
     return `<li class="list-item" style="flex-wrap:wrap;align-items:flex-start">
     <div class="li-main" style="min-width:240px"><div class="li-title">${esc(m.raw_name)} <span class="badge b-muted">${g.length} sesi</span></div>
       <div class="li-sub">${m.kind === 'group' ? esc(m.prog + ' · ' + m.area) : 'Personal · ' + esc(m.venue || '') + (m.coach ? ' · ' + esc(m.coach) : '')} · ${fmtShort(ds[0])}${ds.length > 1 ? ' – ' + fmtShort(ds[ds.length - 1]) : ''}</div>
-      ${sg.length ? `<div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">${sg.map(x => `<button class="chip" style="cursor:pointer;text-align:left;justify-content:flex-start" data-action="mq-pick" data-id="${m.id}|${x.id}"><b>${esc(x.full_name)}</b>&nbsp;<span class="muted" style="font-size:11.5px">${esc(info(x))}</span></button>`).join('')}</div>` : ''}
+      ${cands.length ? `<div class="mq-cands">${cands.map(x => `<label class="mq-c ${sel.has(x.id) ? 'on' : ''}"><input type="checkbox" value="${x.id}" ${sel.has(x.id) ? 'checked' : ''} data-on-change="mq-c" data-mid="${m.id}"><span><b>${esc(x.full_name)}</b> <em>${esc(info(x))}</em></span></label>`).join('')}</div>
+      <div class="muted" style="font-size:11.5px;margin-top:4px">Tanda satu profil untuk padankan. Tanda beberapa profil jika semuanya orang yang sama — anda akan pilih satu profil utama dan yang lain digabungkan.</div>` : ''}
       ${g.length > 1 ? `<button class="btn sm ghost" style="margin-top:6px" data-action="mq-open" data-id="${m.id}">${open ? 'Tutup senarai tarikh' : 'Pilih tarikh tertentu (jika bukan orang yang sama)'}</button>` : ''}
       ${open ? `<div class="langchk" style="flex-direction:column;gap:4px;margin-top:6px;max-height:220px;overflow:auto">${g.slice().sort((a, b) => a.d.localeCompare(b.d)).map(x => `<label><input type="checkbox" class="mq-d-${m.id}" value="${x.id}" checked> ${fmtShort(x.d)}${x.t1 ? ' ' + hm(x.t1) : ''}${x.coach ? ' · ' + esc(x.coach) : ''}${x.note ? ' · ' + esc(x.note) : ''}</label>`).join('')}</div>` : ''}</div>
-    <div class="actions" style="flex-wrap:wrap"><label class="field"><select id="mq-${m.id}"><option value="">Pilih pelajar…</option>${allSt.map(x => `<option value="${x.id}">${esc(x.full_name)}${x.status !== 'active' ? ' (' + esc(LABEL[x.status] || x.status) + ')' : ''}</option>`).join('')}</select></label>
-      <button class="btn sm primary" data-action="mq-ok" data-id="${m.id}">${open ? 'Padankan tarikh ditanda' : 'Padankan semua'}</button><button class="btn sm" data-action="mq-ign" data-id="${m.id}">Abaikan</button></div></li>`; }).join('') || `<li class="empty">${S.mode === 'supabase' ? 'Semua nama sudah dipadankan. 🎉' : 'Data import WhatsApp hanya ada pada sistem sebenar (bukan demo).'}</li>`}</ul></div>`;
+    <div class="actions" style="flex-wrap:wrap"><label class="field"><select data-on-change="mq-add" data-mid="${m.id}"><option value="">+ Tambah pelajar lain…</option>${allSt.filter(x => !cands.some(c => c.id === x.id)).map(x => `<option value="${x.id}">${esc(x.full_name)}${x.status !== 'active' ? ' (' + esc(LABEL[x.status] || x.status) + ')' : ''}</option>`).join('')}</select></label>
+      <button class="btn sm primary" data-action="mq-ok" data-id="${m.id}">${sel.size > 1 ? `Gabung ${sel.size} profil &amp; padankan` : open ? 'Padankan tarikh ditanda' : 'Padankan'}</button><button class="btn sm" data-action="mq-ign" data-id="${m.id}">Abaikan</button></div></li>`; }).join('') || `<li class="empty">${S.mode === 'supabase' ? 'Semua nama sudah dipadankan. 🎉' : 'Data import WhatsApp hanya ada pada sistem sebenar (bukan demo).'}</li>`}</ul></div>`;
 };
 async function resolve(id, sid) {
   const m = T('import_matches').find(x => x.id === Number(id) || String(x.id) === String(id));
@@ -274,10 +276,16 @@ async function resolve(id, sid) {
   toast(`${n} kehadiran dimasukkan untuk ${studentName(sid)}`); app.render();
 }
 INPUTS['mq-q'] = v => { UI.mqQ = v; app.render(); };
+const mqSel = mid => ((UI.mqSel ||= {})[mid] ||= new Set());
+INPUTS['mq-c'] = (v, el) => { const s = mqSel(el.dataset.mid); el.checked ? s.add(v) : s.delete(v); app.render(); };
+INPUTS['mq-add'] = (v, el) => { if (v) { mqSel(el.dataset.mid).add(v); app.render(); } };
 Object.assign(ACTIONS, {
-  'mq-pick': key => { const [id, sid] = key.split('|'), el = document.getElementById('mq-' + id); if (el) { el.value = sid; el.style.outline = '2px solid var(--brand)'; } toast('Dipilih: ' + studentName(sid) + ' — tekan Padankan untuk sahkan'); },
   'mq-open': id => { UI.mqOpen = UI.mqOpen === Number(id) || UI.mqOpen === id ? null : (Number(id) || id); app.render(); },
-  'mq-ok': id => { const sid = document.getElementById('mq-' + id)?.value; if (!sid) return toast('Pilih pelajar dahulu', true); return resolve(id, sid); },
+  'mq-ok': id => { const ids = [...mqSel(id)].filter(x => byId('students', x)); if (!ids.length) return toast('Tandakan profil pelajar dahulu', true);
+    const done = async sid => { await resolve(id, sid); delete UI.mqSel[id]; };
+    if (ids.length === 1) return done(ids[0]);
+    const m = T('import_matches').find(x => String(x.id) === String(id));
+    openMerge(ids, { title: `Gabung profil untuk "${m?.raw_name || ''}"`, after: done }); },
   'mq-ign': async id => { const m = T('import_matches').find(x => String(x.id) === String(id)); await rpc('import_ignore', { p_id: m.id, p_all: true }); S.t.import_matches = T('import_matches').filter(x => !(x.kind === m.kind && x.raw_name.toLowerCase() === m.raw_name.toLowerCase())); toast('Diabaikan'); app.render(); },
 });
 

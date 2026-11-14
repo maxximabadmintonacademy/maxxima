@@ -373,16 +373,17 @@ const studentFormHtml = (s, progIds, guards, mode) => `
     ${F('Nama penuh pelajar', 'full_name', { value: s?.full_name, req: true, full: true })}
     ${F('Tarikh lahir', 'birth_date', { type: 'date', value: s?.birth_date })}
     ${F('Jantina', 'gender', { value: s?.gender || '', opts: [['', '—'], ['male', 'Lelaki'], ['female', 'Perempuan']] })}
-    ${F('Lokasi latihan', 'venue_id', { value: s?.venue_id || '', opts: venueOpts('— Belum ditetapkan —') })}
     ${F('Status', 'status', { value: s?.status || 'active', opts: [['active', 'Aktif'], ['pending', 'Dalam proses'], ['paused', 'Digantung'], ['left', 'Berhenti']] })}
     <div class="f full">Program (boleh pilih lebih daripada satu: contohnya Group + Personal)
       <div class="checklist" style="margin-top:6px">${T('programmes').filter(p => p.active || progIds.includes(p.id)).map(p => `<label class="check-row"><input type="checkbox" name="prog_ids" value="${p.id}" ${progIds.includes(p.id) ? 'checked' : ''}><span>${esc(p.name)}</span><em>${p.kind === 'personal' ? 'Personal' : 'Group'}</em></label>`).join('')}</div></div>
-    <div class="f full">Lokasi tambahan (jika berlatih di lebih satu lokasi, cth. Puchong Sport Centre + Michael's BA)
-      <div class="langchk" style="margin-top:6px">${T('venues').filter(v => v.active).map(v => `<label><input type="checkbox" name="extra_venues" value="${v.id}" ${s && T('student_programmes').some(x => x.student_id === s.id && x.venue_id === v.id && v.id !== s.venue_id) ? 'checked' : ''}> ${esc(v.name)}</label>`).join('')}</div></div>
+    <div class="f full">Lokasi latihan <span class="muted" style="font-weight:500">(tanda semua lokasi pelajar berlatih — boleh lebih daripada satu)</span>
+      <div class="venue-grid">${T('venues').filter(v => v.active || v.id === s?.venue_id).map(v => { const on = s && (s.venue_id === v.id || T('student_programmes').some(x => x.student_id === s.id && x.venue_id === v.id));
+        return `<label class="vchk"><input type="checkbox" name="venue_ids" value="${v.id}" ${on ? 'checked' : ''}><span>${esc(v.name)}${s?.venue_id === v.id ? ' <em>utama</em>' : ''}</span></label>`; }).join('')}</div></div>
     ${F('Kod keluarga (adik-beradik)', 'family_ref', { value: s?.family_ref, ph: 'sama untuk adik-beradik' })}
-    <label class="f" style="justify-content:flex-end"><span style="flex-direction:row;display:flex;align-items:center;gap:8px;height:40px"><input type="checkbox" name="fee_exempt" value="1" ${s?.fee_exempt ? 'checked' : ''} style="width:auto;height:auto"> Tajaan: latihan kumpulan percuma (personal bayar court sahaja)</span></label>
-    ${F('Nota bil (cth. penajaan tamat, hanya bayar court)', 'billing_note', { value: s?.billing_note })}
+
     ${F('Bahasa mesej, invois & resit', 'lang', { value: s?.lang || '', opts: [['', 'Auto (ikut akaun ibu bapa)'], ['ms', 'Bahasa Malaysia'], ['en', 'English'], ['zh', '中文']] })}
+    <label class="check-row f full" style="border:1px solid var(--line);border-radius:10px"><input type="checkbox" name="fee_exempt" value="1" ${s?.fee_exempt ? 'checked' : ''}><span><b>Tajaan</b> — latihan kumpulan percuma (personal bayar court sahaja)</span></label>
+    ${F('Nota bil (cth. penajaan tamat, hanya bayar court)', 'billing_note', { value: s?.billing_note, full: true })}
     ${F('Catatan', 'notes', { type: 'textarea', value: s?.notes, full: true })}
   </div>
   <input type="hidden" name="sib_ids" value="">
@@ -424,7 +425,7 @@ function bindFamily(f, selfId) {
       box.insertAdjacentHTML('beforeend', guardBlock({ ...o, id: null }, box.querySelectorAll('.g-block').length + 1)); }
     if (!E.family_ref.value) E.family_ref.value = fam.ref || familyCode(fam.main);
     if (E.lang && !E.lang.value && fam.main.lang) E.lang.value = fam.main.lang;
-    if (E.venue_id && !E.venue_id.value && fam.main.venue_id) E.venue_id.value = fam.main.venue_id;
+    if (fam.main.venue_id && !f.querySelector('[name=venue_ids]:checked')) { const cb = f.querySelector(`[name=venue_ids][value="${fam.main.venue_id}"]`); if (cb) cb.checked = true; }
     E.sib_ids.value = fam.all.map(x => x.id).join(',');
     note.innerHTML = `<div class="hint" style="margin-bottom:10px;border-color:var(--ok);background:var(--ok-soft,#ecfdf3)">${ic('users', 'sm')} Adik-beradik ditemui: <b>${fam.all.map(x => esc(x.full_name)).join(', ')}</b>. Maklumat penjaga dan kod keluarga <b>${esc(E.family_ref.value)}</b> diisi automatik${fam.account ? '; akaun ibu bapa yang sama akan dipautkan' : ''}. <button type="button" class="btn sm" id="famUndo" style="margin-left:6px">Bukan keluarga ini</button></div>`;
     note.querySelector('#famUndo').onclick = () => { E.sib_ids.value = ''; if (!fam.ref || E.family_ref.value === fam.ref || E.family_ref.value === familyCode(fam.main)) E.family_ref.value = ''; note.innerHTML = ''; };
@@ -459,7 +460,7 @@ async function saveStudent(d, sid) {
   const gs = names.map((n, i) => ({ id: ids[i] || null, relationship: rels[i], full_name: (n || '').trim(), phone: val(phones[i]), email: val(emails[i]) ? emails[i].trim().toLowerCase() : null, address: val(addrs[i]), ic_no: val(ics[i]) })).filter(g => g.full_name);
   if (!gs.length) { toast('Masukkan sekurang-kurangnya seorang penjaga', true); return false; }
   const progs = arr('prog_ids').filter(Boolean);
-  const patch = { full_name: d.full_name.trim(), birth_date: val(d.birth_date), gender: val(d.gender), venue_id: val(d.venue_id), status: d.status, family_ref: val(d.family_ref), fee_exempt: d.fee_exempt === '1', billing_note: val(d.billing_note), lang: val(d.lang), notes: val(d.notes), programme_id: progs[0] || null, guardian_name: gs[0].full_name, guardian_phone: gs[0].phone };
+  const patch = { full_name: d.full_name.trim(), birth_date: val(d.birth_date), gender: val(d.gender), venue_id: (() => { const vs = arr('venue_ids').filter(Boolean), cur = sid && byId('students', sid)?.venue_id; return vs.includes(cur) ? cur : vs[0] || null; })(), status: d.status, family_ref: val(d.family_ref), fee_exempt: d.fee_exempt === '1', billing_note: val(d.billing_note), lang: val(d.lang), notes: val(d.notes), programme_id: progs[0] || null, guardian_name: gs[0].full_name, guardian_phone: gs[0].phone };
   const sibs = String(d.sib_ids || '').split(',').filter(Boolean).map(x => byId('students', x)).filter(Boolean);
   const acct = sibs.find(x => x.guardian_id)?.guardian_id;
   if (acct && !(sid && byId('students', sid)?.guardian_id)) patch.guardian_id = acct;
@@ -470,7 +471,7 @@ async function saveStudent(d, sid) {
   const have = T('guardians').filter(g => g.student_id === id);
   for (const g of have) if (!gs.some(x => x.id === g.id)) await remove('guardians', g.id);
   for (const [i, g] of gs.entries()) { const row = { sort: i + 1, relationship: g.relationship, full_name: g.full_name, phone: g.phone, email: g.email, address: g.address, ic_no: g.ic_no }; if (g.id) await update('guardians', g.id, row); else await insert('guardians', { ...row, student_id: id }); }
-  const hp = T('student_programmes').filter(p => p.student_id === id), vens = [...new Set([patch.venue_id || null, ...arr('extra_venues').filter(Boolean)])];
+  const hp = T('student_programmes').filter(p => p.student_id === id), vens = [...new Set([patch.venue_id || null, ...arr('venue_ids').filter(Boolean)])];
   const want = progs.flatMap(pid => vens.map(v => [pid, v]));
   for (const p of hp) if (!want.some(([pid, v]) => pid === p.programme_id && v === (p.venue_id || null))) await remove('student_programmes', p.id);
   for (const [pid, v] of want) if (!hp.some(p => p.programme_id === pid && (p.venue_id || null) === v)) await insert('student_programmes', { student_id: id, programme_id: pid, venue_id: v });
@@ -504,7 +505,7 @@ VIEWS.pelajar = () => {
     </div>
     ${sel.size ? `<div class="bulkbar"><b>${sel.size} dipilih</b>
       <button class="btn sm" data-action="st-bulk" data-id="left">Tandakan Berhenti</button><button class="btn sm" data-action="st-bulk" data-id="archive">${ic('file', 'sm')} Arkib</button>
-      <button class="btn sm" data-action="st-bulk" data-id="active">Aktifkan semula</button>${st === 'archived' ? '<button class="btn sm" data-action="st-bulk" data-id="unarchive">Keluarkan dari arkib</button>' : ''}<button class="btn sm" data-action="st-sel-clear">Kosongkan pilihan</button></div>` : ''}
+      <button class="btn sm" data-action="st-bulk" data-id="active">Aktifkan semula</button>${st === 'archived' ? '<button class="btn sm" data-action="st-bulk" data-id="unarchive">Keluarkan dari arkib</button>' : ''}${sel.size > 1 ? `<button class="btn sm" data-action="st-merge-sel">${ic('users', 'sm')} Gabung ${sel.size} profil</button>` : ''}<button class="btn sm" data-action="st-sel-clear">Kosongkan pilihan</button></div>` : ''}
     <div class="table-wrap"><table>
       <thead><tr><th class="selcol" data-action="st-sel-all" data-id="${rows.map(r => r.id).join(',')}"><span class="cbx ${rows.length && rows.every(r => sel.has(r.id)) ? 'on' : ''}"></span></th><th>Pelajar</th><th>Program</th><th>Lokasi</th><th>Ibu bapa</th><th>Kehadiran</th><th>Pakej</th></tr></thead>
       <tbody>${rows.map(s => {

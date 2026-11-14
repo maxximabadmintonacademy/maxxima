@@ -1,6 +1,15 @@
 // Kamus Portal Admin: 'teks BM': ['English', '中文'].
 // Bahagian 1: menu, Dashboard, Senarai Pelajar, Jadual Kelas, Kehadiran, Tetapan. Halaman lain ditambah berperingkat.
 export const AD = {
+  // v31
+  "(tanda semua lokasi pelajar berlatih — boleh lebih daripada satu)": ["(tick every location the student trains at — more than one allowed)", "（勾选学员训练的所有地点 — 可多选）"],
+  "utama": ["main", "主要"],
+  "Utama": ["Main", "主要"],
+  "+ Tambah pelajar lain…": ["+ Add another student…", "+ 添加其他学员…"],
+  "Padankan": ["Match", "匹配"],
+  "Gabung profil": ["Merge profiles", "合并档案"],
+  "Saya telah menyemak perkara di atas dan mahu teruskan": ["I have reviewed the items above and want to continue", "我已核对以上内容并继续"],
+  "Tanda satu profil untuk padankan. Tanda beberapa profil jika semuanya orang yang sama — anda akan pilih satu profil utama dan yang lain digabungkan.": ["Tick one profile to match. Tick several if they are the same person — you will choose one main profile and the others are merged into it.", "勾选一个档案进行匹配。若多个档案是同一人，请全部勾选 — 您将选择一个主要档案，其余合并到其中。"],
   // v26
   "Check-in & Tugasan": ["Check-in & Assignments", "签到与任务"],
   "Check-in & Tugasan Coach": ["Coach Check-in & Assignments", "教练签到与任务"],

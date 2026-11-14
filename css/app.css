@@ -531,3 +531,30 @@ input.switch:checked{background:var(--ok,#16a34a)}input.switch:checked::after{le
 .im-table tr:not(.im-sub) td{border-bottom:0;padding-bottom:4px}.im-table tr.im-sub td{padding-top:0;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)}
 .im-table tr.im-sub td>div{display:inline;margin-left:8px}.im-table tr.im-sub details{display:inline-block;margin-left:8px}
 .im-table{min-width:0}.im-table select{max-width:150px}
+/* v31: borang pelajar — lokasi latihan (tanda banyak) */
+.venue-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;margin-top:8px}
+.vchk{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;background:var(--card)}
+.vchk input{width:auto;height:auto;margin:0}.vchk:has(input:checked){border-color:var(--brand);background:var(--brand-soft,#eef4ff)}
+.vchk em{font-style:normal;font-size:11px;color:var(--brand);font-weight:700}
+/* v31 gabung profil */
+.mq-cands{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.mq-c{display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px;background:var(--card)}
+.mq-c input{width:auto;height:auto;margin-top:2px}
+.mq-c em{font-style:normal;color:var(--muted);font-size:11.5px}
+.mq-c.on{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 8%,var(--card))}
+.mg-pick{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.mg-r{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.mg-r input{width:auto;height:auto;margin-top:3px}
+.mg-r span{flex:1;display:flex;flex-direction:column;gap:1px;font-size:13.5px}
+.mg-r em{font-style:normal;color:var(--muted);font-size:12px}
+.mg-r i{font-style:normal;font-size:11px;font-weight:700;color:var(--brand);visibility:hidden}
+.mg-r:has(input:checked){border-color:var(--brand);background:color-mix(in srgb,var(--brand) 7%,transparent)}
+.mg-r:has(input:checked) i{visibility:visible}
+.mg-review{margin-top:14px}
+.mg-head{padding:9px 12px;border-radius:9px;font-weight:600;font-size:13px;margin-bottom:8px}
+.mg-head.warn{background:color-mix(in srgb,var(--warn,#d97706) 14%,transparent);color:var(--warn,#b45309)}
+.mg-head.ok{background:color-mix(in srgb,var(--ok,#16a34a) 12%,transparent);color:var(--ok,#15803d)}
+.mg-o{border:1px solid var(--line-2);border-radius:9px;padding:9px 12px;margin-bottom:6px}
+.mg-n{font-weight:600;font-size:13.5px;margin-bottom:4px}.mg-n .muted{font-weight:400;font-size:12px}
+.mg-o ul{margin:0;padding-left:18px;font-size:12.5px;display:flex;flex-direction:column;gap:4px}
+.mg-list{color:var(--muted);margin-top:2px;max-height:120px;overflow:auto}
