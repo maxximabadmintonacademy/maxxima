@@ -28,7 +28,8 @@ async function settleLocal(invId) {
   if (S.mode === 'supabase') return refresh(['invoices', 'student_packages', 'credit_notes', 'payments']);
   const inv = byId('invoices', invId); if (!inv) return;
   const cr = creditOf(inv), pd = paidOf(inv), amt = Number(inv.amount);
-  if (inv.status === 'issued' && cr >= amt && pd === 0) { inv.status = 'void'; T('student_packages').filter(p => p.invoice_id === invId && p.status === 'pending').forEach(p => { p.status = 'cancelled'; }); }
+  if (inv.status === 'paid' && pd + cr < amt) { inv.status = 'issued'; inv.paid_on = null; }
+  if (['issued', 'paid'].includes(inv.status) && cr >= amt && pd === 0) { inv.status = 'void'; T('student_packages').filter(p => p.invoice_id === invId && p.status === 'pending').forEach(p => { p.status = 'cancelled'; }); }
   else if (inv.status === 'issued' && cr + pd >= amt) { inv.status = 'paid'; inv.paid_on = todayISO(); T('student_packages').filter(p => p.invoice_id === invId && p.status === 'pending').forEach(p => { p.status = 'active'; }); }
   else if (inv.status === 'void' && cr < amt) { inv.status = 'issued'; T('student_packages').filter(p => p.invoice_id === invId && p.status === 'cancelled').forEach(p => { p.status = 'pending'; }); }
 }
@@ -192,7 +193,7 @@ VIEWS.yuran = () => {
         return `<tr>
           <td><div class="cell-person">${avatar(studentName(i.student_id))}<div><b>${esc(invoiceStudentIds(i).length > 1 ? invoiceStudentIds(i).map(studentName).join(' & ') : studentName(i.student_id))}</b>${invoiceStudentIds(i).length > 1 ? ` <span class="badge b-info" title="${esc(invoiceStudentIds(i).map(studentName).join(', '))}">+${invoiceStudentIds(i).length - 1} adik-beradik</span>` : ''}<span>${esc(byId('students', i.student_id)?.guardian_name || '')}</span></div></div></td>
           <td><span class="num">${esc(i.number)}</span><div class="muted" style="font-size:12px">${esc(i.description || LABEL[i.kind])}</div></td>
-          <td class="num"><b>${RM(i.amount)}</b>${creditOf(i) > 0 ? `<div class="muted" style="font-size:12px">kredit -${RM(creditOf(i))}</div>` : ''}${i.status === 'issued' && (creditOf(i) > 0 || part > 0) && dueOf(i) > 0 ? `<div style="font-size:12px;font-weight:700;color:var(--bad)">baki ${RM(dueOf(i))}</div>` : ''}${refundOf(i) > 0 ? `<div><span class="badge b-warn" title="Bayaran + nota kredit melebihi amaun invois">pulangkan ${RM(refundOf(i))}</span></div>` : ''}${part > 0 && i.status === 'issued' ? `<div class="muted" style="font-size:12px">dibayar ${RM(part)}</div>` : ''}</td>
+          <td class="num"><b>${RM(i.amount)}</b>${creditOf(i) > 0 ? `<div class="muted" style="font-size:12px">kredit -${RM(creditOf(i))}</div>` : ''}${i.status === 'issued' && (creditOf(i) > 0 || part > 0) && dueOf(i) > 0 ? `<div style="font-size:12px;font-weight:700;color:var(--bad)">baki ${RM(dueOf(i))}</div>` : ''}${refundOf(i) > 0 ? `<div><button class="badge b-warn" style="border:0;cursor:pointer" data-action="inv-overpaid" data-id="${i.id}" title="Bayaran + nota kredit melebihi amaun invois — tekan untuk urus">lebihan ${RM(refundOf(i))} · urus ›</button></div>` : ''}${part > 0 && i.status === 'issued' ? `<div class="muted" style="font-size:12px">dibayar ${RM(part)}</div>` : ''}</td>
           <td class="num">${fmtShort(i.due_date)}</td>
           <td>${badge(st)}${hasPend ? '<div style="margin-top:2px"><span class="badge b-info">bayaran dihantar</span></div>' : ''}${i.status === 'paid' && i.paid_on ? `<div class="muted" style="font-size:12px;margin-top:2px">${fmtShort(i.paid_on)}</div>` : ''}</td>
           <td style="white-space:nowrap">${i.status === 'issued' && dueOf(i) > 0 ? `<button class="btn sm primary" data-action="inv-pay" data-id="${i.id}">Rekod Bayaran</button> <button class="btn sm" data-action="inv-remind" data-id="${i.id}" title="Peringatan WhatsApp">${ic('msg', 'sm')}</button>` : ''}<button class="btn sm" data-action="inv-edit" data-id="${i.id}" title="Edit invois">${ic('edit', 'sm')}</button> ${i.status === 'void' && !creditOf(i) ? `<button class="btn sm" data-action="inv-restore" data-id="${i.id}" title="Aktifkan semula">Aktifkan</button> ` : ''}${i.status !== 'void' ? ` <button class="btn sm" data-action="inv-print" data-id="${i.id}" title="Cetak / PDF invois">${ic('file', 'sm')} Invois</button> <button class="btn sm danger-o" data-action="inv-credit" data-id="${i.id}" title="Keluarkan nota kredit (invois tidak dipadam)">Nota Kredit</button>` : ''}${T('payments').some(p => p.invoice_id === i.id) ? `<button class="btn sm" data-action="pay-manage" data-id="${i.id}" title="Urus rekod bayaran">Bayaran</button> ` : ''}${receipts.map(p => `<button class="btn sm" data-action="receipt" data-id="${p.id}" title="Resit ${esc(p.receipt_no)}">${ic('file', 'sm')} Resit</button>`).join(' ')}</td></tr>`;
@@ -353,6 +354,25 @@ Object.assign(ACTIONS, {
   'cn-del': id => { const c = byId('credit_notes', id), iv = byId('invoices', c?.invoice_id);
     confirmModal({ title: 'Padam nota kredit?', message: `Nota kredit <b>${esc(c.number || '')}</b> (${RM(c.amount)}) untuk invois <b>${esc(iv?.number || '')}</b> akan dipadam dan baki invois dikira semula. Gunakan hanya jika nota kredit dikeluarkan secara salah.`, ok: 'Padam', danger: true,
       onOk: async () => { await remove('credit_notes', id); await settleLocal(c.invoice_id); toast('Nota kredit dipadam — invois dikira semula'); app.render(); } }); },
+  /** Lebihan bayaran selepas nota kredit: batalkan rekod bayaran ujian, rekod wang dipulangkan, atau biarkan. */
+  'inv-overpaid': id => {
+    const inv = byId('invoices', id), pays = T('payments').filter(p => p.invoice_id === id && p.status === 'confirmed'), paid = paidOf(inv), cr = creditOf(inv), over = refundOf(inv);
+    const full = over >= paid - 0.005, pk = T('student_packages').filter(p => p.invoice_id === id && ['active', 'pending'].includes(p.status));
+    openModal({ title: `Lebihan bayaran — ${esc(inv.number)}`, submit: 'Simpan', body: `
+      <div class="pw-review" style="margin-bottom:12px"><div><span>Invois</span><b>${RM(inv.amount)}</b><small>${esc(studentName(inv.student_id))}</small></div><div><span>Nota kredit</span><b>${RM(cr)}</b></div><div><span>Bayaran diterima</span><b>${RM(paid)}</b><small>${pays.map(p => esc(p.receipt_no || '') + ' · ' + fmtShort(p.paid_on)).join(', ')}</small></div><div><span>Lebihan</span><b style="color:var(--warn)">${RM(over)}</b></div></div>
+      ${full ? `<label class="check-row"><input type="radio" name="act" value="void" checked> <span><b>Bayaran ini juga ujian / salah rekod</b> — batalkan rekod bayaran & resit. Invois menjadi Dibatalkan.</span></label>
+        <label class="check-row"><input type="radio" name="act" value="refunded"> <span><b>Wang dipulangkan kepada ibu bapa</b> — rekod bayaran ditanda Dipulangkan. Invois menjadi Dibatalkan.</span></label>` : `<p class="hint">Lebihan ${RM(over)} kurang daripada jumlah bayaran — pulangkan secara manual dan catat sebabnya di bawah.</p>`}
+      <label class="check-row"><input type="radio" name="act" value="keep" ${full ? '' : 'checked'}> <span>Biarkan dahulu — kekal sebagai "lebihan"</span></label>
+      ${F('Sebab / nota', 'reason', { full: true, ph: 'cth. invois & bayaran ujian sistem', value: 'Invois ujian' })}
+      ${pk.length ? `<div class="pw-sub">Pakej daripada invois ini:</div>${pk.map(p => `<label class="check-row"><input type="checkbox" name="pk_${p.id}" checked> <span>Batalkan pakej <b>${esc(p.name)}</b> (${LABEL[p.status] || p.status}, ${Number(p.sessions_used || 0)}/${Number(p.sessions_total)} digunakan)</span></label>`).join('')}` : ''}`,
+      onSubmit: async d => {
+        if (d.act === 'keep') return;
+        for (const p of pays) await update('payments', p.id, { status: d.act, void_reason: val(d.reason), voided_at: new Date().toISOString() });
+        for (const p of pk) if (d['pk_' + p.id]) await update('student_packages', p.id, { status: 'cancelled' });
+        await settleLocal(id);
+        toast(d.act === 'void' ? 'Rekod bayaran dibatalkan — invois dibatalkan' : 'Bayaran ditanda Dipulangkan — invois dibatalkan'); app.render();
+      } });
+  },
   'inv-credit': id => {
     const inv = byId('invoices', id), room = Math.max(Number(inv.amount) - creditOf(inv), 0);
     if (room <= 0) return toast('Invois ini sudah dikreditkan sepenuhnya.', true);
@@ -369,7 +389,8 @@ Object.assign(ACTIONS, {
         await insert('credit_notes', { invoice_id: id, amount: amt, reason: d.reason, issued_on: d.issued_on, created_by: adminId() });
         await settleLocal(id);
         const st = invStatus(byId('invoices', id));
-        toast(st === 'void' ? 'Nota kredit dikeluarkan — invois dibatalkan (tiada baki)' : st === 'paid' ? 'Nota kredit dikeluarkan — invois dilunaskan' : `Nota kredit dikeluarkan — baki ${RM(dueOf(byId('invoices', id)))}`); app.render();
+        toast(refundOf(byId('invoices', id)) > 0 ? 'Nota kredit dikeluarkan — bayaran sudah diterima untuk invois ini, pilih tindakan' : st === 'void' ? 'Nota kredit dikeluarkan — invois dibatalkan (tiada baki)' : st === 'paid' ? 'Nota kredit dikeluarkan — invois dilunaskan' : `Nota kredit dikeluarkan — baki ${RM(dueOf(byId('invoices', id)))}`); app.render();
+        if (refundOf(byId('invoices', id)) > 0) setTimeout(() => ACTIONS['inv-overpaid'](id), 50);   // bayaran sudah diterima: tanya apa perlu dibuat
       },
     });
   },

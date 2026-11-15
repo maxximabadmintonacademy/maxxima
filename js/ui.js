@@ -91,7 +91,7 @@ const LABEL_MS = {
   // pelajar
   pending: 'Menunggu Semakan', awaiting_payment: 'Menunggu Bayaran', active: 'Aktif', paused: 'Digantung', left: 'Berhenti',
   // invois
-  issued: 'Belum Bayar', paid: 'Dibayar', void: 'Dibatalkan', overdue: 'Lewat',
+  issued: 'Belum Bayar', paid: 'Dibayar', void: 'Dibatalkan', refunded: 'Dipulangkan', overdue: 'Lewat',
   // kehadiran
   booked: 'Ditempah', present: 'Hadir', late: 'Lewat Hadir', absent: 'Tidak Hadir', excused: 'Dimaafkan', late_cancel: 'Batal Lewat',
   // sesi
@@ -115,7 +115,7 @@ const LABEL_EN = {
   new: 'New', contacted: 'Contacted', trial_scheduled: 'Trial Scheduled', trial_done: 'Trial Done', requested: 'Requested', enrolled: 'Enrolled', lost: 'Not Interested',
   scheduled: 'Scheduled', done: 'Done', no_show: 'No-show', cancelled: 'Cancelled',
   pending: 'Pending Review', awaiting_payment: 'Awaiting Payment', active: 'Active', paused: 'Paused', left: 'Left',
-  issued: 'Unpaid', paid: 'Paid', void: 'Cancelled', overdue: 'Overdue',
+  issued: 'Unpaid', paid: 'Paid', void: 'Cancelled', refunded: 'Refunded', overdue: 'Overdue',
   booked: 'Booked', present: 'Present', late: 'Late', absent: 'Absent', excused: 'Excused', late_cancel: 'Late Cancel',
   held: 'Completed', expired: 'Expired', fixed: 'Fixed Schedule', flexible: 'Flexible', package: 'Session Package',
   draft: 'Draft', open: 'Registration Open', closed: 'Registration Closed', ongoing: 'Ongoing', completed: 'Completed',
