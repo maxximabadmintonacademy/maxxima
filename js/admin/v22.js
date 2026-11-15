@@ -1,7 +1,7 @@
 // v22 (admin): Maklum balas ibu bapa, permintaan pakej (lanjut / sahkan tarikh tamat), link maklum balas trial.
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
-import { S, update, rpc } from '../data.js';
-import { ic, esc, F, UI, app, toast, openModal, pageHead, fmtShort, fmtDate, todayISO, addDays, avatar } from '../ui.js';
+import { S, update, remove, rpc } from '../data.js';
+import { ic, esc, F, UI, app, toast, openModal, confirmModal, pageHead, fmtShort, fmtDate, todayISO, addDays, avatar } from '../ui.js';
 import { T, byId, studentName, staffName, progName, venueName, EXTRA_TASKS } from './helpers.js';
 
 const stars = n => `<span style="color:#f5b301;letter-spacing:1px">${'★'.repeat(n)}</span><span style="color:#d1d5db">${'★'.repeat(5 - n)}</span>`;
@@ -21,11 +21,13 @@ VIEWS.maklumbalas = () => {
     <label class="field"><select data-on-change="fb-c"><option value="">Semua coach</option>${T('staff').filter(s => s.active).map(s => `<option value="${s.id}" ${co === s.id ? 'selected' : ''}>${esc(s.full_name)}</option>`).join('')}</select></label></div></div>
   <div class="card"><ul class="list">${L.map(f => `<li class="list-item" style="flex-wrap:wrap;${f.status === 'new' ? 'background:var(--accent-soft,#f4fbe6)' : ''}">${avatar(who(f))}<div class="li-main"><div class="li-title">${esc(who(f))} ${stars(f.rating)} <span class="badge b-muted">${{ session: 'Sesi', trial: 'Trial', general: 'Umum' }[f.kind]}</span></div>
     <div class="li-sub">${esc(sessLbl(f))}${f.coach_id ? ' · Coach ' + esc(staffName(f.coach_id)) : ''} · ${fmtShort((f.created_at || '').slice(0, 10))}</div>${f.comment ? `<div style="font-size:13.5px;margin-top:4px;white-space:pre-line">“${esc(f.comment)}”</div>` : ''}${f.admin_note ? `<div class="li-sub">Nota admin: ${esc(f.admin_note)}</div>` : ''}</div>
-    <div class="actions">${f.status === 'new' ? `<button class="btn sm" data-action="fb-read" data-id="${f.id}">Tanda dibaca</button>` : ''}<button class="btn sm" data-action="fb-note" data-id="${f.id}">Nota</button></div></li>`).join('') || '<li class="empty">Belum ada maklum balas. Ibu bapa boleh beri bintang selepas sesi di portal; untuk trial, hantar "Link maklum balas" dari Leads.</li>'}</ul></div>`;
+    <div class="actions">${f.status === 'new' ? `<button class="btn sm" data-action="fb-read" data-id="${f.id}">Tanda dibaca</button>` : ''}<button class="btn sm" data-action="fb-note" data-id="${f.id}">Nota</button><button class="btn sm danger-o" data-action="fb-del" data-id="${f.id}">${ic('trash', 'sm')} Padam</button></div></li>`).join('') || '<li class="empty">Belum ada maklum balas. Ibu bapa boleh beri bintang selepas sesi di portal; untuk trial, hantar "Link maklum balas" dari Leads.</li>'}</ul></div>`;
 };
 INPUTS['fb-k'] = v => { UI.fbK = v; app.render(); };
 INPUTS['fb-c'] = v => { UI.fbC = v; app.render(); };
 Object.assign(ACTIONS, {
+  'fb-del': id => { const f = byId('feedback', id); confirmModal({ title: 'Padam maklum balas?', message: `Maklum balas ${'★'.repeat(f?.rating || 0)} untuk <b>${esc(who(f))}</b> akan dipadam terus — tidak lagi dilihat oleh admin, coach atau ibu bapa, dan tidak dikira dalam purata. Sesuai untuk data ujian.`, ok: 'Padam', danger: true,
+    onOk: async () => { await remove('feedback', id); toast('Maklum balas dipadam'); app.render(); } }); },
   'fb-read': async id => { await update('feedback', id, { status: 'read' }); app.render(); },
   'fb-note': id => { const f = byId('feedback', id); openModal({ title: 'Nota dalaman', body: F('Nota (tidak dilihat ibu bapa)', 'n', { type: 'textarea', value: f.admin_note || '', full: true }), onSubmit: async d => { await update('feedback', id, { admin_note: d.n || null, status: 'read' }); app.render(); } }); },
   'lead-fb': id => {

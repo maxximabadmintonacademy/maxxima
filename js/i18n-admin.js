@@ -1,6 +1,7 @@
 // Kamus Portal Admin: 'teks BM': ['English', '中文'].
 // Bahagian 1: menu, Dashboard, Senarai Pelajar, Jadual Kelas, Kehadiran, Tetapan. Halaman lain ditambah berperingkat.
 export const AD = {
+  "Padam maklum balas?": ["Delete feedback?", "删除反馈？"],
   // v31
   "(tanda semua lokasi pelajar berlatih — boleh lebih daripada satu)": ["(tick every location the student trains at — more than one allowed)", "（勾选学员训练的所有地点 — 可多选）"],
   "utama": ["main", "主要"],

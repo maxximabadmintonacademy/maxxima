@@ -124,7 +124,7 @@ export function openSession(sid) {
     return `<li class="list-item" style="padding:8px 4px;flex-wrap:wrap">${photoAvatar(st.full_name, st.photo_path, { priv: true })}<div class="li-main"><div class="li-title">${esc(st.full_name)} ${a?.status === 'booked' ? '<span class="badge b-info">ditempah</span>' : ''}${st.birth_date ? ` <span class="muted" style="font-size:11.5px">${ageOn(st.birth_date, s.session_date)} thn</span>` : ''}</div>${st.medical_notes ? `<div class="li-sub" style="color:var(--bad)">⚕ ${esc(st.medical_notes)}</div>` : ''}${pkgLine(st.id, a)}</div>
       ${personal && !isCoach() ? `<input class="date-input" style="width:70px" type="number" step="0.25" min="0" title="Jam" placeholder="${sHours(s, c)}" value="${a?.hours ?? ''}" data-on-change="sp-hours" data-key="${s.id}|${st.id}">` : ''}
       ${multi && !isCoach() ? `<select class="att-select" title="Kategori" data-on-change="sp-cat" data-key="${s.id}|${st.id}">${[...new Set([...(c.categories || []), ...ageGroups().map(g => g.code)])].map(k => `<option ${catFor(st, s, c) === k ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select>` : ''}
-      <select class="att-select ${a ? 'a-' + a.status : ''}" data-on-change="sp-att" data-key="${s.id}|${st.id}"><option value="">${a?.status === 'booked' ? 'ditempah — belum direkod' : '— belum direkod —'}</option>${ATT_OPTS.map(o => `<option value="${o}" ${a?.status === o ? 'selected' : ''}>${LABEL[o]}</option>`).join('')}</select></li>`;
+      <select class="att-select ${a ? 'a-' + a.status : ''}" data-on-change="sp-att" data-key="${s.id}|${st.id}"><option value="">${a?.status === 'booked' ? 'ditempah — belum direkod' : '— belum direkod —'}</option>${ATT_OPTS.map(o => `<option value="${o}" ${a?.status === o ? 'selected' : ''}>${LABEL[o]}</option>`).join('')}</select>${isCoach() ? '' : `<button type="button" class="sp-x" data-action="sp-rm" data-id="${s.id}|${st.id}" title="Keluarkan ${esc(st.full_name)} dari sesi">✕</button>`}</li>`;
   };
   const assign = (k, g) => isCoach() ? `<span class="muted" style="font-size:12.5px">${esc(staffName(g?.coach_id))} · ${esc(g?.court || '—')}</span>` : `
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
@@ -276,6 +276,30 @@ Object.assign(ACTIONS, {
     openPlanEditor({ title: `${progName(c.programme_id)} — ${fmtDate(s.session_date)}`, programme_id: c.programme_id, venue_id: c.venue_id, plan_date: s.session_date, start_time: t1, end_time: t2 }, { coachId: myStaffId() || sCoach(s, c), onSaved: async () => {
       const p = T('lesson_plans').filter(x => !x.session_id && x.plan_date === s.session_date).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0]; if (p) await update('lesson_plans', p.id, { session_id: sid, class_id: c.id }); setTimeout(reopen, 0); } }); },
   'sp-held': async sid => { await update('class_sessions', sid, { status: 'held' }); toast('Sesi ditandakan selesai'); reopen(); },
+  'sp-rm': key => {
+    const [sid, stid] = key.split('|'), s = byId('class_sessions', sid), c = byId('classes', s.class_id), st = byId('students', stid);
+    const a = T('attendance').find(x => x.session_id === sid && x.student_id === stid), enr = enrolledIn(c.id).find(e => e.student_id === stid);
+    if (a && ['present', 'late'].includes(a.status)) return toast(`${st.full_name} sudah direkod ${LABEL[a.status]} — tukar status dahulu jika salah.`, true);
+    const later = T('class_sessions').filter(x => x.class_id === c.id && x.session_date > s.session_date && x.status !== 'cancelled').length;
+    openModal({ title: `Keluarkan ${esc(st.full_name)}`, submit: 'Keluarkan', body: `<p style="font-size:13.5px;margin-top:0">${fmtDate(s.session_date)} · ${esc(progName(c.programme_id))} · ${esc(venueName(c.venue_id))}</p>
+      ${enr ? `<label class="check-row"><input type="radio" name="scope" value="all" checked> <span><b>Sesi ini & semua sesi akan datang</b> — ${esc(st.full_name)} bukan dalam kelas ini${later ? ` (${later} sesi lagi)` : ''}. Rekod kehadiran lama kekal.</span></label>
+        <label class="check-row"><input type="radio" name="scope" value="one"> <span><b>Sesi ini sahaja</b> — ${isPersonal(c) ? 'sesi ini diasingkan tanpa ' + esc(st.full_name) : 'ditanda tidak hadir (cuti) untuk tarikh ini'}</span></label>`
+        : `<p style="font-size:13.5px">${esc(st.full_name)} hanya ditempah untuk sesi ini — rekod tempahan akan dipadam.</p>`}`,
+      onSubmit: async d => {
+        if (enr && d.scope === 'all') {
+          await remove('class_enrolments', enr.id);
+          for (const x of T('attendance').filter(x => x.student_id === stid && x.status === 'booked' && T('class_sessions').some(y => y.id === x.session_id && y.class_id === c.id && y.session_date >= s.session_date))) await remove('attendance', x.id);
+        } else if (enr && isPersonal(c)) {
+          // asingkan sesi ini ke salinan kelas tanpa pelajar ini
+          const { id, created_at, ...rest } = c, nc = await insert('classes', { ...rest, active: false });
+          for (const e of enrolledIn(c.id).filter(e => e.student_id !== stid)) await insert('class_enrolments', { class_id: nc.id, student_id: e.student_id });
+          await update('class_sessions', sid, { class_id: nc.id });
+          if (a) await remove('attendance', a.id);
+        } else if (enr) await setAtt(sid, stid, { status: 'excused', marked_by: markedBy() });
+        else if (a) await remove('attendance', a.id);
+        toast(`${st.full_name} dikeluarkan`); setTimeout(reopen, 0);
+      } });
+  },
   'sp-del': async sid => {
     if (T('attendance').some(a => a.session_id === sid && a.status !== 'booked')) return toast('Sesi ada rekod kehadiran — batalkan sahaja, jangan padam.', true);
     await remove('class_sessions', sid); openSession.cur = null; document.querySelector('[data-action=close-modal]')?.click(); toast('Sesi dipadam'); app.render();
