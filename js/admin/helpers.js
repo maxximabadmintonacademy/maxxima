@@ -28,9 +28,17 @@ export const unallocated = () => T('attendance').filter(a => !a.student_package_
 export const lowPackages = () => T('student_packages').filter(p => p.status === 'active' && pkgRemaining(p) <= 1);
 export const expiringPackages = (days = 7) => T('student_packages').filter(p => p.status === 'active' && p.expires_on && daysLeft(p) <= days);
 
-export const invStatus = inv => (inv.status === 'issued' && inv.due_date < todayISO() ? 'overdue' : inv.status);
 export const creditOf = inv => sum(T('credit_notes').filter(c => c.invoice_id === inv.id), c => c.amount);
 export const paidOf = inv => sum(T('payments').filter(p => p.invoice_id === inv.id && p.status === 'confirmed'), p => p.amount);
+/** Baki sebenar = amaun − nota kredit − bayaran disahkan. */
+export const dueOf = inv => Math.max(Math.round((Number(inv.amount) - creditOf(inv) - paidOf(inv)) * 100) / 100, 0);
+/** Lebihan bayaran yang perlu dipulangkan (bayaran + kredit melebihi amaun). */
+export const refundOf = inv => Math.max(Math.round((paidOf(inv) + creditOf(inv) - Number(inv.amount)) * 100) / 100, 0);
+/** Status paparan: invois "issued" yang bakinya 0 (dilunaskan oleh kredit/bayaran) dianggap Dibayar / Dibatalkan walaupun pelayan belum dikemas kini. */
+export const invStatus = inv => {
+  if (inv.status === 'issued' && Number(inv.amount) > 0 && dueOf(inv) <= 0) return paidOf(inv) > 0 ? 'paid' : 'void';
+  return inv.status === 'issued' && inv.due_date < todayISO() ? 'overdue' : inv.status;
+};
 
 /** Kadar kehadiran (hadir+lewat hadir) / (hadir+lewat+tidak hadir+batal lewat); dimaafkan tidak dikira. */
 export function attRate(studentId, days = 60) {

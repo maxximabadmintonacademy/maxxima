@@ -5,7 +5,7 @@ import { S, insert, update, remove, refresh } from '../data.js';
 import { adjHint } from './ops2.js';
 const watchAdj = f => { let last = null; const up = () => { const v = f.elements.student_id?.value || ''; if (v !== last) { last = v; const b = f.querySelector('#adjBox'); if (b) b.innerHTML = v ? adjHint(v) : ''; } }; ['change', 'click', 'input'].forEach(ev => f.addEventListener(ev, () => setTimeout(up, 30))); };
 import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, todayISO, addDays, monthKey, monthLabel, LABEL, waLink, $ } from '../ui.js';
-import { T, byId, venueName, progName, studentName, invStatus, paidOf, creditOf, billing, academy, pkgRemaining, studentPackages, catalogFor, pendingPayments, unallocated, daysLeft, lowPackages, expiringPackages, enrolledIn } from './helpers.js';
+import { T, byId, venueName, progName, studentName, invStatus, paidOf, creditOf, dueOf, refundOf, billing, academy, pkgRemaining, studentPackages, catalogFor, pendingPayments, unallocated, daysLeft, lowPackages, expiringPackages, enrolledIn } from './helpers.js';
 import { openReceipt } from '../receipt.js';
 import { openInvoice, openCreditNote } from '../invoice.js';
 import { itemsEditor, bindItems, readItems, saveItems, itemsOf, legacyItems, itemsTotal, lineAmount, recalcItems, setKids, getKids, itemRow } from './invoice-items.js';
@@ -23,6 +23,15 @@ function remindText(inv) {
    Pakej aktif secara automatik apabila bayaran disahkan.
    ===================================================================== */
 const MODE_OPTS = [['parent', 'Ibu bapa pilih di portal (tetap / fleksibel)'], ['fixed', 'Jadual tetap (didaftar ke kelas)'], ['flexible', 'Fleksibel (ibu bapa tempah sendiri)']];
+/** Selepas nota kredit / bayaran: ambil status terkini dari pelayan (pencetus settle_invoice), atau tiru dalam mod demo. */
+async function settleLocal(invId) {
+  if (S.mode === 'supabase') return refresh(['invoices', 'student_packages', 'credit_notes', 'payments']);
+  const inv = byId('invoices', invId); if (!inv) return;
+  const cr = creditOf(inv), pd = paidOf(inv), amt = Number(inv.amount);
+  if (inv.status === 'issued' && cr >= amt && pd === 0) { inv.status = 'void'; T('student_packages').filter(p => p.invoice_id === invId && p.status === 'pending').forEach(p => { p.status = 'cancelled'; }); }
+  else if (inv.status === 'issued' && cr + pd >= amt) { inv.status = 'paid'; inv.paid_on = todayISO(); T('student_packages').filter(p => p.invoice_id === invId && p.status === 'pending').forEach(p => { p.status = 'active'; }); }
+  else if (inv.status === 'void' && cr < amt) { inv.status = 'issued'; T('student_packages').filter(p => p.invoice_id === invId && p.status === 'cancelled').forEach(p => { p.status = 'pending'; }); }
+}
 export async function sellPackage({ studentId, pkg, price, mode, due, reg, jersey, discount, pending }) {
   const modeSet = mode === 'parent' ? null : new Date().toISOString(); if (mode === 'parent') mode = pkg.schedule_mode || 'flexible';
   const disc = Number(discount) || 0, items = [{ kind: 'package', description: pkg.name, unit: 'unit', qty: 1, unit_price: Number(price), discount: 0 }];
@@ -167,7 +176,7 @@ VIEWS.yuran = () => {
   <div class="grid g-3 mb">
     <div class="card kpi"><div class="kpi-top"><span class="kpi-label">Jumlah Invois</span><span class="kpi-ico t-info">${ic('wallet')}</span></div><div class="kpi-val">${RM(total)}</div><div class="kpi-foot"><b>${live.length}</b> invois · ${mk ? monthLabel(mk) : 'semua bulan'}</div></div>
     <div class="card kpi"><div class="kpi-top"><span class="kpi-label">Telah Dikutip</span><span class="kpi-ico t-ok">${ic('trend')}</span></div><div class="kpi-val" style="color:var(--ok)">${RM(paid)}</div><div class="kpi-foot"><b>${total ? Math.round(paid / total * 100) : 0}%</b> daripada jumlah</div></div>
-    <div class="card kpi"><div class="kpi-top"><span class="kpi-label">Baki Tertunggak</span><span class="kpi-ico t-bad">${ic('alert')}</span></div><div class="kpi-val" style="color:var(--bad)">${RM(total - paid)}</div><div class="kpi-foot"><b>${overdue.length}</b> melepasi tarikh akhir</div></div>
+    <div class="card kpi"><div class="kpi-top"><span class="kpi-label">Baki Tertunggak</span><span class="kpi-ico t-bad">${ic('alert')}</span></div><div class="kpi-val" style="color:var(--bad)">${RM(sum(live.filter(i => i.status === 'issued'), dueOf))}</div><div class="kpi-foot"><b>${overdue.length}</b> melepasi tarikh akhir</div></div>
   </div>
   <div class="card">
     <div class="toolbar">
@@ -183,15 +192,15 @@ VIEWS.yuran = () => {
         return `<tr>
           <td><div class="cell-person">${avatar(studentName(i.student_id))}<div><b>${esc(invoiceStudentIds(i).length > 1 ? invoiceStudentIds(i).map(studentName).join(' & ') : studentName(i.student_id))}</b>${invoiceStudentIds(i).length > 1 ? ` <span class="badge b-info" title="${esc(invoiceStudentIds(i).map(studentName).join(', '))}">+${invoiceStudentIds(i).length - 1} adik-beradik</span>` : ''}<span>${esc(byId('students', i.student_id)?.guardian_name || '')}</span></div></div></td>
           <td><span class="num">${esc(i.number)}</span><div class="muted" style="font-size:12px">${esc(i.description || LABEL[i.kind])}</div></td>
-          <td class="num"><b>${RM(i.amount)}</b>${creditOf(i) > 0 ? `<div class="muted" style="font-size:12px">kredit -${RM(creditOf(i))}</div>` : ''}${part > 0 && i.status === 'issued' ? `<div class="muted" style="font-size:12px">dibayar ${RM(part)}</div>` : ''}</td>
+          <td class="num"><b>${RM(i.amount)}</b>${creditOf(i) > 0 ? `<div class="muted" style="font-size:12px">kredit -${RM(creditOf(i))}</div>` : ''}${i.status === 'issued' && (creditOf(i) > 0 || part > 0) && dueOf(i) > 0 ? `<div style="font-size:12px;font-weight:700;color:var(--bad)">baki ${RM(dueOf(i))}</div>` : ''}${refundOf(i) > 0 ? `<div><span class="badge b-warn" title="Bayaran + nota kredit melebihi amaun invois">pulangkan ${RM(refundOf(i))}</span></div>` : ''}${part > 0 && i.status === 'issued' ? `<div class="muted" style="font-size:12px">dibayar ${RM(part)}</div>` : ''}</td>
           <td class="num">${fmtShort(i.due_date)}</td>
           <td>${badge(st)}${hasPend ? '<div style="margin-top:2px"><span class="badge b-info">bayaran dihantar</span></div>' : ''}${i.status === 'paid' && i.paid_on ? `<div class="muted" style="font-size:12px;margin-top:2px">${fmtShort(i.paid_on)}</div>` : ''}</td>
-          <td style="white-space:nowrap">${i.status === 'issued' ? `<button class="btn sm primary" data-action="inv-pay" data-id="${i.id}">Rekod Bayaran</button> <button class="btn sm" data-action="inv-remind" data-id="${i.id}" title="Peringatan WhatsApp">${ic('msg', 'sm')}</button>` : ''}<button class="btn sm" data-action="inv-edit" data-id="${i.id}" title="Edit invois">${ic('edit', 'sm')}</button> ${i.status === 'void' && !creditOf(i) ? `<button class="btn sm" data-action="inv-restore" data-id="${i.id}" title="Aktifkan semula">Aktifkan</button> ` : ''}${i.status !== 'void' ? ` <button class="btn sm" data-action="inv-print" data-id="${i.id}" title="Cetak / PDF invois">${ic('file', 'sm')} Invois</button> <button class="btn sm danger-o" data-action="inv-credit" data-id="${i.id}" title="Keluarkan nota kredit (invois tidak dipadam)">Nota Kredit</button>` : ''}${T('payments').some(p => p.invoice_id === i.id) ? `<button class="btn sm" data-action="pay-manage" data-id="${i.id}" title="Urus rekod bayaran">Bayaran</button> ` : ''}${receipts.map(p => `<button class="btn sm" data-action="receipt" data-id="${p.id}" title="Resit ${esc(p.receipt_no)}">${ic('file', 'sm')} Resit</button>`).join(' ')}</td></tr>`;
+          <td style="white-space:nowrap">${i.status === 'issued' && dueOf(i) > 0 ? `<button class="btn sm primary" data-action="inv-pay" data-id="${i.id}">Rekod Bayaran</button> <button class="btn sm" data-action="inv-remind" data-id="${i.id}" title="Peringatan WhatsApp">${ic('msg', 'sm')}</button>` : ''}<button class="btn sm" data-action="inv-edit" data-id="${i.id}" title="Edit invois">${ic('edit', 'sm')}</button> ${i.status === 'void' && !creditOf(i) ? `<button class="btn sm" data-action="inv-restore" data-id="${i.id}" title="Aktifkan semula">Aktifkan</button> ` : ''}${i.status !== 'void' ? ` <button class="btn sm" data-action="inv-print" data-id="${i.id}" title="Cetak / PDF invois">${ic('file', 'sm')} Invois</button> <button class="btn sm danger-o" data-action="inv-credit" data-id="${i.id}" title="Keluarkan nota kredit (invois tidak dipadam)">Nota Kredit</button>` : ''}${T('payments').some(p => p.invoice_id === i.id) ? `<button class="btn sm" data-action="pay-manage" data-id="${i.id}" title="Urus rekod bayaran">Bayaran</button> ` : ''}${receipts.map(p => `<button class="btn sm" data-action="receipt" data-id="${p.id}" title="Resit ${esc(p.receipt_no)}">${ic('file', 'sm')} Resit</button>`).join(' ')}</td></tr>`;
       }).join('') || `<tr><td colspan="6" class="empty">Tiada invois${mk ? ' untuk ' + monthLabel(mk) : ''}. Invois dikeluarkan melalui <b>Jual Pakej</b>, atau automatik apabila baki pakej tinggal 1 sesi.</td></tr>`}</tbody>
     </table></div>
   </div>
   ${T('credit_notes').length ? `<div class="card mt"><div class="card-head"><div><h3>Nota Kredit</h3><div class="sub">Invois asal kekal dalam sistem dan boleh dicari menggunakan nombornya.</div></div><span class="badge b-muted">${T('credit_notes').length}</span></div>
-    <div class="table-wrap"><table><thead><tr><th>No. nota kredit</th><th>Pelajar</th><th>Invois</th><th>Amaun</th><th>Sebab</th><th></th></tr></thead><tbody>${T('credit_notes').slice().sort((a, b) => (b.issued_on || '').localeCompare(a.issued_on || '') || b.number.localeCompare(a.number)).filter(c => !q || (c.number + ' ' + (byId('invoices', c.invoice_id)?.number || '') + ' ' + studentName(byId('invoices', c.invoice_id)?.student_id)).toLowerCase().includes(q)).map(c => { const iv = byId('invoices', c.invoice_id); return `<tr><td><span class="num">${esc(c.number)}</span><div class="muted" style="font-size:12px">${fmtDate(c.issued_on)}</div></td><td>${esc(studentName(iv?.student_id))}</td><td class="num">${esc(iv?.number || '')}</td><td class="num"><b>-${RM(c.amount)}</b></td><td class="muted">${esc(c.reason || '')}</td><td><button class="btn sm" data-action="cn-print" data-id="${c.id}">${ic('file', 'sm')} Cetak</button></td></tr>`; }).join('')}</tbody></table></div></div>` : ''}`;
+    <div class="table-wrap"><table><thead><tr><th>No. nota kredit</th><th>Pelajar</th><th>Invois</th><th>Amaun</th><th>Sebab</th><th></th></tr></thead><tbody>${T('credit_notes').slice().sort((a, b) => (b.issued_on || '').localeCompare(a.issued_on || '') || b.number.localeCompare(a.number)).filter(c => !q || (c.number + ' ' + (byId('invoices', c.invoice_id)?.number || '') + ' ' + studentName(byId('invoices', c.invoice_id)?.student_id)).toLowerCase().includes(q)).map(c => { const iv = byId('invoices', c.invoice_id); return `<tr><td><span class="num">${esc(c.number)}</span><div class="muted" style="font-size:12px">${fmtDate(c.issued_on)}</div></td><td>${esc(studentName(iv?.student_id))}</td><td class="num">${esc(iv?.number || '')}</td><td class="num"><b>-${RM(c.amount)}</b></td><td class="muted">${esc(c.reason || '')}</td><td><button class="btn sm" data-action="cn-print" data-id="${c.id}">${ic('file', 'sm')} Cetak</button> <button class="btn sm danger-o" data-action="cn-del" data-id="${c.id}" title="Padam nota kredit yang dikeluarkan secara salah">${ic('trash', 'sm')}</button></td></tr>`; }).join('')}</tbody></table></div></div>` : ''}`;
 };
 
 Object.assign(INPUTS, {
@@ -341,6 +350,9 @@ Object.assign(ACTIONS, {
       } });
   },
   'cn-print': id => openCreditNote(id),
+  'cn-del': id => { const c = byId('credit_notes', id), iv = byId('invoices', c?.invoice_id);
+    confirmModal({ title: 'Padam nota kredit?', message: `Nota kredit <b>${esc(c.number || '')}</b> (${RM(c.amount)}) untuk invois <b>${esc(iv?.number || '')}</b> akan dipadam dan baki invois dikira semula. Gunakan hanya jika nota kredit dikeluarkan secara salah.`, ok: 'Padam', danger: true,
+      onOk: async () => { await remove('credit_notes', id); await settleLocal(c.invoice_id); toast('Nota kredit dipadam — invois dikira semula'); app.render(); } }); },
   'inv-credit': id => {
     const inv = byId('invoices', id), room = Math.max(Number(inv.amount) - creditOf(inv), 0);
     if (room <= 0) return toast('Invois ini sudah dikreditkan sepenuhnya.', true);
@@ -348,14 +360,16 @@ Object.assign(ACTIONS, {
       title: `Nota Kredit — ${esc(inv.number)}`, submit: 'Keluarkan Nota Kredit',
       body: `<p class="muted" style="margin-bottom:12px">${esc(studentName(inv.student_id))} · ${esc(inv.description?.split('\n')[0] || LABEL[inv.kind])} · invois ${RM(inv.amount)}${paidOf(inv) > 0 ? ` · telah dibayar ${RM(paidOf(inv))}` : ''}</p>
       <div class="form-grid">
-        ${F('Amaun kredit (RM)', 'amount', { type: 'number', step: '0.01', min: 0.01, max: room, value: room, req: true })}
+        ${F('Amaun kredit (RM)', 'amount', { type: 'number', step: '0.01', min: 0.01, max: room, value: dueOf(inv) > 0 ? dueOf(inv) : room, req: true })}
         ${F('Tarikh', 'issued_on', { type: 'date', value: todayISO(), req: true })}
         ${F('Sebab', 'reason', { full: true, req: true, ph: 'cth. Berhenti mulai bulan depan / invois salah / diskaun' })}
       </div><p class="muted" style="margin-top:10px;font-size:12.5px">Invois <b>tidak dipadam</b>: nombornya kekal untuk carian dan audit. Jika dikreditkan penuh dan belum dibayar, invois ditandakan Dibatalkan.${paidOf(inv) > 0 ? ' Bayaran yang sudah diterima tidak dipulangkan secara automatik; uruskan bayaran balik secara berasingan.' : ''}</p>`,
       onSubmit: async d => {
         const amt = Number(d.amount); if (!(amt > 0) || amt > room + 0.001) throw new Error(`Amaun mesti antara RM0.01 dan ${RM(room)}.`);
         await insert('credit_notes', { invoice_id: id, amount: amt, reason: d.reason, issued_on: d.issued_on, created_by: adminId() });
-        toast('Nota kredit dikeluarkan'); app.render();
+        await settleLocal(id);
+        const st = invStatus(byId('invoices', id));
+        toast(st === 'void' ? 'Nota kredit dikeluarkan — invois dibatalkan (tiada baki)' : st === 'paid' ? 'Nota kredit dikeluarkan — invois dilunaskan' : `Nota kredit dikeluarkan — baki ${RM(dueOf(byId('invoices', id)))}`); app.render();
       },
     });
   },

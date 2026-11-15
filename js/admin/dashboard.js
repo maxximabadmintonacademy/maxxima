@@ -1,7 +1,7 @@
 import { VIEWS, ACTIONS } from '../registry.js';
 import { S } from '../data.js';
 import { ic, esc, RM, sum, badge, avatar, DAYS, MONTHS, hm, todayISO, addDays, monthKey, monthLabel, fmtShort, pageHead } from '../ui.js';
-import { creditOf, T, byId, venueName, progName, staffName, invStatus, tasks, studentName, progColor, enrolledIn, lowPackages, pkgRemaining, expiringPackages, pendingPayments } from './helpers.js';
+import { creditOf, dueOf, T, byId, venueName, progName, staffName, invStatus, tasks, studentName, progColor, enrolledIn, lowPackages, pkgRemaining, expiringPackages, pendingPayments } from './helpers.js';
 
 VIEWS.dashboard = () => {
   const now = new Date(), h = now.getHours(), today = todayISO(), mk = monthKey(today);
@@ -17,7 +17,7 @@ VIEWS.dashboard = () => {
   const monthInv = invs.filter(i => monthKey(i.issued_on) === mk);
   const total = sum(monthInv, i => i.amount), paid = sum(monthInv.filter(i => i.status === 'paid'), i => i.amount);
   const pct = total ? Math.round(paid / total * 100) : 0;
-  const outstanding = invs.filter(i => i.status === 'issued');
+  const outstanding = invs.filter(i => i.status === 'issued' && dueOf(i) > 0);
   const overdue = outstanding.filter(i => invStatus(i) === 'overdue');
 
   // Kelas hari ini
@@ -61,7 +61,7 @@ VIEWS.dashboard = () => {
     </a>
     <a href="#yuran" class="card kpi">
       <div class="kpi-top"><span class="kpi-label">Yuran Tertunggak</span><span class="kpi-ico t-bad">${ic('alert')}</span></div>
-      <div class="kpi-val">${RM(sum(outstanding, i => Number(i.amount) - creditOf(i)))}</div>
+      <div class="kpi-val">${RM(sum(outstanding, dueOf))}</div>
       <div class="kpi-foot"><b>${outstanding.length}</b> invois · <b style="color:var(--bad)">${overdue.length}</b> lewat${pendingPayments().length ? ` · <b style="color:var(--warn)">${pendingPayments().length}</b> menunggu sahkan` : ''}</div>
     </a>
   </div>
