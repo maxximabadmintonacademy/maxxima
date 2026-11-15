@@ -1,7 +1,7 @@
 /* Wizard Sesi Personal: 1) Kelas  2) Jadual  3) Pelajar & pakej  4) Semak & simpan */
 import { ACTIONS, INPUTS } from '../registry.js';
 import { S, insert } from '../data.js';
-import { esc, val, app, toast, openModal, closeModal, hm, todayISO, addDays, parseISO, fmtDate, fmtShort, DAYS, LABEL } from '../ui.js';
+import { esc, val, UI, app, toast, openModal, closeModal, hm, todayISO, addDays, parseISO, fmtDate, fmtShort, DAYS, LABEL } from '../ui.js';
 import { T, byId, studentName, progName, venueName, staffName, livePackages } from './helpers.js';
 import { calItems, langWarn } from './sessions.js';
 import { sellPackage, dueDefault } from './finance.js';
@@ -65,10 +65,10 @@ function step2() {
     <div class="pw-sum">${L.length} sesi${L.length ? ` · ${fmtShort(L[0].date)} – ${fmtShort(L[L.length - 1].date)}` : ''}${cl.length ? ` · <span style="color:var(--warn)">⚠ ${cl.length} bertindih dengan jadual coach</span>` : ''}</div>`;
 }
 function pkgOptions(sid) {
-  const live = livePackages(sid), tpl = T('packages').filter(p => p.active !== false && (!W.programme_id || p.programme_id === W.programme_id));
+  const live = livePackages(sid).slice().sort((a, b) => (b.programme_id === W.programme_id) - (a.programme_id === W.programme_id)), tpl = T('packages').filter(p => p.active !== false && (!W.programme_id || p.programme_id === W.programme_id));
   return `<optgroup label="Pakej sedia ada">${live.length ? live.map(p => opt(p.id, `${p.name} · baki ${pkgRem(p)}/${Number(p.sessions_total)}${p.status === 'pending' ? ' · belum bayar' : ''}`, W.pkg[sid])).join('') : '<option disabled>— tiada pakej aktif —</option>'}</optgroup>
     ${tpl.length ? `<optgroup label="Jual pakej baharu (invois dikeluarkan)">${tpl.map(p => opt('new:' + p.id, `${p.name} · RM${Number(p.price || 0)}`, W.pkg[sid])).join('')}</optgroup>` : ''}
-    <optgroup label="Tanpa pakej">${opt('monthly', 'Bil bulanan ikut sesi', W.pkg[sid])}${opt('walkin', 'Walk-in (bayar setiap sesi)', W.pkg[sid])}</optgroup>`;
+    <optgroup label="Tanpa pakej">${byId('students', sid)?.fee_exempt ? opt('sponsor', 'Tajaan — coach percuma, bil court sahaja', W.pkg[sid]) : ''}${opt('monthly', 'Bil bulanan ikut sesi', W.pkg[sid])}${opt('walkin', 'Walk-in (bayar setiap sesi)', W.pkg[sid])}</optgroup>`;
 }
 function step3() {
   const q = W.q.trim().toLowerCase(), full = W.students.length >= W.format;
@@ -77,18 +77,18 @@ function step3() {
   return `<div class="pw-sub" style="margin-top:0">Format ${W.format === 1 ? '1 : 1' : W.format + ' : 1'} — pilih ${W.format} pelajar (${W.students.length}/${W.format}).</div>
     <div class="pw-picked">${W.students.map(id => { const s = byId('students', id);
       return `<div class="pw-st"><div class="pw-st-h"><b>${esc(s.full_name)}</b><span class="muted">${esc([s.status !== 'active' ? LABEL[s.status] : '', s.guardian_name].filter(Boolean).join(' · '))}</span><button type="button" class="sp-x" data-action="pw-st-del" data-id="${id}" title="Buang">✕</button></div>
-        <label class="pw-pk">Pakej / bil<select data-on-change="pw-pkg" data-id="${id}">${pkgOptions(id)}</select></label></div>`; }).join('') || '<div class="pw-empty">Belum ada pelajar dipilih.</div>'}</div>
+        <label class="pw-pk">Pakej / bil<select data-on-change="pw-pkg" data-id="${id}">${pkgOptions(id)}</select>${W.why[id] ? `<span class="pw-why">✓ Dipilih automatik — ${esc(W.why[id])}</span>` : ''}</label></div>`; }).join('') || '<div class="pw-empty">Belum ada pelajar dipilih.</div>'}</div>
     ${full ? '' : `<div class="pw-search"><input type="search" placeholder="Taip nama pelajar / ibu bapa / no. telefon…" value="${esc(W.q)}" data-on-input="pw-q" autocomplete="off">
       ${res.length ? `<div class="pw-res">${res.map(s => `<button type="button" data-action="pw-st-add" data-id="${s.id}"><b>${esc(s.full_name)}</b><span>${esc([s.status !== 'active' ? LABEL[s.status] : '', venueName(s.venue_id), s.guardian_name].filter(x => x && x !== '—').join(' · '))}</span></button>`).join('')}</div>` : q.length >= 2 ? '<div class="pw-empty">Tiada padanan. Daftar pelajar baharu di Senarai Pelajar dahulu.</div>' : ''}</div>`}`;
 }
 function step4() {
-  const L = slots(), monthly = W.students.some(id => W.pkg[id] === 'monthly'), sell = W.students.filter(id => String(W.pkg[id] || '').startsWith('new:'));
+  const L = slots(), monthly = W.students.some(id => ['monthly', 'sponsor'].includes(W.pkg[id])), sell = W.students.filter(id => String(W.pkg[id] || '').startsWith('new:'));
   return `<div class="pw-review">
       <div><span>Kelas</span><b>${esc(W.title || autoTitle())}</b><small>${esc(progName(W.programme_id))} · ${W.format === 1 ? '1 : 1' : W.format + ' : 1'}</small></div>
       <div><span>Coach & lokasi</span><b>${esc(staffName(W.coach_id))}</b><small>${esc(venueName(W.venue_id))}${W.court ? ' · Court ' + esc(W.court) : ''}</small></div>
       <div><span>Jadual</span><b>${L.length} sesi</b><small>${L.slice(0, 6).map(x => `${fmtShort(x.date)} ${x.start}–${x.end}`).join(', ')}${L.length > 6 ? '…' : ''}</small></div>
       <div><span>Pelajar</span><b>${W.students.map(id => esc(studentName(id))).join(', ')}</b><small>${W.students.map(id => { const v = W.pkg[id] || ''; const p = byId('student_packages', v), t = v.startsWith('new:') && byId('packages', v.slice(4));
-        return esc(studentName(id).split(' ')[0]) + ': ' + esc(p ? p.name : t ? 'pakej baharu ' + t.name : v === 'walkin' ? 'walk-in' : 'bil bulanan'); }).join(' · ')}</small></div></div>
+        return esc(studentName(id).split(' ')[0]) + ': ' + esc(p ? p.name : t ? 'pakej baharu ' + t.name : v === 'walkin' ? 'walk-in' : v === 'sponsor' ? 'tajaan (court sahaja)' : 'bil bulanan'); }).join(' · ')}</small></div></div>
     ${sell.length ? `<div class="pw-note">${sell.length} invois pakej baharu akan dikeluarkan (bayar sebelum ${fmtDate(dueDefault())}). Pakej aktif bila bayaran disahkan.</div>` : ''}
     ${monthly ? `<div class="form-grid" style="margin-top:12px"><label class="f">Kadar coach / jam (RM)<input type="number" step="0.01" min="0" value="${esc(W.rate_coach)}" data-on-input="pw-f" data-k="rate_coach"></label>
       <label class="f">Kadar court / jam (RM)<input type="number" step="0.01" min="0" value="${esc(W.rate_court)}" data-on-input="pw-f" data-k="rate_court"></label></div>` : ''}`;
@@ -107,13 +107,28 @@ function check(step) {
   if (step === 2) { if (!W.students.length) return 'Pilih sekurang-kurangnya seorang pelajar.'; if (W.students.length > W.format) return `Format ${W.format} : 1 — terlalu ramai pelajar.`; }
   return null;
 }
-const defPkg = id => { const L = livePackages(id), pers = L.find(p => p.programme_id === W.programme_id) || L.find(p => byId('programmes', p.programme_id)?.kind === 'personal'); return pers?.id || 'monthly'; };
+/** Pilihan asal untuk pelajar — supaya admin tidak perlu semak semula:
+ *  1) tajaan (fee_exempt)  2) pakej aktif untuk program ini  3) pakej personal aktif lain
+ *  4) pakej / cara bil sesi personal terakhir  5) bil bulanan */
+function defPkg(id) {
+  const st = byId('students', id), L = livePackages(id);
+  if (st?.fee_exempt) return { v: 'sponsor', why: 'pelajar tajaan' };
+  const a = L.find(p => p.programme_id === W.programme_id); if (a) return { v: a.id, why: 'pakej aktif program ini' };
+  const b = L.find(p => byId('programmes', p.programme_id)?.kind === 'personal'); if (b) return { v: b.id, why: 'pakej personal aktif' };
+  const last = T('attendance').filter(x => x.student_id === id && T('class_sessions').some(s => s.id === x.session_id && byId('programmes', byId('classes', s.class_id)?.programme_id)?.kind === 'personal'))
+    .sort((x, y) => String(y.session_date).localeCompare(String(x.session_date)))[0];
+  if (last) { const lp = last.student_package_id && L.find(p => p.id === last.student_package_id); if (lp) return { v: lp.id, why: 'pakej sesi terakhir' };
+    const lc = byId('classes', byId('class_sessions', last.session_id)?.class_id); if (lc?.billing === 'walkin') return { v: 'walkin', why: 'sesi personal terakhir: walk-in' };
+    if (lc?.billing === 'monthly') return { v: 'monthly', why: 'sesi personal terakhir: bil bulanan' }; }
+  return { v: 'monthly', why: '' };
+}
+const setDef = id => { const d = defPkg(id); W.pkg[id] = d.v; W.why[id] = d.why; };
 
 Object.assign(INPUTS, {
-  'pw-f': (v, el) => { const k = el.dataset.k; W[k] = k === 'weeks' ? Math.min(26, Math.max(1, Number(v) || 1)) : v; if (['title', 'court', 'rate_coach', 'rate_court'].includes(k)) return; if (k === 'date') W.skip.clear(); if (k === 'programme_id') W.students.forEach(id => { W.pkg[id] = defPkg(id); }); render(); },
+  'pw-f': (v, el) => { const k = el.dataset.k; W[k] = k === 'weeks' ? Math.min(26, Math.max(1, Number(v) || 1)) : v; if (['title', 'court', 'rate_coach', 'rate_court'].includes(k)) return; if (k === 'date') W.skip.clear(); if (k === 'programme_id') W.students.forEach(setDef); render(); },
   'pw-row': (v, el) => { W.rows[+el.dataset.i][el.dataset.k] = v; render(); },
   'pw-q': v => { W.q = v; render(); const i = $w()?.querySelector('[data-on-input="pw-q"]'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } },
-  'pw-pkg': (v, el) => { W.pkg[el.dataset.id] = v; },
+  'pw-pkg': (v, el) => { W.pkg[el.dataset.id] = v; W.why[el.dataset.id] = ''; render(); },
 });
 Object.assign(ACTIONS, {
   'pw-format': n => { W.format = +n; render(); },
@@ -122,7 +137,7 @@ Object.assign(ACTIONS, {
   'pw-mode': m => { if (m === 'custom' && W.mode === 'weekly') W.rows = slots().map(x => ({ ...x })); W.mode = m; if (!W.rows.length) W.rows = [{ date: W.date, start: W.start, end: W.end }]; render(); },
   'pw-row-add': () => { const l = W.rows[W.rows.length - 1]; W.rows.push({ date: l ? addDays(l.date, 7) : W.date, start: l?.start || W.start, end: l?.end || W.end }); render(); },
   'pw-row-del': i => { W.rows.splice(+i, 1); render(); },
-  'pw-st-add': id => { if (W.students.length >= W.format) return toast(`Format ${W.format} : 1 sudah penuh`, true); W.students.push(id); W.pkg[id] = defPkg(id); W.q = ''; render(); },
+  'pw-st-add': id => { if (W.students.length >= W.format) return toast(`Format ${W.format} : 1 sudah penuh`, true); W.students.push(id); setDef(id); W.q = ''; render(); },
   'pw-st-del': id => { W.students = W.students.filter(x => x !== id); delete W.pkg[id]; render(); },
   'pw-go': i => { W.step = +i; render(); },
   'pw-back': () => { W.step--; render(); },
@@ -134,7 +149,7 @@ Object.assign(ACTIONS, {
     for (const id of ids) { const v = W.pkg[id] || ''; if (!v.startsWith('new:')) continue;
       const pkg = byId('packages', v.slice(4)), inv = await sellPackage({ studentId: id, pkg, price: pkg.price, mode: 'fixed', due: dueDefault() });
       W.pkg[id] = T('student_packages').find(p => p.invoice_id === inv.id)?.id || 'monthly'; }
-    const kinds = ids.map(id => W.pkg[id]), billing = kinds.every(k => k !== 'monthly' && k !== 'walkin') ? 'package' : kinds.includes('monthly') ? 'monthly' : 'walkin';
+    const kinds = ids.map(id => W.pkg[id] === 'sponsor' ? 'monthly' : W.pkg[id]), billing = kinds.every(k => k !== 'monthly' && k !== 'walkin') ? 'package' : kinds.includes('monthly') ? 'monthly' : 'walkin';
     const row = { venue_id: W.venue_id, programme_id: W.programme_id, coach_id: W.coach_id, weekday: parseISO(first.date).getDay(), start_time: first.start, end_time: first.end, court: val(W.court), capacity: W.format, active: false, billing, rate_coach: val(W.rate_coach), rate_court: val(W.rate_court) };
     let cls;
     try { cls = await insert('classes', W.title ? { ...row, title: W.title } : row); }
@@ -145,7 +160,9 @@ Object.assign(ACTIONS, {
       for (const id of ids) { const pk = byId('student_packages', W.pkg[id]); await insert('attendance', { session_id: s.id, session_date: x.date, student_id: id, status: 'booked', ...(pk ? { student_package_id: pk.id } : {}) }); }
     }
     const done = W.onDone; W = null; closeModal();
-    toast(`${L.length} sesi personal disimpan untuk ${ids.map(studentName).join(', ')}`);
+    Object.assign(UI.cal ||= {}, { mode: 'minggu', date: first.date, venue: '', coach: '', prog: '', type: '' });   // terus tunjuk minggu sesi pertama
+    toast(`${L.length} sesi disimpan untuk ${ids.map(studentName).join(', ')} — sesi pertama ${DAYS[parseISO(first.date).getDay()]}, ${fmtShort(first.date)} ${first.start}`);
+    if (!done && !location.hash.startsWith('#kalendar')) location.hash = '#kalendar';
     if (done) await done(cls);
     app.render();
   },
@@ -156,9 +173,9 @@ ACTIONS['cal-personal'] = (preset = {}) => {
   preset = typeof preset === 'object' && preset ? preset : {};
   const progs = T('programmes').filter(p => p.active && p.kind === 'personal');
   W = { step: 0, max: 0, title: '', programme_id: preset.programme_id || progs[0]?.id || '', format: Math.max(1, Math.min(4, (preset.students || []).length || 1)), coach_id: preset.coach_id || '', venue_id: preset.venue_id || '', court: '',
-    mode: 'weekly', date: preset.date || todayISO(), start: preset.start || '18:00', end: preset.end || '19:00', weeks: 4, skip: new Set(), rows: [], students: [...(preset.students || [])], pkg: {}, q: '', rate_coach: '', rate_court: '', onDone: preset.onDone };
+    mode: 'weekly', date: preset.date || todayISO(), start: preset.start || '18:00', end: preset.end || '19:00', weeks: 4, skip: new Set(), rows: [], students: [...(preset.students || [])], pkg: {}, why: {}, q: '', rate_coach: '', rate_court: '', onDone: preset.onDone };
   if (preset.date) W.weeks = 1;
-  W.students.forEach(id => { W.pkg[id] = defPkg(id); });
+  W.students.forEach(setDef);
   openModal({ title: 'Sesi Personal Baharu', wide: true, cancel: 'Batal', body: '<div id="pw"></div>' });
   render();
 };
