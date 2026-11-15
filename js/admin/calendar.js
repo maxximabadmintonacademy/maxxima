@@ -21,7 +21,7 @@ const slot = ({ s, c, date }, showDate) => {
   const gs = s ? groupsOf(s.id) : [], coaches = [...new Set([sCoach(s, c), ...gs.map(g => g.coach_id)].filter(Boolean))].map(staffName).join(', ');
   const personal = isPersonal(c), who = personal ? rosterOf(s, c).map(x => x.full_name.split(' ').slice(0, 2).join(' ')).join(', ') : '';
   return `<button class="slot ${al.length ? 'alert' : ''} ${s ? '' : 'virtual'} ${s?.status === 'cancelled' ? 'cancel' : ''}" data-action="${s ? 'sess-open' : 'sess-open-v'}" data-id="${s ? s.id : c.id + '|' + date}" style="border-left-color:${progColor(c.programme_id)}">
-    <b>${showDate ? fmtShort(date) + ' · ' : ''}${a}–${b} · ${esc(progName(c.programme_id))}</b>
+    <b>${showDate ? fmtShort(date) + ' · ' : ''}${a}–${b} · ${esc(c.title || progName(c.programme_id))}</b>
     ${who ? `<div style="font-weight:600">${esc(who)}</div>` : ''}
     <div class="meta">${esc(venueName(c.venue_id))}${sCourt(s, c) ? ' · ' + courtLbl(sCourt(s, c)) : ''}</div>
     <div class="meta">${esc(coaches || '—')} · ${n} pelajar${(c.categories || []).length ? ' · ' + c.categories.map(esc).join('/') : ''}</div>
@@ -83,7 +83,7 @@ Object.assign(ACTIONS, {
   'cal-move': n => { const c = C(); n = Number(n); if (c.mode === 'hari') c.date = addDays(c.date, n); else if (c.mode === 'minggu') c.date = addDays(c.date, 7 * n); else { const d = parseISO(c.date); c.date = iso(new Date(d.getFullYear(), d.getMonth() + n, 1)); } app.render(); },
 
   /* Sesi personal bertarikh: satu atau beberapa tarikh (ulang mingguan + tarikh tambahan). */
-  'cal-personal': (preset = {}) => {
+  'cal-personal-classic': (preset = {}) => {
     preset = typeof preset === 'object' && preset ? preset : {};
     const progs = T('programmes').filter(p => p.active && p.kind === 'personal');
     const f = openModal({ title: 'Tambah Sesi Personal', submit: 'Simpan Sesi', wide: true, body: `<div class="form-grid">
@@ -130,3 +130,4 @@ Object.assign(ACTIONS, {
   },
 });
 export { ensureSession };
+import './personal-wizard.js';

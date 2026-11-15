@@ -153,7 +153,7 @@ export function openSession(sid) {
       ${isCoach() ? '' : s.status !== 'cancelled' ? `<button type="button" class="btn sm" data-action="sess-cancel" data-id="${s.id}">Batal sesi</button>` : `<button type="button" class="btn sm" data-action="sess-reopen" data-id="${s.id}">Buka semula</button>`}
       ${isCoach() || !personal ? '' : `<button type="button" class="btn sm danger-o" data-action="sp-del" data-id="${s.id}">${ic('trash', 'sm')} Padam sesi</button>`}
     </div>`;
-  openModal({ title: `${esc(progName(c.programme_id))}${s.status === 'cancelled' ? ' · ' + badge('cancelled') : ''}`, body, wide: true, cancel: 'Tutup' });
+  openModal({ title: `${esc(c.title || progName(c.programme_id))}${s.status === 'cancelled' ? ' · ' + badge('cancelled') : ''}`, body, wide: true, cancel: 'Tutup' });
   openSession.cur = s.id;
 }
 const reopen = () => { app.render(); if (openSession.cur) openSession(openSession.cur); };
