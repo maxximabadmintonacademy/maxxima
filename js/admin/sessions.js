@@ -132,7 +132,8 @@ export function openSession(sid) {
       <input class="date-input" style="width:110px" placeholder="Court no." value="${esc(g?.court || '')}" data-on-change="sp-gcourt" data-key="${s.id}|${esc(k)}">
     </div>${g?.coach_id ? langWarn(g.coach_id, c.venue_id) : ''}`;
   const body = `
-    <div class="muted" style="margin-bottom:10px">${DAYS[parseISO(s.session_date).getDay()]}, ${fmtDate(s.session_date)} · ${t1}–${t2} · ${esc(venueName(c.venue_id))}</div>
+    <div class="sp-when"><span class="muted">${DAYS[parseISO(s.session_date).getDay()]}, ${fmtDate(s.session_date)} · ${t1}–${t2} · ${esc(venueName(c.venue_id))}${s.status === 'cancelled' ? ' · <b style="color:var(--bad)">Dibatalkan</b>' : ''}</span>
+      ${isCoach() ? '' : `<span class="sp-when-a">${s.status !== 'cancelled' ? `<button type="button" class="btn sm" data-action="sp-move" data-id="${s.id}">${ic('calendar', 'sm')} ${personal ? 'Ubah tarikh / masa / lokasi' : 'Ubah tarikh / masa sesi ini'}</button>` : ''}${personal ? '' : `<button type="button" class="btn sm ghost" data-action="sp-class-edit" data-id="${c.id}" title="Ubah hari, masa, lokasi, program & coach untuk setiap minggu">${ic('edit', 'sm')} Edit kelas mingguan</button>`}</span>`}</div>
     ${trialsOf(s, c).length ? `<div class="hint" style="margin-bottom:10px;background:var(--surface-2);border-radius:10px;padding:9px 12px">${ic('flag', 'sm')} <b>Trial:</b> ${trialsOf(s, c).map(t => `${esc(t.child_name || '')}${t.child_age ? ' (' + t.child_age + ' thn)' : ''}${t.notes ? ' — ' + esc(t.notes) : ''}`).join(' · ')}</div>` : ''}
     ${alerts.length ? `<div class="hint bad" style="margin-bottom:10px">${ic('alert', 'sm')} Belum lengkap: ${alerts.map(esc).join(' · ')}</div>` : ''}
     ${isCoach() ? '' : `<div class="form-grid" style="margin-bottom:8px">
@@ -149,7 +150,6 @@ export function openSession(sid) {
     <div class="actions" style="margin-top:14px;flex-wrap:wrap">
       ${s.status !== 'cancelled' ? `<button type="button" class="btn sm" data-action="sp-all" data-id="${s.id}">Semua hadir</button>` : ''}
       ${s.status === 'scheduled' ? `<button type="button" class="btn sm" data-action="sp-held" data-id="${s.id}">Tandakan selesai</button>` : ''}
-      ${isCoach() || s.status === 'cancelled' ? '' : `<button type="button" class="btn sm" data-action="sp-move" data-id="${s.id}">${ic('calendar', 'sm')} Ubah tarikh / masa</button>`}
       ${isCoach() ? '' : s.status !== 'cancelled' ? `<button type="button" class="btn sm" data-action="sess-cancel" data-id="${s.id}">Batal sesi</button>` : `<button type="button" class="btn sm" data-action="sess-reopen" data-id="${s.id}">Buka semula</button>`}
       ${isCoach() || !personal ? '' : `<button type="button" class="btn sm danger-o" data-action="sp-del" data-id="${s.id}">${ic('trash', 'sm')} Padam sesi</button>`}
     </div>`;
@@ -175,6 +175,15 @@ async function linkPlan(sid, planId) {
   else await update('lesson_plans', p.id, at);
 }
 /* ---- Pindah sesi ke tarikh / masa lain ---- */
+/** Sesi personal tukar lokasi: jika kelas ini hanya ada satu sesi, tukar lokasi kelas; jika tidak, salin kelas ke lokasi baharu dan pindahkan sesi ini sahaja. */
+async function moveVenue(sid, venueId) {
+  const s = byId('class_sessions', sid), c = byId('classes', s.class_id);
+  if (T('class_sessions').filter(x => x.class_id === c.id && x.status !== 'cancelled').length <= 1) return update('classes', c.id, { venue_id: venueId });
+  const { id, created_at, ...rest } = c;
+  const nc = await insert('classes', { ...rest, venue_id: venueId, active: false });
+  for (const e of T('class_enrolments').filter(x => x.class_id === c.id)) { const { id: _i, created_at: _c, ...er } = e; await insert('class_enrolments', { ...er, class_id: nc.id }); }
+  await update('class_sessions', sid, { class_id: nc.id });
+}
 export async function moveSession(sid, { date, start, end, court, notify }) {
   const s = byId('class_sessions', sid), c = byId('classes', s.class_id);
   if (!date || !start || !end) throw new Error('Isi tarikh, masa mula dan tamat.');
@@ -248,14 +257,16 @@ Object.assign(ACTIONS, {
     for (const st of rosterOf(s, c)) { const a = T('attendance').find(x => x.session_id === sid && x.student_id === st.id); if (!a || a.status === 'booked') await setAtt(sid, st.id, { status: 'present', marked_by: markedBy() }); }
     toast('Semua ditandakan hadir'); reopen();
   },
+  'sp-class-edit': id => { ACTIONS['class-edit'](id); },
   'sp-move': sid => {
     const s = byId('class_sessions', sid), c = byId('classes', s.class_id), [t1, t2] = sTime(s, c);
     openModal({ title: 'Ubah Tarikh / Masa Sesi', submit: 'Simpan', body: `<p class="muted" style="font-size:13px;margin-bottom:10px">${esc(progName(c.programme_id))} · ${esc(venueName(c.venue_id))} — asal ${DAYS[parseISO(s.session_date).getDay()]} ${fmtDate(s.session_date)} ${t1}–${t2}</p><div class="form-grid">
       ${F('Tarikh', 'date', { type: 'date', value: s.session_date, req: true })}${F('Court no.', 'court', { value: sCourt(s, c) || '' })}
       ${F('Mula', 'start', { type: 'time', value: t1, req: true })}${F('Tamat', 'end', { type: 'time', value: t2, req: true })}
+      ${isPersonal(c) ? `<label class="f full">Lokasi<select name="venue_id">${T('venues').filter(v => v.active || v.id === c.venue_id).map(v => `<option value="${v.id}" ${v.id === c.venue_id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>` : ''}
       <label class="f full" style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="notify" value="1" checked style="width:auto;height:auto"> Beritahu ibu bapa (notifikasi dalam portal)</label></div>
       <p class="muted" style="font-size:12.5px;margin-top:8px">Untuk betulkan masa sahaja, kekalkan tarikh. Untuk pindah ke hari lain (cth. Selasa 2–3 petang), tukar tarikh — kehadiran & pelan latihan ikut dipindahkan. Untuk ubah masa setiap minggu, edit kelas di Jadual Latihan.</p>`,
-      onSubmit: async d => { const r = await moveSession(sid, { date: d.date, start: d.start, end: d.end, court: d.court, notify: d.notify === '1' }); toast('Sesi dikemas kini: ' + r.newLbl); openSession.cur = r.target.id; setTimeout(reopen, 0); } });
+      onSubmit: async d => { if (d.venue_id && d.venue_id !== c.venue_id) await moveVenue(sid, d.venue_id); const r = await moveSession(sid, { date: d.date, start: d.start, end: d.end, court: d.court, notify: d.notify === '1' }); toast('Sesi dikemas kini: ' + r.newLbl); openSession.cur = r.target.id; setTimeout(reopen, 0); } });
   },
   'sp-plan-view': id => { const p = byId('lesson_plans', id); openModal({ title: esc(p.title), body: planView(p), cancel: 'Tutup', wide: true }); },
   'sp-plan-edit': id => openPlanEditor(byId('lesson_plans', id), { coachId: myStaffId(), onSaved: () => setTimeout(reopen, 0) }),

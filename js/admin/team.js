@@ -1,7 +1,7 @@
 import { uploadMedia, photoAvatar } from '../media.js';
 // Coach dan HR & Staf.
 import { VIEWS, ACTIONS } from '../registry.js';
-import { S, insert, update, remove, rpc } from '../data.js';
+import { S, insert, update, remove, rpc, setting, saveSetting } from '../data.js';
 import { LANGS_ALL, langName } from './sessions.js';
 import { ic, esc, F, RM, sum, num, val, badge, avatar, app, toast, openModal, confirmModal, pageHead, fmtShort, fmtDate, todayISO, LABEL, DAYS, hm } from '../ui.js';
 import { T, byId, venueName, progName, staffName, classHours, enrolledIn } from './helpers.js';
@@ -21,7 +21,7 @@ function hoursThisMonth(staffId) {
 VIEWS.coach = () => {
   const coaches = T('staff').filter(s => s.active && (/jurulatih|coach/i.test(s.position) || T('classes').some(c => c.coach_id === s.id)));
   return `
-  ${pageHead('Coach', `${coaches.length} jurulatih aktif`, `<a class="btn" href="#hr">${ic('briefcase', 'sm')} HR & Gaji</a><button class="btn primary" data-action="staff-add">${ic('plus', 'sm')} Tambah Staf</button>`)}
+  ${pageHead('Coach', `${coaches.length} jurulatih aktif`, `<button class="btn" data-action="coach-from" title="Sesi sebelum tarikh ini tidak dipaparkan di portal coach">${ic('calendar', 'sm')} Jadual coach mula: ${setting('coach_portal', {})?.from ? fmtDate(setting('coach_portal', {}).from) : 'semua'}</button><a class="btn" href="#hr">${ic('briefcase', 'sm')} HR & Gaji</a><button class="btn primary" data-action="staff-add">${ic('plus', 'sm')} Tambah Staf</button>`)}
   <div class="grid g-3">${coaches.map(c => {
     const cls = T('classes').filter(k => k.active && k.coach_id === c.id), hrs = sum(cls, classHours);
     const studs = new Set(cls.flatMap(k => enrolledIn(k.id).map(e => e.student_id)));
@@ -125,3 +125,6 @@ Object.assign(ACTIONS, {
   'leave-del': id => confirmModal({ title: 'Padam rekod cuti?', message: 'Rekod cuti ini akan dipadam.', ok: 'Padam', danger: true, onOk: async () => { await remove('leave_requests', id); toast('Rekod cuti dipadam'); app.render(); } }),
   'leave-decide': async key => { const [id, st] = key.split('|'); await update('leave_requests', id, { status: st, decided_by: S.mode === 'demo' ? null : S.profile.id }); toast(st === 'approved' ? 'Cuti diluluskan' : 'Cuti ditolak'); app.render(); },
 });
+
+ACTIONS['coach-from'] = () => openModal({ title: 'Tarikh mula jadual coach', body: `<p style="font-size:13.5px;margin-top:0">Portal coach hanya memaparkan sesi <b>pada atau selepas</b> tarikh ini (tab Hari Ini, Minggu & "Belum ditanda"). Sesi lama tidak dipadam — hanya disembunyikan dari coach semasa data lama dikemas kini. Kosongkan untuk paparkan semua.</p>
+  ${F('Mula dari', 'from', { type: 'date', value: setting('coach_portal', {})?.from || '' })}`, onSubmit: async d => { await saveSetting('coach_portal', { ...setting('coach_portal', {}), from: d.from || null }); toast(d.from ? 'Jadual coach bermula ' + fmtDate(d.from) : 'Semua sesi dipaparkan'); app.render(); } });

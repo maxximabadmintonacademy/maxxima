@@ -17,16 +17,20 @@ const nowISO = () => new Date().toISOString();
 Object.assign(ACTIONS, {
   'st-sel': id => { const s = (UI.stSel ||= new Set()); s.has(id) ? s.delete(id) : s.add(id); app.render(); },
   'st-sel-all': ids => { const s = (UI.stSel ||= new Set()), list = String(ids || '').split(',').filter(Boolean), all = list.every(i => s.has(i)); list.forEach(i => (all ? s.delete(i) : s.add(i))); app.render(); },
+  'st-later': () => { UI.studentLater = !UI.studentLater; UI.stSel = new Set(); app.render(); },
   'st-merge-sel': () => openMerge([...(UI.stSel || [])], { after: () => { UI.stSel = new Set(); } }),
   'st-sel-clear': () => { UI.stSel = new Set(); app.render(); },
   'st-bulk': kind => {
     const ids = [...(UI.stSel || [])]; if (!ids.length) return;
     const L = { left: ['Tandakan berhenti?', 'Status ditukar kepada "Berhenti". Sesi akan datang tidak dijana untuk mereka.'], archive: ['Arkib pelajar?', 'Pelajar ditanda "Berhenti" dan disembunyikan daripada senarai. Semua rekod (invois, kehadiran) kekal dan boleh dikeluarkan semula dari tapisan "Arkib".'],
-      active: ['Aktifkan semula?', 'Status ditukar kepada "Aktif".'], unarchive: ['Keluarkan dari arkib?', 'Pelajar dipaparkan semula dalam senarai (status kekal "Berhenti").'] }[kind];
+      active: ['Aktifkan semula?', 'Status ditukar kepada "Aktif".'], unarchive: ['Keluarkan dari arkib?', 'Pelajar dipaparkan semula dalam senarai (status kekal "Berhenti").'],
+      checked: ['Selesai semak?', 'Pelajar dikeluarkan dari senarai "Semak kemudian". Maklumat lain tidak berubah.'] }[kind];
     confirmModal({ title: L[0], message: `<b>${ids.length} pelajar</b>: ${ids.slice(0, 8).map(i => esc(byId('students', i)?.full_name || '')).join(', ')}${ids.length > 8 ? '…' : ''}<br><br>${L[1]}`, ok: 'Teruskan',
       onOk: async () => {
-        const patch = { left: { status: 'left' }, archive: { status: 'left', archived_at: nowISO() }, active: { status: 'active', archived_at: null }, unarchive: { archived_at: null } }[kind];
-        for (const id of ids) { const s = byId('students', id); await update('students', id, kind === 'archive' && !['active', 'paused', 'pending', 'awaiting_payment'].includes(s?.status) ? { archived_at: patch.archived_at } : patch); }
+        const patch = { left: { status: 'left' }, archive: { status: 'left', archived_at: nowISO() }, active: { status: 'active', archived_at: null }, unarchive: { archived_at: null }, checked: {} }[kind];
+        for (const id of ids) { const s = byId('students', id), p = kind === 'archive' && !['active', 'paused', 'pending', 'awaiting_payment'].includes(s?.status) ? { archived_at: patch.archived_at } : { ...patch };
+          if (s?.review_later) p.review_later = false;   // apa-apa tindakan pukal = sudah disemak
+          if (Object.keys(p).length) await update('students', id, p); }
         UI.stSel = new Set(); toast(`${ids.length} pelajar dikemas kini`); app.render();
       } });
   },

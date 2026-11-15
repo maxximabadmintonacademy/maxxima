@@ -75,14 +75,19 @@ const dropLocal = (tab, ids) => {
   const set = new Set(ids);
   if (tab === 'attendance' || tab === 'legacy_records') rev()[tab] = rev()[tab].filter(r => !set.has(r.id));
 };
-async function bulk(tab, ids, op) {
+// legacy_records tiada lajur review_note pada pangkalan data lama — hantar hanya lajur yang wujud.
+const keepPatch = (tab, later) => ({ needs_review: false, ...(tab === 'legacy_records' ? {} : { review_note: null }), ...(tab === 'students' ? { review_later: !!later } : {}) });
+async function bulk(tab, ids, op, later) {
   if (S.mode === 'demo') {
-    if (op === 'keep') ids.forEach(id => { const r = S.t[tab]?.find(x => x.id === id); if (r) { r.needs_review = false; r.review_note = null; } });
+    if (op === 'keep') ids.forEach(id => { const r = S.t[tab]?.find(x => x.id === id); if (r) Object.assign(r, keepPatch(tab, later)); });
     else for (const id of ids) await remove(tab, id);
   } else {
     for (let i = 0; i < ids.length; i += 100) {
       const part = ids.slice(i, i + 100);
-      const { error } = op === 'keep' ? await S.client.from(tab).update({ needs_review: false, review_note: null }).in('id', part) : await S.client.from(tab).delete().in('id', part);
+      let patch = keepPatch(tab, later);
+      let { error } = op === 'keep' ? await S.client.from(tab).update(patch).in('id', part) : await S.client.from(tab).delete().in('id', part);
+      // SQL 36 belum dijalankan: cuba semula tanpa lajur baharu
+      if (error && op === 'keep' && /review_later|review_note/.test(error.message)) { delete patch.review_later; if (/review_note/.test(error.message)) delete patch.review_note; ({ error } = await S.client.from(tab).update(patch).in('id', part)); }
       if (error) throw error;
     }
   }
@@ -94,6 +99,9 @@ const run = async (fn, okMsg) => { try { await fn(); toast(okMsg); } catch (e) {
 ACTIONS['rv-tab'] = id => { UI.rvTab = id; app.render(); };
 ACTIONS['rv-keep'] = id => run(() => bulk(UI.rvTab || 'students', [id], 'keep'), 'Disimpan');
 ACTIONS['rv-del'] = id => { const tab = UI.rvTab || 'students'; confirmModal({ title: 'Padam rekod ini?', message: 'Rekod ini akan dipadam kekal (termasuk rekod berkaitan seperti invois pelajar).', ok: 'Padam', danger: true, onOk: () => run(() => bulk(tab, [id], 'del'), 'Dipadam') }); };
-ACTIONS['rv-all-keep'] = () => { const { tab, list } = cur(); confirmModal({ title: `Simpan ${list.length} rekod?`, message: 'Semua rekod yang dipaparkan ditanda sebagai sah.', ok: 'Simpan semua', onOk: () => run(() => bulk(tab, list.map(r => r.id), 'keep'), 'Disimpan') }); };
+ACTIONS['rv-all-keep'] = () => { const { tab, list } = cur();
+  const msg = tab === 'students' ? 'Semua pelajar yang dipaparkan dikeluarkan dari senarai ini dan ditanda <b>"Semak kemudian"</b>.<br><br>Selepas ini buka <b>Senarai Pelajar → Semak kemudian</b> untuk semak satu per satu: kekalkan, arkib, kemas kini atau gabung profil berganda.'
+    : 'Semua rekod yang dipaparkan ditanda sebagai sah.';
+  confirmModal({ title: `Simpan ${list.length} rekod?`, message: msg, ok: 'Simpan semua', onOk: () => run(async () => { await bulk(tab, list.map(r => r.id), 'keep', true); if (tab === 'students') UI.studentLater = true; }, tab === 'students' ? `${list.length} pelajar disimpan — lihat Senarai Pelajar → Semak kemudian` : 'Disimpan') }); };
 ACTIONS['rv-all-del'] = () => { const { tab, list } = cur(); confirmModal({ title: `Padam ${list.length} rekod?`, message: 'Semua rekod yang dipaparkan dipadam <b>kekal</b>, termasuk invois/pakej/kehadiran pelajar berkaitan. Tidak boleh dibatalkan.', ok: 'Padam semua', danger: true, onOk: () => run(() => bulk(tab, list.map(r => r.id), 'del'), 'Dipadam') }); };
 INPUTS['rv-q'] = v => { UI.rvQ = v; app.render(); };

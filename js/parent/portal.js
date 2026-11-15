@@ -20,7 +20,7 @@ import { photoAvatar, uploadMedia } from '../media.js';
 const PV = {};
 const NAV = [['utama', 'Utama', 'home'], ['jadual', 'Jadual', 'calendar'], ['tempah', 'Tempah', 'plus'], ['yuran', 'Yuran', 'wallet'], ['progres', 'Progres', 'trend'], ['akaun', 'Akaun', 'user']];
 const me = () => S.profile.id;
-const kids = () => T('students').filter(s => s.guardian_id === me()).sort((a, b) => a.full_name.localeCompare(b.full_name));
+const kids = () => T('students').filter(s => s.guardian_id === me() && !s.merged_into && !s.archived_at).sort((a, b) => a.full_name.localeCompare(b.full_name));
 const kidSet = () => new Set(kids().map(k => k.id));
 const myInvoices = () => { const ks = kidSet(); return T('invoices').filter(i => ks.has(i.student_id)); };
 const kidName = id => byId('students', id)?.full_name || '';

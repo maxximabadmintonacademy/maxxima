@@ -72,7 +72,20 @@ const classPatch = (d, isEdit) => {
 const bindLang = f => { const chk = () => { f.querySelector('#clsWarn').innerHTML = f.coach_id.value && f.venue_id.value ? langWarn(f.coach_id.value, f.venue_id.value) : ''; }; f.coach_id.addEventListener('change', chk); f.venue_id.addEventListener('change', chk); return f; };
 Object.assign(ACTIONS, {
   'class-add': () => bindLang(openModal({ title: 'Tambah Kelas', submit: 'Tambah ke Jadual', wide: true, body: classForm(), onSubmit: async d => { await insert('classes', classPatch(d)); toast('Kelas ditambah'); app.render(); } })),
-  'class-edit': id => bindLang(openModal({ title: 'Edit Kelas', wide: true, body: classForm(byId('classes', id)), onSubmit: async d => { await update('classes', id, classPatch(d, true)); toast('Kelas dikemas kini'); app.render(); } })),
+  'class-edit': id => { const c0 = byId('classes', id);
+    bindLang(openModal({ title: 'Edit Kelas', wide: true, body: classForm(c0) + `<p class="muted" style="font-size:12.5px;margin-top:10px">Perubahan masa, lokasi, coach & court terpakai pada semua sesi akan datang. Jika hari ditukar, sesi akan datang yang belum berlangsung dipindahkan ke hari baharu dalam minggu yang sama (rekod kehadiran ikut dipindah). Sesi yang masanya diubah secara khusus kekal dengan masa khusus itu.</p>`,
+      onSubmit: async d => { const patch = classPatch(d, true), oldWd = c0.weekday; await update('classes', id, patch);
+        let moved = 0;
+        if (patch.weekday !== oldWd) {
+          const mon = w => (w + 6) % 7, delta = mon(patch.weekday) - mon(oldWd), t0 = todayISO();
+          for (const s of T('class_sessions').filter(x => x.class_id === id && x.status === 'scheduled' && x.session_date >= t0 && parseISO(x.session_date).getDay() === oldWd)) {
+            const nd = addDays(s.session_date, delta); if (nd < t0 || T('class_sessions').some(x => x.class_id === id && x.session_date === nd)) continue;
+            await update('class_sessions', s.id, { session_date: nd });
+            for (const a of T('attendance').filter(x => x.session_id === s.id)) await update('attendance', a.id, { session_date: nd });
+            moved++;
+          }
+        }
+        toast('Kelas dikemas kini' + (moved ? ` · ${moved} sesi akan datang dipindah ke ${DAYS[patch.weekday]}` : '')); app.render(); } })); },
   'class-del': id => confirmModal({ title: 'Padam kelas?', message: 'Semua sesi dan rekod kehadiran kelas ini akan turut dipadam. Pertimbangkan menyahaktifkan kelas (Edit) untuk menyimpan sejarah.', ok: 'Padam Kelas', danger: true, onOk: async () => { await remove('classes', id); toast('Kelas dipadam'); app.render(); } }),
 
   'class-view': id => {

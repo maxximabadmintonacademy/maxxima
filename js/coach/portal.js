@@ -1,6 +1,6 @@
 // Portal Coach: sesi hari ini & minggu ini (termasuk kategori umur yang diberi), tanda kehadiran, pelajar, akaun.
 import { ACTIONS, INPUTS } from '../registry.js';
-import { S, loadCoach, markRead, subscribeNotifications, subscribeTables, setPassword, insert, rpc } from '../data.js';
+import { S, setting, loadCoach, markRead, subscribeNotifications, subscribeTables, setPassword, insert, rpc } from '../data.js';
 import { uploadMedia, mediaGrid, publicUrl, photoAvatar } from '../media.js';
 import { planCard, planView, openPlanEditor, copyPlan } from '../planner.js';
 import { LANGS_ALL } from '../admin/sessions.js';
@@ -22,6 +22,9 @@ const SKILLS = [['footwork', 'Footwork'], ['strokes', 'Pukulan'], ['tactics', 'T
 const NAV = [['hari', 'Hari Ini', 'home'], ['minggu', 'Minggu Ini', 'calendar'], ['pelajar', 'Pelajar', 'users'], ['pelan', 'Pelan Latihan', 'check'], ['akaun', 'Akaun', 'user']];
 const meStaff = () => T('staff').find(s => s.profile_id === S.profile.id) || (S.mode === 'demo' ? (T('staff').find(s => /alvi/i.test(s.full_name)) || T('staff')[0]) : null);
 const mine = (from, to) => { const st = meStaff(); return st ? calItems(from, to, { mine: st.id }) : []; };
+/** Jadual coach bermula dari tarikh yang ditetapkan admin (Tetapan → coach_portal.from); sesi sebelum itu disembunyikan. */
+const coachFrom = () => setting('coach_portal', {})?.from || '';
+const mineS = (from, to) => { const f = coachFrom(); if (f && to < f) return []; return mine(f && from < f ? f : from, to); };
 const unread = () => T('notifications').filter(n => !n.read_at && n.user_id === S.profile.id);
 
 function renderShell() {
@@ -98,10 +101,10 @@ const card = ({ s, c, date }, showDate) => {
 
 CV.hari = () => {
   const me = st(); if (!me) return head('Portal Coach', '') + `<div class="card card-pad">Akaun anda belum dipautkan dengan profil staf. Hubungi admin.</div>`;
-  const today = todayISO(), list = mine(today, today), past = mine(addDays(today, -7), addDays(today, -1)).filter(x => x.s && x.s.status === 'scheduled');
+  const today = todayISO(), list = mineS(today, today), past = mineS(addDays(today, -7), addDays(today, -1)).filter(x => x.s && x.s.status === 'scheduled');
   return `${head(`Hai, ${esc(me.full_name.split(' ')[0])}`, `${DAYS[parseISO(today).getDay()]}, ${fmtDate(today)} · ${list.length} sesi hari ini`)}
   ${assignBanner()}
-  ${list.map(x => card(x)).join('') || (() => { const nx = mine(addDays(today, 1), addDays(today, 30)); return nx.length
+  ${list.map(x => card(x)).join('') || (() => { const nx = mineS(addDays(today, 1), addDays(today, 30)); return nx.length
     ? `<div class="card empty mb">Tiada sesi hari ini. Sesi seterusnya: <b>${DAYS[parseISO(nx[0].date).getDay()]}, ${fmtDate(nx[0].date)}</b> — lihat tab Minggu.</div>`
     : `<div class="card card-pad mb"><b>Belum ada sesi ditugaskan kepada anda</b><p class="muted" style="font-size:13px;margin-top:6px">Portal coach memaparkan kelas & sesi personal di mana anda ialah coach. Admin boleh tetapkan anda sebagai coach kelas di <b>Jadual Latihan</b>, coach sesi dalam panel sesi Kalendar, atau coach kategori (U8/U12…). Selepas itu jadual, senarai pelajar, kehadiran & pelan latihan akan muncul di sini.</p></div>`; })()}
   ${sopCard()}
@@ -117,7 +120,7 @@ CV.pelan = () => { const me = st(), mine = T('lesson_plans').filter(p => p.coach
   <h3 style="font-size:14px;margin:12px 0 8px">Pelan saya</h3>${mine.map(p => planCard(p)).join('') || '<div class="card empty">Belum ada pelan. Tekan "Pelan baharu" atau salin templat.</div>'}`; };
 CV.kursus = () => { const cs = T('courses').filter(c => c.status === 'published'); return `${head('Kursus', 'Bahan pembelajaran akademi')}${cs.map(c => `<div class="card card-pad mb"><b>${esc(c.title)}</b>${c.summary ? `<p class="muted" style="font-size:13px">${esc(c.summary)}</p>` : ''}<ol style="margin:8px 0 0 18px;font-size:13.5px">${T('course_lessons').filter(l => l.course_id === c.id).sort((a, b) => a.sort - b.sort).map(l => `<li style="margin-bottom:6px"><b>${esc(l.title)}</b>${l.video_url ? ` · <a target="_blank" rel="noopener" href="${esc(l.video_url)}">video</a>` : ''}${l.body ? `<div style="white-space:pre-line">${esc(l.body)}</div>` : ''}</li>`).join('')}</ol></div>`).join('') || '<div class="card empty">Belum ada kursus.</div>'}`; };
 CV.minggu = () => {
-  const today = todayISO(), list = mine(today, addDays(today, 7)), days = [...new Set(list.map(x => x.date))];
+  const today = todayISO(), list = mineS(today, addDays(today, 7)), days = [...new Set(list.map(x => x.date))];
   return `${head('Minggu Ini', '7 hari akan datang')}${days.map(d => `<div class="daylist"><div class="dh">${DAYS[parseISO(d).getDay()]}, ${fmtDate(d)}</div>${list.filter(x => x.date === d).map(x => card(x)).join('')}</div>`).join('') || '<div class="card empty">Tiada sesi.</div>'}`;
 };
 CV.pelajar = () => {

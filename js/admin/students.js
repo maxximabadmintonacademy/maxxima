@@ -1,3 +1,4 @@
+import { dupeCount } from './dupes.js';
 // Leads, Kelas Percubaan (trial), Pendaftaran (kemasukan), Senarai Pelajar.
 import { withLang, getLang } from '../i18n.js';
 import { langOf } from '../lang-of.js';
@@ -356,13 +357,13 @@ Object.assign(ACTIONS, {
 
 /* ---------- Borang pelajar + penjaga (aliran AOne: pelajar dahulu, kemudian penjaga 1, 2, 3) ---------- */
 const RELS = [['father', 'Bapa'], ['mother', 'Ibu'], ['guardian', 'Penjaga'], ['self', 'Diri sendiri (pelajar dewasa)']];
-const guardBlock = (g, n) => `<div class="g-block" style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px">
+const guardBlock = (g, n, opt) => `<div class="g-block" style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:13.5px">Penjaga ${n}${n === 1 ? ' (utama)' : ''}</b>${n > 1 ? `<button type="button" class="btn sm danger-o" data-action="guard-remove">${ic('trash', 'sm')}</button>` : ''}</div>
   <input type="hidden" name="g_id" value="${esc(g?.id || '')}">
   <div class="form-grid">
     ${F('Hubungan', 'g_rel', { value: g?.relationship || (n === 1 ? 'mother' : 'father'), opts: RELS })}
-    ${F('Nama penuh', 'g_name', { value: g?.full_name, req: n === 1 })}
-    ${F('No. WhatsApp', 'g_phone', { value: g?.phone, req: n === 1, ph: '60123456789' })}
+    ${F('Nama penuh', 'g_name', { value: g?.full_name, req: n === 1 && !opt })}
+    ${F('No. WhatsApp', 'g_phone', { value: g?.phone, req: n === 1 && !opt, ph: '60123456789' })}
     ${F('E-mel', 'g_email', { type: 'email', value: g?.email, ph: 'untuk akaun portal ibu bapa' })}
     ${F('Alamat (pilihan)', 'g_addr', { value: g?.address, full: true })}
     ${F('No. KP (pilihan: untuk resit cukai pendapatan)', 'g_ic', { value: g?.ic_no, full: true })}
@@ -390,7 +391,8 @@ const studentFormHtml = (s, progIds, guards, mode) => `
   <h4 style="font-size:13.5px;margin:18px 0 8px">2. Ibu bapa / penjaga</h4>
   <div id="famNote"></div>
   <label class="check-row" style="border:1px solid var(--line);border-radius:12px;margin-bottom:10px"><input type="checkbox" name="g_self" value="1" ${guards[0]?.relationship === 'self' ? 'checked' : ''}><span><b>Pelajar dewasa: daftar sebagai diri sendiri</b><br><span class="muted" style="font-size:12.5px">Tiada ibu bapa. No. WhatsApp, e-mel dan alamat di bawah ialah milik pelajar.</span></span></label>
-  <div id="guardBlocks">${(guards.length ? guards : [null]).map((g, i) => guardBlock(g, i + 1)).join('')}</div>
+  ${s && !guards.length ? `<div class="hint" style="margin-bottom:8px">Profil ini belum ada rekod penjaga${s.guardian_name || s.guardian_phone ? ' — maklumat dari import lama diisi di bawah, semak & simpan' : ' — boleh dikosongkan buat masa ini'}.</div>` : ''}
+  <div id="guardBlocks">${(guards.length ? guards : [s && (s.guardian_name || s.guardian_phone) ? { full_name: s.guardian_name || '', phone: s.guardian_phone || '', relationship: 'guardian' } : null]).map((g, i) => guardBlock(g, i + 1, !!s)).join('')}</div>
   <button type="button" class="btn sm" data-action="guard-more">${ic('plus', 'sm')} Tambah penjaga</button>
   <p class="muted" style="margin-top:8px;font-size:12.5px">Taip no. WhatsApp penjaga: jika sama dengan adik-beradik yang sudah didaftar, maklumat penjaga, kod keluarga dan akaun ibu bapa dipautkan secara automatik.</p>`;
 
@@ -458,14 +460,14 @@ async function saveStudent(d, sid) {
   const ids = arr('g_id'), names = arr('g_name'), rels = arr('g_rel'), phones = arr('g_phone'), emails = arr('g_email'), addrs = arr('g_addr'), ics = arr('g_ic');
   if (d.g_self === '1') { names[0] = d.full_name.trim(); rels[0] = 'self'; }
   const gs = names.map((n, i) => ({ id: ids[i] || null, relationship: rels[i], full_name: (n || '').trim(), phone: val(phones[i]), email: val(emails[i]) ? emails[i].trim().toLowerCase() : null, address: val(addrs[i]), ic_no: val(ics[i]) })).filter(g => g.full_name);
-  if (!gs.length) { toast('Masukkan sekurang-kurangnya seorang penjaga', true); return false; }
+  if (!gs.length && !sid) { toast('Masukkan sekurang-kurangnya seorang penjaga', true); return false; }
   const progs = arr('prog_ids').filter(Boolean);
   const patch = { full_name: d.full_name.trim(), birth_date: val(d.birth_date), gender: val(d.gender), venue_id: (() => { const vs = arr('venue_ids').filter(Boolean), cur = sid && byId('students', sid)?.venue_id; return vs.includes(cur) ? cur : vs[0] || null; })(), status: d.status, family_ref: val(d.family_ref), fee_exempt: d.fee_exempt === '1', billing_note: val(d.billing_note), lang: val(d.lang), notes: val(d.notes), programme_id: progs[0] || null, guardian_name: gs[0].full_name, guardian_phone: gs[0].phone };
   const sibs = String(d.sib_ids || '').split(',').filter(Boolean).map(x => byId('students', x)).filter(Boolean);
   const acct = sibs.find(x => x.guardian_id)?.guardian_id;
   if (acct && !(sid && byId('students', sid)?.guardian_id)) patch.guardian_id = acct;
   let id = sid;
-  if (id) await update('students', id, patch);
+  if (id) await update('students', id, byId('students', id)?.review_later ? { ...patch, review_later: false } : patch);
   else { const r = await insert('students', { ...patch, joined_on: d.status === 'active' ? todayISO() : null }); id = r?.id; }
   if (!id) return false;
   const have = T('guardians').filter(g => g.student_id === id);
@@ -490,9 +492,12 @@ VIEWS.pelajar = () => {
   const q = (UI.studentQ || '').toLowerCase(), st = UI.studentStatus || 'active', pg = UI.studentProg || '', vn = UI.studentVenue || '';
   const all = T('students');
  const sel = UI.stSel ||= new Set();
-  const rows = all.filter(s => (st === 'archived' ? !!s.archived_at : !s.archived_at && (st === 'all' || s.status === st)) && (!pg || s.programme_id === pg) && (!vn || s.venue_id === vn) && (!UI.studentLink || !s.guardian_id)
+  const later = all.filter(s => s.review_later && !s.archived_at), onLater = UI.studentLater && later.length;
+  const rows = all.filter(s => (onLater ? s.review_later && !s.archived_at : st === 'archived' ? !!s.archived_at : !s.archived_at && (st === 'all' || s.status === st)) && (!pg || s.programme_id === pg) && (!vn || s.venue_id === vn) && (!UI.studentLink || !s.guardian_id)
     && (!q || [s.full_name, s.guardian_name, s.guardian_phone, s.family_ref, ...guardiansOf(s.id).map(g => g.email)].join(' ').toLowerCase().includes(q)))
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
+  // carian: tunjuk padanan yang tersembunyi oleh tapisan status / program / lokasi / arkib
+  const hidden = q ? all.filter(s => !rows.includes(s) && [s.full_name, s.guardian_name, s.guardian_phone, s.family_ref].join(' ').toLowerCase().includes(q)) : [];
   return `
   ${pageHead('Senarai Pelajar', `${all.filter(s => s.status === 'active').length} pelajar aktif · ${all.length} rekod keseluruhan`, `<button class="btn primary" data-action="student-add">${ic('userplus', 'sm')} Daftar Pelajar</button> <a class="btn" href="#kemasukan">Pendaftaran</a>`)}
   <div class="card">
@@ -503,7 +508,12 @@ VIEWS.pelajar = () => {
       <label class="field"><select data-on-change="student-link"><option value="">Semua akaun</option><option value="1" ${UI.studentLink ? 'selected' : ''}>Belum dipautkan akaun (${all.filter(s => s.status === 'active' && !s.guardian_id).length})</option></select></label>
       <label class="field"><select data-on-change="student-venue"><option value="">Semua lokasi</option>${T('venues').map(v => `<option value="${v.id}" ${vn === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
     </div>
-    ${sel.size ? `<div class="bulkbar"><b>${sel.size} dipilih</b>
+    ${hidden.length ? `<div class="later-bar"><span><b>${hidden.length} lagi</b> padanan "${esc(UI.studentQ)}" disembunyikan oleh tapisan: ${hidden.slice(0, 6).map(s => `<a href="#" data-action="student-view" data-id="${s.id}">${esc(s.full_name)}</a> (${s.archived_at ? 'Arkib' : esc(LABEL[s.status] || s.status)}${s.merged_into ? ', digabung' : ''})`).join(', ')}${hidden.length > 6 ? '…' : ''}</span>
+      <button class="btn sm" data-action="st-show-all">Tunjuk semua</button></div>` : ''}
+    ${(() => { const n = dupeCount(); return n ? `<div class="later-bar dupe"><span><b>${n} kumpulan</b> kemungkinan profil berganda (nama serupa & ibu bapa sama).</span><button class="btn sm" data-action="dupe-open">Semak & gabung</button></div>` : ''; })()}
+    ${later.length ? `<div class="later-bar ${onLater ? 'on' : ''}"><span>${onLater ? `<b>Semak kemudian: ${later.length} pelajar</b> dari import lama. Buka setiap profil untuk kemas kini, atau tanda beberapa dan pilih tindakan di bawah. Status semua dipaparkan.` : `<b>${later.length} pelajar</b> dari import lama menunggu semakan anda.`}</span>
+      <button class="btn sm ${onLater ? '' : 'primary'}" data-action="st-later">${onLater ? 'Tutup tapisan' : 'Semak sekarang'}</button></div>` : ''}
+    ${sel.size ? `<div class="bulkbar"><b>${sel.size} dipilih</b>${onLater ? `<button class="btn sm primary" data-action="st-bulk" data-id="checked">✓ Selesai semak</button>` : ''}
       <button class="btn sm" data-action="st-bulk" data-id="left">Tandakan Berhenti</button><button class="btn sm" data-action="st-bulk" data-id="archive">${ic('file', 'sm')} Arkib</button>
       <button class="btn sm" data-action="st-bulk" data-id="active">Aktifkan semula</button>${st === 'archived' ? '<button class="btn sm" data-action="st-bulk" data-id="unarchive">Keluarkan dari arkib</button>' : ''}${sel.size > 1 ? `<button class="btn sm" data-action="st-merge-sel">${ic('users', 'sm')} Gabung ${sel.size} profil</button>` : ''}<button class="btn sm" data-action="st-sel-clear">Kosongkan pilihan</button></div>` : ''}
     <div class="table-wrap"><table>
@@ -512,7 +522,7 @@ VIEWS.pelajar = () => {
         const r = attRate(s.id), lp = livePackages(s.id)[0], pp = studentPackages(s.id).find(p => p.status === 'pending');
         return `<tr class="click ${sel.has(s.id) ? 'sel' : ''}" data-action="student-view" data-id="${s.id}">
           <td class="selcol" data-action="st-sel" data-id="${s.id}"><span class="cbx ${sel.has(s.id) ? 'on' : ''}"></span></td>
-          <td><div class="cell-person">${avatar(s.full_name)}<div><b>${esc(s.full_name)}</b><span>${s.birth_date ? ageOf(s.birth_date) + ' thn' : '—'}${s.status !== 'active' ? ' · ' + LABEL[s.status] : ''}${s.archived_at ? ' · Arkib' : ''}</span>${s.fee_exempt ? '<span class="badge b-lime" style="margin-top:3px">Tiada yuran</span>' : ''}</div></div></td>
+          <td><div class="cell-person">${avatar(s.full_name)}<div><b>${esc(s.full_name)}</b><span>${s.birth_date ? ageOf(s.birth_date) + ' thn' : '—'}${s.status !== 'active' ? ' · ' + LABEL[s.status] : ''}${s.archived_at ? ' · Arkib' : ''}${s.merged_into ? ' · digabung ke ' + esc(byId('students', s.merged_into)?.full_name || 'profil lain') : ''}</span>${s.fee_exempt ? '<span class="badge b-lime" style="margin-top:3px">Tiada yuran</span>' : ''}</div></div></td>
           <td>${esc(progNamesOf(s))}<div class="muted" style="font-size:12px">${lp ? LABEL[lp.schedule_mode] : ''}</div></td>
           <td>${esc(venueName(s.venue_id))}</td>
           <td>${esc(s.guardian_name || '—')}<div class="muted" style="font-size:12px">${esc(s.guardian_phone || '')}${guardiansOf(s.id)[0]?.email ? ' · ' + esc(guardiansOf(s.id)[0].email) : ''}</div>${s.guardian_id ? '' : '<span class="badge b-warn" style="margin-top:3px">Belum dipautkan akaun</span>'}</td>
@@ -656,3 +666,6 @@ ACTIONS['parent-acct'] = (id, el) => {
 
 import { openMonthlyReport } from '../docs2.js';
 ACTIONS['st-report'] = id => openModal({ title: 'Laporan Progres Bulanan', submit: 'Buka laporan', body: F('Bulan', 'month', { type: 'month', value: todayISO().slice(0, 7), req: true }), onSubmit: d => openMonthlyReport(id, d.month) });
+
+ACTIONS['st-show-all'] = () => { const q = (UI.studentQ || '').toLowerCase(), arch = T('students').some(s => s.archived_at && s.full_name.toLowerCase().includes(q)) && !T('students').some(s => !s.archived_at && s.status !== UI.studentStatus && s.full_name.toLowerCase().includes(q));
+    Object.assign(UI, { studentStatus: arch ? 'archived' : 'all', studentProg: '', studentVenue: '', studentLink: '', studentLater: false }); app.render(); };
