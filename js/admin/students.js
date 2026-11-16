@@ -526,8 +526,8 @@ VIEWS.pelajar = () => {
           <td>${esc(progNamesOf(s))}<div class="muted" style="font-size:12px">${lp ? LABEL[lp.schedule_mode] : ''}</div></td>
           <td>${esc(venueName(s.venue_id))}</td>
           <td>${esc(s.guardian_name || '—')}<div class="muted" style="font-size:12px">${esc(s.guardian_phone || '')}${guardiansOf(s.id)[0]?.email ? ' · ' + esc(guardiansOf(s.id)[0].email) : ''}</div>${s.guardian_id ? '' : '<span class="badge b-warn" style="margin-top:3px">Belum dipautkan akaun</span>'}</td>
-          <td style="min-width:120px">${r == null ? '<span class="muted">—</span>' : `<div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><span style="width:${r}%;background:${barColor(r)}"></span></div><b class="num" style="font-size:12.5px">${r}%</b></div>`}</td>
-          <td style="white-space:nowrap">${lp ? `<b class="num" style="color:${pkgRemaining(lp) <= 1 ? 'var(--bad)' : 'var(--ink)'}">${pkgRemaining(lp)}</b><span class="muted"> / ${lp.sessions_total} sesi</span><div class="muted" style="font-size:11.5px">tamat ${fmtShort(lp.expires_on)}</div>` : pp ? '<span class="badge b-info">menunggu bayaran</span>' : s.status === 'active' ? '<span class="badge b-warn">tiada pakej</span>' : '<span class="muted">—</span>'}</td></tr>`;
+          <td style="min-width:120px" class="qcell" data-action="sq-att" data-id="${s.id}" title="Tanda kehadiran">${r == null ? '<span class="muted">—</span>' : `<div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><span style="width:${r}%;background:${barColor(r)}"></span></div><b class="num" style="font-size:12.5px">${r}%</b></div>`}</td>
+          <td style="white-space:nowrap" class="qcell" data-action="sq-pkg" data-id="${s.id}" title="Lihat / laras / jual pakej">${lp ? `<b class="num" style="color:${pkgRemaining(lp) <= 1 ? 'var(--bad)' : 'var(--ink)'}">${pkgRemaining(lp)}</b><span class="muted"> / ${lp.sessions_total} sesi</span><div class="muted" style="font-size:11.5px">tamat ${fmtShort(lp.expires_on)}</div>` : pp ? '<span class="badge b-info">menunggu bayaran</span>' : s.status === 'active' ? '<span class="badge b-warn">tiada pakej</span>' : '<span class="muted">—</span>'}</td></tr>`;
       }).join('') || `<tr><td colspan="7" class="empty">Tiada pelajar sepadan.</td></tr>`}</tbody>
     </table></div>
   </div>`;
@@ -667,6 +667,7 @@ ACTIONS['parent-acct'] = (id, el) => {
 
 import { openMonthlyReport } from '../docs2.js';
 import './level.js';
+import './student-quick.js';
 ACTIONS['st-report'] = id => openModal({ title: 'Laporan Progres Bulanan', submit: 'Buka laporan', body: F('Bulan', 'month', { type: 'month', value: todayISO().slice(0, 7), req: true }), onSubmit: d => openMonthlyReport(id, d.month) });
 
 ACTIONS['st-show-all'] = () => { const q = (UI.studentQ || '').toLowerCase(), arch = T('students').some(s => s.archived_at && s.full_name.toLowerCase().includes(q)) && !T('students').some(s => !s.archived_at && s.status !== UI.studentStatus && s.full_name.toLowerCase().includes(q));

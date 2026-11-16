@@ -614,3 +614,6 @@ input.switch:checked{background:var(--ok,#16a34a)}input.switch:checked::after{le
 .pw-chips input[type=number]{height:34px!important;width:70px}
 .pw-pk select{height:38px}
 .pw-why{font-size:11.5px;color:var(--ok,#15803d);margin-top:2px}
+/* v53: sel pantas dalam Senarai Pelajar */
+td.qcell { cursor: pointer; border-radius: 8px; transition: background .12s; }
+td.qcell:hover { background: rgba(60, 90, 200, .08); box-shadow: inset 0 0 0 1px rgba(60, 90, 200, .25); }

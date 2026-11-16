@@ -43,8 +43,10 @@ ACTIONS['st-level'] = id => {
     ${oldPk ? `<div class="f" style="margin-top:12px"><span>Baki pakej lama: <b>${esc(oldPk.name)}</b> — ${left} sesi lagi (${RM(oldPk.price)})</span>
       <label class="check-row"><input type="radio" name="pk" value="carry" checked><span><b>Teruskan baki ${left} sesi di kelas baru</b> — pakej dipindah ke program baru. Isi caj beza jika yuran baru lebih mahal.</span></label>
       <label class="check-row"><input type="radio" name="pk" value="credit"><span><b>Tamatkan & kredit ${RM(credit)}</b> ke invois akan datang (${left} × ${RM(per)}). Kemudian jual pakej baru.</span></label>
+      <label class="check-row"><input type="radio" name="pk" value="done"><span><b>Pakej lama sebenarnya sudah habis</b> — tandakan habis (sesi lama sebelum sistem), tiada kredit.</span></label>
       <label class="check-row"><input type="radio" name="pk" value="keep"><span>Biarkan pakej lama (saya urus sendiri)</span></label></div>
       <div class="form-grid" style="margin-top:8px">${F('Caj beza yuran (RM, pilihan)', 'diff', { type: 'number', step: '0.01', min: 0, ph: 'Kosongkan jika tiada' })}</div>` : '<p class="hint" style="margin-top:12px">Tiada pakej aktif untuk program lama. Jual pakej program baru selepas ini.</p>'}
+    <label class="check-row" style="margin-top:12px"><input type="checkbox" name="sell" ${oldPk ? '' : 'checked'}><span><b>Selepas simpan, terus jual pakej program baru & keluarkan invois</b></span></label>
     <p class="muted" style="margin-top:12px;font-size:12.5px">Yang akan berlaku: program pelajar ditukar, pelajar dikeluarkan dari kelas lama mulai tarikh di atas (tempahan akan datang dalam kelas lama dibatalkan), dimasukkan ke kelas baru, dan catatan perubahan disimpan dalam profil. Rekod kehadiran lama kekal.</p>`,
     onSubmit: async d => {
       const prog = d.programme_id, ids = [].concat(d.class_ids || []), from = d.from || todayISO();
@@ -65,12 +67,13 @@ ACTIONS['st-level'] = id => {
       if (!T('student_programmes').some(p => p.student_id === id && p.programme_id === prog)) { try { await insert('student_programmes', { student_id: id, programme_id: prog, venue_id: newVenue || null }); } catch (_) {} }
       // 4. pakej lama
       const month = from.slice(0, 7);
-      if (oldPk && d.pk === 'carry') { await update('student_packages', oldPk.id, { programme_id: prog }); done.push(`baki ${left} sesi diteruskan`); }
+      if (oldPk && d.pk === 'carry') { await update('student_packages', oldPk.id, { programme_id: prog, name: /→/.test(oldPk.name) ? oldPk.name : `${oldPk.name} → ${progName(prog)}` }); done.push(`baki ${left} sesi diteruskan`); }
       if (oldPk && d.pk === 'credit') {
         await update('student_packages', oldPk.id, { status: 'cancelled' });
         if (credit > 0) await insert('billing_adjustments', { student_id: id, kind: 'credit', amount: credit, apply_month: month, reason: `Naik tahap ke ${progName(prog)} — baki ${left} sesi ${oldPk.name}`, created_by: S.mode === 'demo' ? null : S.profile?.id || null });
         done.push(`kredit ${RM(credit)}`);
       }
+      if (oldPk && d.pk === 'done') { const { markPkgDone } = await import('./student-quick.js'); await markPkgDone(oldPk.id); done.push('pakej lama ditanda habis'); }
       if (Number(d.diff) > 0) { await insert('billing_adjustments', { student_id: id, kind: 'charge', amount: Number(d.diff), apply_month: month, reason: `Beza yuran naik tahap ke ${progName(prog)}`, created_by: S.mode === 'demo' ? null : S.profile?.id || null }); done.push(`caj beza ${RM(d.diff)}`); }
       // 5. profil + catatan
       const note = `[${from}] Tahap: ${progName(oldProg)} → ${progName(prog)}`;
@@ -78,6 +81,7 @@ ACTIONS['st-level'] = id => {
       closeModal();
       toast(`${s.full_name} kini ${progName(prog)}${ids.length ? ` · ${ids.length} kelas` : ' · belum ada kelas'}${done.length ? ' · ' + done.join(', ') : ''}`);
       app.render();
+      if (d.sell) setTimeout(() => ACTIONS.sell(id), 50);
     },
   });
   const redraw = () => { const fd = new FormData(f); f.querySelector('#lvClasses').innerHTML = classList(id, fd.get('programme_id'), fd.get('venue_id'), fd.getAll('class_ids')); };
