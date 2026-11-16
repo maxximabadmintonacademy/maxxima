@@ -53,7 +53,7 @@ ACTIONS['sq-att'] = id => {
   const items = calItems(from, to).filter(x => x.s?.status !== 'cancelled' && ((x.s && mine.has(x.s.id)) || (myCls.has(x.c.id) && !isPersonal(x.c))))
     .sort((a, b) => b.date.localeCompare(a.date) || String(sTime(b.s, b.c)[0]).localeCompare(String(sTime(a.s, a.c)[0])));
   const rec = x => x.s && T('attendance').find(a => a.session_id === x.s.id && a.student_id === id);
-  const done = items.filter(x => x.date <= today && ['present', 'late'].includes(rec(x)?.status)).length, past = items.filter(x => x.date <= today).length;
+  const done = items.filter(x => x.date <= today && ['present', 'late', 'trial'].includes(rec(x)?.status)).length, past = items.filter(x => x.date <= today).length;
   openModal({ title: `Kehadiran — ${esc(s.full_name)}`, wide: true, cancel: 'Tutup',
     body: `<p class="muted" style="margin-bottom:10px">5 minggu lepas & 2 minggu akan datang · hadir ${done}/${past} sesi lepas. Tukar status terus di sini — baki pakej dikira semula automatik.</p>
     <ul class="list" style="margin:0 -20px">${[...items.filter(x => x.date <= today), ...items.filter(x => x.date > today).reverse()].map((x, i, arr) => { const a = rec(x), [t] = sTime(x.s, x.c), fut = x.date > today, head = fut && !(arr[i - 1]?.date > today);
