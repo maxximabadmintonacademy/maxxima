@@ -20,5 +20,14 @@
 <div class="modal-root" id="modal"></div>
 <div class="toast" id="toast" role="status"></div>
 <script type="module" src="js/main.js"></script>
+<script>
+/* Pengawas permulaan: jika app gagal dimuat (fail tidak lengkap selepas upload, cache lama, rangkaian lemah) — tunjuk butang muat semula, bukan "Memuatkan…" selamanya. */
+(function(){var err='';window.addEventListener('error',function(e){if(e&&(e.message||(e.target&&e.target.src)))err=e.message||('Gagal memuat '+e.target.src)},true);
+window.addEventListener('unhandledrejection',function(e){err=(e.reason&&(e.reason.message||e.reason))+''});
+function stuck(){var b=document.querySelector('#root > .boot');return b&&!document.querySelector('#root .auth, #root .shell, #root .cp, #root main')}
+function show(){if(!stuck())return;document.getElementById('root').innerHTML='<div class="boot" style="max-width:340px;margin:12vh auto;text-align:center;line-height:1.6;padding:0 16px"><b>Lambat memuatkan…</b><br><span style="font-size:13px">Sambungan perlahan atau app baru dikemas kini.</span>'+(err?'<div style="font-size:11.5px;color:#b42318;margin-top:8px;word-break:break-word">'+String(err).replace(/[<>&]/g,'')+'</div>':'')+'<br><button id="bootRetry" style="margin-top:14px;height:44px;padding:0 22px;border-radius:12px;border:0;background:#0B2545;color:#fff;font-weight:700;font-size:15px">Muat semula</button></div>';
+document.getElementById('bootRetry').onclick=function(){var go=function(){location.replace(location.pathname+'?r='+Date.now()+location.hash)};try{Promise.all([caches.keys().then(function(k){return Promise.all(k.map(function(x){return caches.delete(x)}))}),navigator.serviceWorker?navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister()}))}):0]).then(go,go)}catch(e){go()}}}
+setTimeout(show,12000);})();
+</script>
 </body>
 </html>
