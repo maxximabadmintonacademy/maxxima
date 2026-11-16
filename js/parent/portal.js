@@ -52,7 +52,12 @@ function renderShell() {
 }
 const parse = () => { const id = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0]; return PV[id] ? id : 'utama'; };
 function render() {
-  if (UI.ob && $('#view')) { $('#view').innerHTML = onboardView(); return; }
+  if (UI.ob && $('#view')) {   // log masuk pertama: tajuk & loceng tetap dipaparkan
+    $('#view').innerHTML = onboardView();
+    if ($('#crumbTitle')) $('#crumbTitle').textContent = t('Selamat datang');
+    if ($('#bellBtn')) $('#bellBtn').innerHTML = ic('bell') + (unread().length ? '<span class="dot"></span>' : '');
+    return;
+  }
   if (!$('#view')) return;
   const id = parse(), sy = window.scrollY;
   try { $('#view').innerHTML = PV[id](); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>${t('Ralat memaparkan halaman.')}</b><p class="muted">${esc(e.message)}</p></div>`; }
@@ -491,13 +496,17 @@ PV.yuran = () => {
   ${cns.length ? `<div class="card"><div class="card-head"><div><h3>${t('Nota Kredit')}</h3></div></div><ul class="list">${cns.map(c => `<li class="list-item"><div class="li-main"><div class="li-title">${esc(c.number)} · <span class="num">-${RM(c.amount)}</span></div><div class="li-sub">${esc(byId('invoices', c.invoice_id)?.number || '')} · ${fmtDate(c.issued_on)}${c.reason ? ' · ' + esc(c.reason) : ''}</div></div><button class="btn sm" data-action="p-cn" data-id="${c.id}">${ic('file', 'sm')} ${t('Cetak')}</button></li>`).join('')}</ul></div>` : ''}`;
 };
 
+/** Mesej terima kasih selepas bayaran (kekal di skrin sehingga ditutup). */
+function thanks(title, sub, body) {
+  openModal({ title: '🏸 ' + title, cancel: t('Tutup'), body: `<div style="text-align:center;padding:6px 4px 2px"><div style="font-size:44px;line-height:1">✅</div>${sub ? `<div style="font-weight:800;font-size:18px;margin-top:10px">${sub}</div>` : ''}<p class="muted" style="margin-top:10px;line-height:1.55">${body}</p><p style="margin-top:12px;font-weight:600">${t('Terima kasih atas sokongan anda kepada Maxxima Badminton Academy!')}</p></div>` });
+}
 const gw = () => (S.t.settings || []).find(x => x.key === 'gateway')?.value || {};
 async function gwReturn() {
   const q = new URLSearchParams(location.search), code = q.get('billcode'); if (!code) return;
   history.replaceState(null, '', location.pathname + '#yuran');
   if (S.mode !== 'supabase') return;
   try { const { data, error } = await S.client.functions.invoke('toyyibpay', { body: { action: 'check', bill_code: code } }); if (error) throw error;
-    if (data?.paid) { toast(t('Bayaran berjaya! Resit tersedia di bawah.')); await loadParent(); render(); }
+    if (data?.paid) { await loadParent(); render(); thanks(t('Terima kasih! Bayaran berjaya'), data?.amount ? RM(data.amount) : '', t('Bayaran anda telah diterima dan disahkan secara automatik. Resit kini tersedia di bahagian Yuran.')); }
     else toast(q.get('status_id') === '3' ? t('Bayaran tidak berjaya / dibatalkan.') : t('Bayaran sedang diproses — status dikemas kini sebentar lagi.'), q.get('status_id') === '3');
   } catch (e) { console.warn(e); }
 }
@@ -540,7 +549,7 @@ Object.assign(ACTIONS, {
           }
         }
         await insert('payments', { invoice_id: id, amount: amt, method: d.method, paid_on: d.paid_on, reference: d.reference || null, status: 'pending', proof_path, submitted_by: S.mode === 'demo' ? null : me(), submitted_at: new Date().toISOString() });
-        toast(t('Bukti dihantar. Admin akan mengesahkan tidak lama lagi.')); app.render();
+        app.render(); setTimeout(() => thanks(t('Terima kasih! Bukti bayaran diterima'), `${RM(amt)} · ${esc(inv?.number || '')}`, t('Admin akan menyemak dan mengesahkan bayaran anda, biasanya dalam 1 hari bekerja. Anda akan menerima notifikasi dan resit di portal sebaik sahaja disahkan.')), 80);
       },
     });
   },

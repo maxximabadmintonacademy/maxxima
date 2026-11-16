@@ -557,6 +557,12 @@ const D = {
   'Bukti bayaran (tangkapan skrin / PDF)': ['Proof of payment (screenshot / PDF)', '付款凭证（截图 / PDF）'],
   'Admin akan menyemak bukti anda. Resit tersedia di sini selepas bayaran disahkan.': ['The admin will review your proof. Your receipt will be available here once payment is confirmed.', '管理员将审核您的凭证。付款确认后，可在此查看收据。'],
   'Amaun mesti antara RM0.01 dan {max}.': ['Amount must be between RM0.01 and {max}.', '金额须介于 RM0.01 与 {max} 之间。'], 'Fail terlalu besar (maksimum 5MB).': ['File is too large (maximum 5MB).', '文件过大（最大 5MB）。'],
+  'Terima kasih! Bukti bayaran diterima': ['Thank you! Payment proof received', '谢谢！已收到付款凭证'],
+  'Admin akan menyemak dan mengesahkan bayaran anda, biasanya dalam 1 hari bekerja. Anda akan menerima notifikasi dan resit di portal sebaik sahaja disahkan.': ['Our admin will review and confirm your payment, usually within 1 working day. You will get a notification and your receipt in the portal once it is confirmed.', '管理员将审核并确认您的付款，通常在1个工作日内。确认后您会在平台收到通知和收据。'],
+  'Terima kasih! Bayaran disahkan': ['Thank you! Payment confirmed', '谢谢！付款已确认'],
+  'Terima kasih! Bayaran berjaya': ['Thank you! Payment successful', '谢谢！付款成功'],
+  'Bayaran anda telah diterima dan disahkan secara automatik. Resit kini tersedia di bahagian Yuran.': ['Your payment has been received and confirmed automatically. Your receipt is now available under Fees.', '您的付款已收到并自动确认。收据可在"费用"中查看。'],
+  'Terima kasih atas sokongan anda kepada Maxxima Badminton Academy!': ['Thank you for supporting Maxxima Badminton Academy!', '感谢您对 Maxxima Badminton Academy 的支持！'],
   'Bukti dihantar. Admin akan mengesahkan tidak lama lagi.': ['Proof submitted. The admin will confirm it shortly.', '凭证已提交，管理员将尽快确认。'],
   // --- progres ---
   'Penilaian daripada jurulatih (skala 1–5)': ['Assessments from the coach (scale 1–5)', '教练评估（1–5 分）'], 'Belum ada penilaian untuk {name}.': ['No assessments yet for {name}.', '{name} 暂无评估。'],

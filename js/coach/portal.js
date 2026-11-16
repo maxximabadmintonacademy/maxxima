@@ -44,7 +44,7 @@ function renderShell() {
 const parse = () => { const id = decodeURIComponent(location.hash.replace(/^#\/?/, '')).split('/')[0]; return CV[id] ? id : 'hari'; };
 function render() {
   if (!$('#view')) return;
-  if (UI.cob) { $('#view').innerHTML = onboard(); $('#crumbTitle').textContent = 'Selamat datang'; $('#nav').innerHTML = ''; $('#bottomnav').innerHTML = ''; return; }
+  if (UI.cob) { $('#view').innerHTML = onboard(); $('#crumbTitle').textContent = 'Selamat datang'; $('#nav').innerHTML = ''; $('#bottomnav').innerHTML = ''; $('#bellBtn').innerHTML = ic('bell') + (unread().length ? '<span class="dot"></span>' : ''); return; }
   const id = parse(), sy = window.scrollY;
   try { $('#view').innerHTML = CV[id](); } catch (e) { console.error(e); $('#view').innerHTML = `<div class="card card-pad"><b>Ralat memaparkan halaman.</b><p class="muted">${esc(e.message)}</p></div>`; }
   const item = NAV.find(n => n[0] === id) || [id, id === 'kursus' ? 'Kursus' : id === 'sop' ? 'SOP Sesi' : 'Berita & acara', 'msg'];

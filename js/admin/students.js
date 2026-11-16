@@ -628,11 +628,11 @@ Object.assign(ACTIONS, {
 });
 
 /* ---------- Akaun portal ibu bapa: cipta / set semula kata laluan, kemudian hantar melalui WhatsApp ---------- */
-const portalUrl = () => location.href.split('#')[0].replace(/index\.html$/, '');
+const portalUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');   // tanpa ?v=… / #…
 const credMsg = ({ name, login, password, kids, url }) => pickL(
-  `Salam ${name}, akaun portal ibu bapa Maxxima Badminton Academy untuk ${kids} sudah sedia.\n\nPautan: ${url}\nLog masuk: ${login}\nKata laluan: ${password}\n\nDi portal anda boleh lihat jadual, kehadiran, invois dan resit, serta muat naik bukti bayaran. Sila tukar kata laluan selepas log masuk (Akaun > Tukar kata laluan). Terima kasih! 🏸`,
-  `Hi ${name}, your Maxxima Badminton Academy parent portal account for ${kids} is ready.\n\nLink: ${url}\nLogin: ${login}\nPassword: ${password}\n\nIn the portal you can see the schedule, attendance, invoices and receipts, and upload payment proof. Please change your password after logging in (Account > Change password). Thank you! 🏸`,
-  `${name} 您好，${kids} 的 Maxxima Badminton Academy 家长平台账户已开通。\n\n链接：${url}\n登录：${login}\n密码：${password}\n\n您可在平台查看课程表、出席、发票和收据，并上传付款凭证。登录后请更改密码（账户 > 更改密码）。谢谢！🏸`);
+  `Salam ${name}, akaun portal ibu bapa Maxxima Badminton Academy untuk ${kids} sudah sedia.\n\nPautan: ${url}\nLog masuk: ${login}\nKata laluan: ${password}\n\nDi portal anda boleh lihat jadual, kehadiran, invois dan resit, serta muat naik bukti bayaran. Kali pertama log masuk, anda akan diminta menukar kata laluan${/^\d+$/.test(login) ? ' dan memasukkan e-mel anda' : ''}. Terima kasih! 🏸`,
+  `Hi ${name}, your Maxxima Badminton Academy parent portal account for ${kids} is ready.\n\nLink: ${url}\nLogin: ${login}\nPassword: ${password}\n\nIn the portal you can see the schedule, attendance, invoices and receipts, and upload payment proof. On your first login you will be asked to set your own password${/^\d+$/.test(login) ? ' and enter your email' : ''}. Thank you! 🏸`,
+  `${name} 您好，${kids} 的 Maxxima Badminton Academy 家长平台账户已开通。\n\n链接：${url}\n登录：${login}\n密码：${password}\n\n您可在平台查看课程表、出席、发票和收据，并上传付款凭证。首次登录时系统会请您设置新密码${/^\d+$/.test(login) ? '并填写您的电邮' : ''}。谢谢！🏸`);
 const pickL = (ms, en, zh) => ({ ms, en, zh }[getLang()] ?? ms);
 export async function makeParentAccount(id, reset = false) {
   const s = byId('students', id);
@@ -651,11 +651,22 @@ export async function makeParentAccount(id, reset = false) {
       app.render();
       const kids = T('students').filter(x => x.guardian_id === s.guardian_id || x.id === id).filter(x => x.guardian_id).map(x => x.full_name.split(' ')[0]);
       if (!r.password) return toast('Akaun sudah wujud dan dipautkan. Tekan "Set semula kata laluan" untuk hantar kata laluan baharu.');
-      const msg = withLang(langOf(s), () => credMsg({ name: r.name || s.guardian_name || '', login: r.login, password: r.password, kids: [...new Set(kids)].join(' & ') || s.full_name, url: portalUrl() }));
+      const cm = { name: r.name || s.guardian_name || '', login: /^60\d+@maxxima\.app$/.test(r.login) ? '0' + r.login.split('@')[0].slice(2) : /@maxxima\.app$/.test(r.login) ? r.login.split('@')[0] : r.login, password: r.password, kids: [...new Set(kids)].join(' & ') || s.full_name, url: portalUrl() };
+      const L0 = langOf(s) || (getLang() !== 'ms' ? getLang() : 'en');   // bahasa ibu bapa, jika tiada → English
+      const msgIn = l => withLang(l, () => credMsg(cm));
       const phone = r.phone || s.guardian_phone;
-      setTimeout(() => openModal({ title: 'Akaun ibu bapa sedia', cancel: 'Tutup', body: `<div class="hint" style="margin-bottom:12px">Log masuk: <b>${esc(r.login)}</b><br>Kata laluan: <b style="font-size:16px;letter-spacing:.05em">${esc(r.password)}</b><br><span class="muted" style="font-size:12.5px">Kata laluan ini hanya dipaparkan sekali. Hantar kepada ibu bapa sekarang.</span></div>
-        <pre class="copybox" id="remindText">${esc(msg)}</pre>
-        <div class="actions" style="margin-top:12px">${phone ? `<a class="btn primary" href="${waLink(phone, msg)}" target="_blank" rel="noopener">${ic('msg', 'sm')} Hantar melalui WhatsApp</a>` : ''}<button type="button" class="btn" data-action="copy-remind">Salin mesej</button></div>` }), 60);
+      setTimeout(() => {
+        const m = openModal({ title: 'Akaun ibu bapa sedia', cancel: 'Tutup', body: `<div class="hint" style="margin-bottom:12px">Log masuk: <b>${esc(r.login)}</b><br>Kata laluan: <b style="font-size:16px;letter-spacing:.05em">${esc(r.password)}</b><br><span class="muted" style="font-size:12.5px">Kata laluan ini hanya dipaparkan sekali. Hantar kepada ibu bapa sekarang.</span></div>
+          <div class="seg" style="margin-bottom:8px" id="credLang">${[['ms', 'BM'], ['en', 'English'], ['zh', '中文']].map(([l, n]) => `<button type="button" class="${l === L0 ? 'on' : ''}" data-l="${l}">${n}</button>`).join('')}</div>
+          <pre class="copybox" id="remindText">${esc(msgIn(L0))}</pre>
+          <div class="actions" style="margin-top:12px">${phone ? `<a class="btn primary" id="credWa" href="${waLink(phone, msgIn(L0))}" target="_blank" rel="noopener">${ic('msg', 'sm')} Hantar melalui WhatsApp</a>` : ''}<button type="button" class="btn" data-action="copy-remind">Salin mesej</button></div>` });
+        const box = (m?.closest?.('.modal') || document).querySelector('#credLang');
+        box?.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+          box.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+          const t = msgIn(b.dataset.l); document.getElementById('remindText').textContent = t;
+          const wa = document.getElementById('credWa'); if (wa) wa.href = waLink(phone, t);
+        }));
+      }, 60);
     }
 ACTIONS['parent-acct'] = (id, el) => {
   const s = byId('students', id), reset = el?.dataset.reset === '1';
