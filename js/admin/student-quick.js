@@ -4,7 +4,7 @@
    • klik sel Kehadiran → tanda kehadiran sesi lepas & akan datang
    ===================================================================== */
 import { ACTIONS, INPUTS } from '../registry.js';
-import { S, insert, update } from '../data.js';
+import { S, insert, update, refresh } from '../data.js';
 import { esc, RM, LABEL, badge, openModal, closeModal, toast, todayISO, addDays, fmtShort, DAYS, app } from '../ui.js';
 import { T, byId, progName, venueName, pkgRemaining, studentPackages } from './helpers.js';
 import { calItems, ensureSession, sTime, isPersonal } from './sessions.js';
@@ -13,8 +13,9 @@ const ATT = ['present', 'late', 'absent', 'excused', 'late_cancel'];
 const by = () => (S.mode === 'demo' ? null : S.profile?.id || null);
 const reopen = (act, id) => { closeModal(); ACTIONS[act](id); };
 
-ACTIONS['sq-pkg'] = id => {
+ACTIONS['sq-pkg'] = async id => {
   const s = byId('students', id); if (!s) return;
+  if (S.mode === 'supabase') { try { await refresh(['student_packages']); } catch (_) {} }   // baki terkini dari pelayan
   const L = studentPackages(id).filter(p => p.status !== 'cancelled').sort((a, b) => (['active', 'pending'].includes(b.status) - ['active', 'pending'].includes(a.status)) || (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 6);
   const row = p => { const used = Number(p.sessions_used || 0), tot = Number(p.sessions_total || 0), left = pkgRemaining(p);
     const st = p.status === 'pending' ? badge('pending', 'Menunggu bayaran') : p.status === 'completed' ? badge('completed', 'Sesi habis') : badge(p.status);
@@ -78,13 +79,17 @@ INPUTS['sq-att-set'] = async (v, el) => {
 
 /* ---------- Rekod kehadiran lama (sebelum sistem) — supaya ibu bapa nampak sejarah & pakej ditolak dengan betul ---------- */
 const pastDates = (c, n = 12) => { const out = []; let d = todayISO(); for (let i = 0; i < 120 && out.length < n; i++) { if (new Date(d + 'T00:00').getDay() === c.weekday) out.push(d); d = addDays(d, -1); } return out; };
-function oldDatesHtml(stid, cid) {
+function oldDatesHtml(stid, cid, pkgId) {
   const c = byId('classes', cid); if (!c) return '<div class="muted">Pilih kelas.</div>';
+  const CONS = ['present', 'late', 'absent', 'late_cancel'];
   return pastDates(c).map(d => { const ss = T('class_sessions').find(x => x.class_id === cid && x.session_date === d), a = ss && T('attendance').find(x => x.session_id === ss.id && x.student_id === stid);
-    return `<label class="check-row"><input type="checkbox" name="dates" value="${d}" ${a && a.status !== 'booked' ? 'disabled' : ''}><span>${DAYS[new Date(d + 'T00:00').getDay()]} ${fmtShort(d)}${ss?.status === 'cancelled' ? ' · <i>sesi dibatalkan</i>' : ''}</span><em>${a && a.status !== 'booked' ? esc(LABEL[a.status] || a.status) + ' ✓' : ''}</em></label>`; }).join('');
+    const rec = a && a.status !== 'booked', linked = rec && pkgId && a.student_package_id === pkgId, lock = rec && (!pkgId || linked || !CONS.includes(a.status));
+    const tag = !rec ? '' : linked ? `${esc(LABEL[a.status] || a.status)} ✓ · ditolak pakej ini` : CONS.includes(a.status) ? `<span style="color:var(--warn)">${esc(LABEL[a.status] || a.status)} · ${a.student_package_id ? 'pakej lain' : 'belum ditolak pakej'} — tanda untuk tolak</span>` : esc(LABEL[a.status] || a.status);
+    return `<label class="check-row"><input type="checkbox" name="dates" value="${d}" ${lock ? 'disabled' : ''}><span>${DAYS[new Date(d + 'T00:00').getDay()]} ${fmtShort(d)}${ss?.status === 'cancelled' ? ' · <i>sesi dibatalkan</i>' : ''}</span><em>${tag}</em></label>`; }).join('');
 }
-ACTIONS['sq-att-old'] = id => {
+ACTIONS['sq-att-old'] = async id => {
   const s = byId('students', id); if (!s) return;
+  if (S.mode === 'supabase') { try { await refresh(['student_packages', 'attendance']); } catch (_) {} }
   const pk = studentPackages(id).filter(p => p.status !== 'cancelled').sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
   const cls = T('classes').filter(c => c.active !== false && !isPersonal(c)).sort((a, b) => (a.venue_id === s.venue_id ? 0 : 1) - (b.venue_id === s.venue_id ? 0 : 1) || a.weekday - b.weekday);
   const defPk = pk.find(p => Number(p.used_offset || 0) > 0) || pk.find(p => p.status === 'active') || pk[0];
@@ -96,7 +101,7 @@ ACTIONS['sq-att-old'] = id => {
       <label class="f">Status<select name="status">${['present', 'late', 'absent', 'excused'].map(o => `<option value="${o}">${LABEL[o]}</option>`).join('')}</select></label>
       <label class="f">Tolak daripada pakej<select name="pkg"><option value="">— Tiada (rekod sahaja) —</option>${pk.map(p => `<option value="${p.id}" ${p.id === defPk?.id ? 'selected' : ''}>${esc(p.name)} · ${pkgRemaining(p)}/${p.sessions_total} baki${Number(p.used_offset || 0) ? ' (' + p.used_offset + ' ditanda sebelum sistem)' : ''}</option>`).join('')}</select></label>
     </div>
-    <div class="f" style="margin-top:12px"><span>Tanda tarikh dia hadir (12 minggu lepas)</span><div class="checklist" id="sqOldDates">${defC ? oldDatesHtml(id, defC.id) : ''}</div></div>`,
+    <div class="f" style="margin-top:12px"><span>Tanda tarikh dia hadir (12 minggu lepas)</span><div class="checklist" id="sqOldDates">${defC ? oldDatesHtml(id, defC.id, defPk?.id) : ''}</div></div>`,
     onSubmit: async d => {
       const dates = [].concat(d.dates || []).sort(); if (!dates.length) { toast('Tandakan sekurang-kurangnya satu tarikh', true); return false; }
       const p = d.pkg ? byId('student_packages', d.pkg) : null, consumes = ['present', 'late', 'absent'].includes(d.status);
@@ -104,12 +109,17 @@ ACTIONS['sq-att-old'] = id => {
       if (p && consumes && !p.renewal_sent) await update('student_packages', p.id, { renewal_sent: true });   // rekod sejarah — jangan jana invois pembaharuan automatik
       for (const dt of dates) {
         const ss = await ensureSession(d.class_id, dt); const sid = ss?.id; if (!sid) continue;
-        if (p && consumes && off > 0) { off--; await update('student_packages', p.id, { used_offset: off }); }   // ganti "sesi sebelum sistem" dengan rekod sebenar
+        const r0 = T('attendance').find(a => a.session_id === sid && a.student_id === id), willUse = p && (consumes || (r0 && ['present', 'late', 'absent', 'late_cancel'].includes(r0.status)));
+        if (willUse && off > 0) { off--; await update('student_packages', p.id, { used_offset: off }); }   // ganti "sesi sebelum sistem" dengan rekod sebenar
         const r = T('attendance').find(a => a.session_id === sid && a.student_id === id), row = { status: d.status, marked_by: by(), ...(p && consumes ? { student_package_id: p.id } : {}) };
-        if (r) await update('attendance', r.id, row); else await insert('attendance', { session_id: sid, student_id: id, ...row });
+        if (r && ['present', 'late', 'absent', 'late_cancel'].includes(r.status)) await update('attendance', r.id, p ? { student_package_id: p.id } : {});   // rekod sedia ada: kekalkan status, hanya tolak pakej
+        else if (r) await update('attendance', r.id, row); else await insert('attendance', { session_id: sid, student_id: id, ...row });
         n++;
       }
-      toast(`${n} rekod kehadiran disimpan${p && consumes ? ' · ditolak daripada ' + p.name : ''}`); app.render(); setTimeout(() => ACTIONS['sq-att'](id), 50);
+      if (S.mode === 'supabase') { try { await refresh(['student_packages', 'attendance', 'class_sessions']); } catch (_) {} }   // baki dikira semula di pelayan
+      const np = p && byId('student_packages', p.id);
+      toast(`${n} rekod kehadiran disimpan${np && consumes ? ` · ${np.name}: baki ${pkgRemaining(np)}/${np.sessions_total}` : ''}`); app.render(); setTimeout(() => ACTIONS['sq-att'](id), 50);
     } });
-  f.elements.class_id.addEventListener('change', () => { f.querySelector('#sqOldDates').innerHTML = oldDatesHtml(id, f.elements.class_id.value); });
+  const redraw = () => { f.querySelector('#sqOldDates').innerHTML = oldDatesHtml(id, f.elements.class_id.value, f.elements.pkg.value); };
+  f.elements.class_id.addEventListener('change', redraw); f.elements.pkg.addEventListener('change', redraw);
 };

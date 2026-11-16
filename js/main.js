@@ -4,6 +4,7 @@ import { APP_VERSION, $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeMod
 import { VIEWS, ACTIONS, INPUTS } from './registry.js';
 import { t, setLang, setI18nActive, langSwitch } from './i18n.js';
 import { setTheme } from './theme.js';
+import { startUpdateCheck } from './update-check.js';
 import { startDomI18n } from './i18n-dom.js';
 import { NAV, ALL_ITEMS, BOTTOM_NAV } from './admin/nav.js';
 import { tasks, academy } from './admin/helpers.js';
@@ -270,6 +271,7 @@ boot();
 
 /* PWA: pasang sebagai app (Android/desktop) + kerja luar talian asas */
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW', e));
+startUpdateCheck();
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__installPrompt = e; app.render?.(); });
 ACTIONS['pwa-install'] = async () => { const p = window.__installPrompt; if (!p) return toast('Gunakan menu pelayar: "Tambah ke skrin utama" / "Install app".'); p.prompt(); await p.userChoice.catch(() => {}); window.__installPrompt = null; app.render?.(); };
 ACTIONS['notif-perm'] = async () => { try { const r = await Notification.requestPermission(); if (r === 'granted') ensurePush(); toast(r === 'granted' ? 'Notifikasi dihidupkan ✓' : 'Notifikasi tidak dibenarkan oleh pelayar', r !== 'granted'); app.render?.(); } catch (e) { toast(e.message, true); } };
