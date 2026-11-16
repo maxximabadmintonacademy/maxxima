@@ -40,7 +40,7 @@ VIEWS.leads = () => {
     requested: `<a class="btn sm" href="#kemasukan">Lihat Pendaftaran</a>`,
   }[l.status] || '<span class="muted">—</span>');
   return `
-  ${pageHead('Leads', 'Pertanyaan ibu bapa — susuli sehingga trial dan permohonan daftar.', `<button class="btn primary" data-action="lead-add">${ic('plus', 'sm')} Lead Baharu</button>`)}
+  ${pageHead('Leads', 'Pertanyaan ibu bapa — susuli sehingga trial dan permohonan daftar.', `<button class="btn" data-action="site-ref">${ic('pin', 'sm')} Rujukan yuran & jadual</button><button class="btn primary" data-action="lead-add">${ic('plus', 'sm')} Lead Baharu</button>`)}
   ${siteStatsCard()}
   <div class="chips">${LEAD_STATUSES.map(s => `<button class="chip ${f === s ? 'on' : ''}" data-action="lead-filter" data-id="${s}">${s === 'all' ? 'Semua' : LABEL[s]}<span class="n">${s === 'all' ? leads.filter(l => !l.archived_at).length : leads.filter(l => !l.archived_at && l.status === s).length}</span></button>`).join('')}${leads.some(l => l.archived_at) ? `<button class="chip ${f === 'archived' ? 'on' : ''}" data-action="lead-filter" data-id="archived">Arkib<span class="n">${leads.filter(l => l.archived_at).length}</span></button>` : ''}</div>
   <div class="card"><div class="table-wrap"><table>

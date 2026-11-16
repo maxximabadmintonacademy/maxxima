@@ -213,13 +213,39 @@ VIEWS.tetapan = () => {
       <div class="muted" style="font-size:12.5px">Mod: <b style="color:var(--ink)">${S.mode === 'demo' ? 'Demo (data tidak disimpan)' : 'Supabase (data kekal)'}</b><br>Log masuk sebagai: <b style="color:var(--ink)">${esc(S.profile.email || S.profile.full_name)}</b></div></div>
   </div>
   <div class="grid g-2">
-    <div class="card"><div class="card-head"><h3>Lokasi Latihan</h3><button class="btn sm primary" data-action="venue-add">${ic('plus', 'sm')} Tambah</button></div>
+    <div class="card"><div class="card-head"><h3>Lokasi Latihan</h3><span style="display:flex;gap:6px"><button class="btn sm" data-action="site-ref">Yuran & jadual laman web</button></span><button class="btn sm primary" data-action="venue-add">${ic('plus', 'sm')} Tambah</button></div>
       <ul class="list">${T('venues').map(v => `<li class="list-item"><div class="kpi-ico t-info" style="display:grid;width:32px;height:32px">${ic('pin', 'sm')}</div><div class="li-main"><div class="li-title">${esc(v.name)}</div><div class="li-sub">${esc(v.area || '')} · ${T('classes').filter(c => c.venue_id === v.id && c.active).length} kelas · ${T('students').filter(s => s.venue_id === v.id && s.status === 'active').length} pelajar</div></div>${v.active ? '' : badge('paused', 'Tidak aktif')}<button class="btn sm" data-action="venue-edit" data-id="${v.id}">${ic('edit', 'sm')}</button></li>`).join('')}</ul></div>
     <div class="card"><div class="card-head"><h3>Program</h3><button class="btn sm primary" data-action="prog-add">${ic('plus', 'sm')} Tambah</button></div>
       <ul class="list">${T('programmes').slice().sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)).map(p => `<li class="list-item"><div class="kpi-ico t-purple" style="display:grid;width:32px;height:32px">${ic('award', 'sm')}</div><div class="li-main"><div class="li-title">${esc(p.name)}</div><div class="li-sub">${p.kind === 'personal' ? 'Personal' : 'Kumpulan'}${p.description ? ' · ' + esc(p.description) : ''}</div></div>${p.active ? '' : badge('paused', 'Tidak aktif')}<button class="btn sm" data-action="prog-edit" data-id="${p.id}">${ic('edit', 'sm')}</button></li>`).join('')}</ul></div>
   </div>`;
 };
 
+/** Yuran: "Foundation & Performance | 1x | 180" (1x/2x = sesi seminggu) · "Elite | 4 sesi | 240" · atau teks bebas di lajur tengah. */
+const parseFees = t => String(t || '').split('\n').map(l => l.split('|').map(x => x.trim())).filter(r => r[0]).map(([prog, mid = '', price = '']) => {
+  const n = Number(String(price).replace(/[^\d.]/g, '')); if (price && !Number.isFinite(n)) throw new Error(`Harga tidak sah: "${price}"`);
+  const f = mid.match(/^(\d+)\s*[x×]/i), ss = mid.match(/^(\d+)\s*(sesi|sessions?|s)\b/i);
+  return { prog, ...(f ? { freq: Number(f[1]) } : ss ? { sessions: Number(ss[1]) } : { label: mid }), price: price ? n : null }; });
+const feeText = fs => (fs || []).map(x => [x.prog, x.freq ? x.freq + 'x' : x.sessions ? x.sessions + ' sesi' : x.label || '', x.price ?? ''].join(' | ')).join('\n');
+/** Jadual: "Rab,Jum | 20:00-22:00 | F/P" · "Isn-Jum | 16:00-18:00 | semua" (hari BM / EN). */
+const DAYK = { ahd: 0, aha: 0, sun: 0, isn: 1, mon: 1, sel: 2, tue: 2, rab: 3, wed: 3, kha: 4, thu: 4, jum: 5, fri: 5, sab: 6, sat: 6 };
+const DAYN = ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'];
+const dayOf = x => { const k = DAYK[String(x).trim().toLowerCase().slice(0, 3)]; if (k == null) throw new Error(`Hari tidak dikenali: "${x}" (guna Isn, Sel, Rab, Kha, Jum, Sab, Ahd)`); return k; };
+const parseSched = t => String(t || '').split('\n').map(l => l.split('|').map(x => x.trim())).filter(r => r[0]).map(([days, time = '', lv = '', note = '']) => {
+  const d = []; for (const part of days.split(/[,&]/)) { const [a, b] = part.split(/[-–]/).map(x => x.trim()).filter(Boolean); if (b) { let i = dayOf(a); const e = dayOf(b); for (;;) { d.push(i); if (i === e) break; i = (i + 1) % 7; } } else if (a) d.push(dayOf(a)); }
+  const m = time.match(/(\d{1,2})[:.]?(\d{2})?\s*[-–]\s*(\d{1,2})[:.]?(\d{2})?/); if (!m) throw new Error(`Masa tidak sah: "${time}" (cth. 20:00-22:00)`);
+  const hh = (h, mm) => String(h).padStart(2, '0') + ':' + (mm || '00');
+  return { d: [...new Set(d)], s: hh(m[1], m[2]), e: hh(m[3], m[4]), lv: /^(semua|all)$/i.test(lv) || !lv ? 'all' : lv.toUpperCase(), ...(note ? { note } : {}) }; });
+const schedText = sc => (sc || []).map(r => [r.d.map(x => DAYN[x]).join(','), `${r.s}-${r.e}`, r.lv === 'all' ? 'semua' : r.lv, r.note || ''].filter((x, i) => i < 3 || x).join(' | ')).join('\n');
+/** Rujukan pantas untuk admin semasa menjawab pertanyaan: yuran & jadual rasmi yang dipaparkan di laman web. */
+ACTIONS['site-ref'] = () => {
+  const vs = T('venues').filter(v => v.show_on_site).sort((a, b) => (a.site_order ?? 99) - (b.site_order ?? 99));
+  const lv = x => x === 'all' ? 'semua' : x, DN = ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'];
+  openModal({ title: 'Yuran & jadual laman web', wide: true, body: vs.length ? `<p class="muted" style="margin-top:0;font-size:13px">Kadar bulanan pelajar baharu (pengambilan Nov 2026). Pelajar sedia ada kekal dengan kadar asal. Ubah di Persediaan → Lokasi → Edit.</p>
+    <div class="table-wrap"><table style="min-width:0"><thead><tr><th>Lokasi</th><th>Yuran</th><th>Jadual mingguan</th></tr></thead><tbody>${vs.map(v => `<tr><td><b>${esc(v.name)}</b><div class="muted" style="font-size:12px">${esc(v.area || '')}</div>${v.site_note ? `<div style="font-size:12px">${esc(v.site_note)}</div>` : ''}</td>
+      <td style="font-size:13px">${(v.fees || []).map(f => `${esc(f.prog)}: ${f.freq ? f.freq + '×/minggu' : f.sessions ? f.sessions + ' sesi' : esc(f.label || '')} <b>RM${f.price ?? '—'}</b>`).join('<br>') || '<span class="muted">belum diisi</span>'}</td>
+      <td style="font-size:13px">${(v.schedule || []).map(r => `${r.d.map(x => DN[x]).join(', ')} ${r.s}–${r.e} <span class="muted">(${esc(lv(r.lv))})</span>`).join('<br>') || '<span class="muted">belum diisi</span>'}</td></tr>`).join('')}</tbody></table></div>`
+    : '<p>Tiada lokasi ditanda "Papar di laman web". Jalankan SQL 44 & 45, atau tanda di Persediaan → Lokasi → Edit.</p>' });
+};
 const activeBox = on => `<label class="f full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="active" value="1" ${on ? 'checked' : ''} style="width:auto;height:auto"> Aktif</label>`;
 const langBox = V => `<div class="f full">Coach mesti bertutur (kosong = tiada syarat)<div class="langchk">${LANGS_ALL.map(([k, l]) => `<label><input type="checkbox" name="required_langs" value="${k}" ${(V?.required_langs || []).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>`;
 Object.assign(ACTIONS, {
@@ -231,10 +257,18 @@ Object.assign(ACTIONS, {
     title: 'Edit Lokasi', body: `<div class="form-grid">${F('Nama lokasi', 'name', { value: v.name, req: true, full: true })}${F('Kawasan', 'area', { value: v.area, full: true })}${langBox(v)}${activeBox(v.active)}
       <div class="f full" style="border-top:1px solid var(--line);padding-top:10px"><b style="font-size:13px">📍 Lokasi GPS (untuk semakan check in coach)</b><span class="muted" style="font-size:12px">Buka Google Maps → tekan lama pada dewan → salin nombor "3.07, 101.51". Atau tekan butang semasa berada di dewan.</span></div>
       ${F('Latitud, longitud', 'latlng', { value: v.lat != null ? `${v.lat}, ${v.lng}` : '', ph: '3.0738, 101.5183' })}${F('Radius dibenarkan (meter)', 'radius_m', { type: 'number', value: v.radius_m ?? 300 })}
-      <div class="f full"><button type="button" class="btn sm" data-action="venue-here">📍 Guna lokasi saya sekarang</button></div></div><div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="venue-del" data-id="${id}">${ic('trash', 'sm')} Padam</button></div>`,
+      <div class="f full"><button type="button" class="btn sm" data-action="venue-here">📍 Guna lokasi saya sekarang</button></div>
+      <div class="f full" style="border-top:1px solid var(--line);padding-top:10px"><b style="font-size:13px">🌐 Laman web (home.html)</b></div>
+      <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="show_on_site" value="1" ${v.show_on_site ? 'checked' : ''} style="width:auto;height:auto"> Papar di laman web & borang trial</label>
+      ${F('Susunan di laman web', 'site_order', { type: 'number', min: 1, value: v.site_order ?? '' })}
+      ${F('Yuran — satu baris setiap kadar: Program | 1x / 2x seminggu atau "4 sesi" | Harga RM', 'fees', { type: 'textarea', full: true, value: feeText(v.fees), ph: 'Foundation & Performance | 1x | 180\nFoundation & Performance | 2x | 320\nElite | 4 sesi | 240' })}
+      ${F('Jadual mingguan rasmi — Hari | Masa | Tahap (F, P, E, F/P atau semua)', 'schedule', { type: 'textarea', full: true, value: schedText(v.schedule), ph: 'Rab,Jum | 20:00-22:00 | F/P\nSab,Ahd | 09:00-11:00 | semua\nIsn-Jum | 16:00-18:00 | semua' })}
+      ${F('Nota laman web (pilihan)', 'site_note', { value: v.site_note, full: true, ph: 'cth. Parking percuma · Kelas Sabtu & Ahad sahaja' })}
+      </div><div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="venue-del" data-id="${id}">${ic('trash', 'sm')} Padam</button></div>`,
     onSubmit: async d => { const m = String(d.latlng || '').match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/);
       if (d.latlng && !m) throw new Error('Format lokasi: "3.0738, 101.5183"');
-      await update('venues', id, { name: d.name.trim(), area: val(d.area), active: d.active === '1', required_langs: [].concat(d.required_langs || []).filter(Boolean), lat: m ? Number(m[1]) : null, lng: m ? Number(m[2]) : null, radius_m: Number(d.radius_m) || 300 }); toast('Lokasi dikemas kini'); app.render(); } }); },
+      await update('venues', id, { name: d.name.trim(), area: val(d.area), active: d.active === '1', required_langs: [].concat(d.required_langs || []).filter(Boolean), lat: m ? Number(m[1]) : null, lng: m ? Number(m[2]) : null, radius_m: Number(d.radius_m) || 300,
+        show_on_site: d.show_on_site === '1', site_order: d.site_order ? Number(d.site_order) : null, site_note: val(d.site_note), fees: parseFees(d.fees), schedule: parseSched(d.schedule) }); toast('Lokasi dikemas kini'); app.render(); } }); },
   'venue-here': () => { if (!navigator.geolocation) return toast('Peranti tidak menyokong lokasi', true);
     navigator.geolocation.getCurrentPosition(p => { const el = document.querySelector('#modal input[name=latlng]'); if (el) el.value = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`; toast(`Lokasi diambil (±${Math.round(p.coords.accuracy)} m)`); }, () => toast('Lokasi tidak dibenarkan', true), { enableHighAccuracy: true, timeout: 10000 }); },
   'venue-del': id => confirmModal({ title: 'Padam lokasi?', message: `Semua kelas di <b>${esc(venueName(id))}</b> akan turut dipadam. Pertimbangkan "Tidak aktif" sahaja.`, ok: 'Padam', danger: true, onOk: async () => { await remove('venues', id); toast('Lokasi dipadam'); app.render(); } }),

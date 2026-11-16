@@ -57,7 +57,7 @@ p{margin:0}
 .btn-sm{padding:8px 14px;font-size:13.5px}
 .login{font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;white-space:nowrap}
 @media (max-width:1240px){.nav a{padding:8px 8px;font-size:13.5px}}
-@media (max-width:1140px){.nav{display:none}.login{margin-left:auto}}
+@media (max-width:1200px){.nav{display:none}.login{margin-left:auto}}
 @media (max-width:960px){.nav{display:none}.top .wrap{gap:10px}.login{margin-left:auto}}
 @media (max-width:520px){.brand span{display:none}.top .btn{display:none}}
 
@@ -241,6 +241,28 @@ footer ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 @media (max-width:800px){.train{grid-template-columns:1fr 1fr}}@media (max-width:480px){.train{grid-template-columns:1fr}}
 .win-note{margin-top:14px;font-size:13.5px;color:var(--muted)}
 
+/* v48: panduan rasmi */
+.top .brand,.top .lang,.top .login,.top .btn{flex-shrink:0}
+.vinfo{display:grid;grid-template-columns:1fr 1fr;gap:0}.vinfo .fees{border-top:0;border-left:1px solid var(--rule)}
+@media (max-width:760px){.vinfo{grid-template-columns:1fr}.vinfo .fees{border-left:0;border-top:1px solid var(--rule)}}
+.sched{padding:16px 18px 18px}.sched h4{font-family:var(--disp);font-size:22px;margin:0 0 8px}
+.sched ul{list-style:none;margin:0 0 10px;padding:0}
+.sched li{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:8px 0;border-bottom:1px dashed var(--rule);font-size:14.5px}
+.sched li b{font-weight:600}.sched li span{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}.sched li em{font-style:normal;color:var(--court);font-weight:700;font-size:13px}.sched li small{grid-column:1/-1;color:var(--muted)}
+.locfoot{margin:16px 0 0;padding-left:18px;font-size:13.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.pintro{border-top:1px solid rgba(255,255,255,.18);padding-top:14px;margin:4px 0 18px}.pintro b{display:block;font-size:15px}.pintro p{color:#c7d2ec;font-size:14px;margin:4px 0 0}
+.infob{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:26px}
+.infob>div{background:#fff;border:1px solid var(--rule);border-radius:var(--r-lg);padding:20px}.infob h3{font-size:22px;margin-bottom:6px}.infob p{font-size:14.5px;color:var(--muted)}
+.infob .contact{background:var(--navy);color:#fff;border-color:var(--navy)}.infob .contact ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;font-size:14px}.infob .contact a{color:#fff}
+@media (max-width:900px){.infob{grid-template-columns:1fr}}
+/* v47: yuran lokasi */
+.fees{border-top:1px solid var(--rule);padding:16px 18px 18px}
+.fees h4{font-family:var(--disp);font-size:22px;margin:0 0 8px}
+.fg-r{display:grid;grid-template-columns:140px 1fr;gap:10px;padding:8px 0;border-bottom:1px dashed var(--rule)}
+.fg-r b{font-size:14.5px}.fg-r ul{list-style:none;margin:0;padding:0}
+.fg-r li{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:2px 0}.fg-r em{font-style:normal;font-weight:700;white-space:nowrap}
+.fnote{font-size:13px;color:var(--muted);margin-top:8px}
+@media (max-width:560px){.fg-r{grid-template-columns:1fr;gap:2px}}
 /* v46: susunan laman asal */
 .hero-img:empty,.train-img:empty,.win-imgs:empty{display:none}
 .train-row:has(.train-img:empty){grid-template-columns:1fr}

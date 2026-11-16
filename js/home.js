@@ -283,7 +283,7 @@ Object.assign(T.zh, {
 
 /* ---- v46: susunan & teks ikut laman asal akademi ---- */
 const OV = {
-  ms: { nav: ['Program', 'Lokasi, yuran & masa', 'Coach', 'Trial percuma', 'Cara tempahan'], bookBtn: 'Tempah kelas', existing: 'Pelajar sedia ada? WhatsApp admin',
+  ms: { nav: ['Program', 'Lokasi & yuran', 'Coach', 'Trial', 'Tempahan'], bookBtn: 'Tempah kelas', existing: 'Pelajar sedia ada? WhatsApp admin',
     h1: 'Latihan badminton untuk semua tahap.', intake: 'Pengambilan baharu November 2026 kini dibuka — pelan kumpulan bulanan untuk pelajar baharu.',
     trialT: 'Trial kumpulan percuma', trialL: 'RM0 · satu sesi kumpulan 2 jam bagi setiap pelajar baharu. Tidak perlu beli pas latihan. Admin sahkan kelayakan, kumpulan, lokasi, tarikh dan kekosongan.', trialLocs: 'Lokasi trial',
     perT: 'Personal coaching', perL: 'Sesi pengenalan 1-ke-1 selama 60 minit (berbayar) untuk penilaian. Admin maklumkan coach, court dan jumlah yuran sebelum tempahan. Tawaran percuma tidak terpakai untuk personal coaching.',
@@ -294,7 +294,7 @@ const OV = {
     fl2: { child: 'Nama pelajar / pemain', guardian: 'Nama ibu bapa / untuk dihubungi', age: 'Umur pelajar / pemain', level: 'Pengalaman badminton sekarang *', levels: [['new', 'Baru belajar badminton'], ['rally', 'Ada sedikit pengalaman'], ['match', 'Pemain tetap / pertandingan']],
       venue: 'Lokasi trial pilihan *', venuePick: '— Pilih lokasi —', prog: 'Program diminati *', progRec: 'Sila cadangkan tahap yang sesuai', times: 'Hari / masa pilihan', notes: 'Catatan (pilihan)', notesPh: 'cth. adik-beradik, keadaan kesihatan' },
     errVenue: 'Pilih lokasi trial.' },
-  en: { nav: ['Programmes', 'Locations, fees & times', 'Coaches', 'Free trial', 'How to book'], bookBtn: 'Book a class', existing: 'Existing student? WhatsApp Admin',
+  en: { nav: ['Programmes', 'Locations & fees', 'Coaches', 'Free trial', 'Booking'], bookBtn: 'Book a class', existing: 'Existing student? WhatsApp Admin',
     h1: 'Badminton coaching for every level.', intake: 'New intake for November 2026 is open — calendar-month group plans for new students.',
     trialT: 'Free group trial', trialL: 'RM0 · one 2-hour group session per new student. No training pass purchase needed. Admin confirms eligibility, group, venue, date and availability.', trialLocs: 'Trial locations',
     perT: 'Personal coaching', perL: 'A paid 60-minute one-to-one introductory session for assessment. Admin quotes the coach, court and total fee before booking. The free offer does not apply to personal coaching.',
@@ -305,7 +305,7 @@ const OV = {
     fl2: { child: 'Student / player name', guardian: 'Parent / contact name', age: 'Student / player age', level: 'Current badminton experience *', levels: [['new', 'New to badminton'], ['rally', 'Some experience'], ['match', 'Regular / competitive player']],
       venue: 'Preferred trial location *', venuePick: '— Choose a location —', prog: 'Programme interest *', progRec: 'Please recommend a suitable level', times: 'Preferred day / time', notes: 'Notes (optional)', notesPh: 'e.g. siblings, health conditions' },
     errVenue: 'Choose a trial location.' },
-  zh: { nav: ['课程', '地点、费用与时间', '教练', '免费试课', '预订流程'], bookBtn: '预订课程', existing: '现有学员？WhatsApp 管理员',
+  zh: { nav: ['课程', '地点与费用', '教练', '免费试课', '预订'], bookBtn: '预订课程', existing: '现有学员？WhatsApp 管理员',
     h1: '适合各水平的羽毛球训练。', intake: '2026年11月新生招收现已开放——为新学员提供按月计算的小组配套。',
     trialT: '免费小组试课', trialL: 'RM0 · 每位新学员一次2小时小组课，无需购买训练配套。管理员确认资格、小组、场地、日期及名额。', trialLocs: '试课地点',
     perT: '私人教练', perL: '收费的60分钟一对一体验课（评估）。预订前管理员会告知教练、场地及总费用。免费优惠不适用于私人教练课。',
@@ -318,6 +318,143 @@ const OV = {
     errVenue: '请选择试课地点。' },
 };
 for (const k of ['ms', 'en', 'zh']) { Object.assign(T[k], OV[k]); Object.assign(T[k].fl, OV[k].fl2); }
+for (const [k, o] of Object.entries({
+  ms: { feesT: 'Yuran di lokasi ini', feesNone: 'Yuran untuk lokasi ini dimaklumkan oleh admin selepas permohonan.', feesExisting: 'Pelajar sedia ada kekal dengan kadar yang telah dipersetujui.', noTimes: 'Masa latihan di lokasi ini akan dimaklumkan oleh admin. Mohon trial dan nyatakan hari / masa pilihan anda.' },
+  en: { feesT: 'Fees at this location', feesNone: 'Fees for this location are confirmed by Admin after your request.', feesExisting: 'Existing students keep their earlier agreed rates.', noTimes: 'Training times at this location are confirmed by Admin. Request a trial and tell us your preferred day / time.' },
+  zh: { feesT: '此地点收费', feesNone: '此地点的收费将在申请后由管理员告知。', feesExisting: '现有学员维持原定收费。', noTimes: '此地点的训练时间将由管理员告知。请申请试课并注明首选日期 / 时间。' },
+})) Object.assign(T[k], o);
+/* ---- v48: kandungan ikut "Maxxima Landing Page Guide" (16 Nov 2026) ---- */
+const G = {
+  ms: {
+    sub: 'Maxxima menawarkan latihan badminton untuk kanak-kanak, remaja dan dewasa. Mulakan dengan asas, bina konsistensi atau berlatih untuk pertandingan. Ketua Jurulatih Muhaimin mengetuai program teknikal, dan akademi membantu pemain memilih kumpulan yang sesuai dengan pengalaman dan matlamat mereka.',
+    stages: [['Foundation', 'Sesuai untuk pemula semua umur', ['Cara pegang raket yang betul', 'Pukulan asas, footwork & koordinasi', 'Latihan berpandu']],
+             ['Performance', 'Bina pukulan yang lebih konsisten', ['Pergerakan di gelanggang', 'Kesedaran taktikal', 'Latihan perlawanan berpandu']],
+             ['Elite', 'Untuk pemain berpengalaman ke arah pertandingan', ['Latihan teknikal intensiti tinggi', 'Latihan taktikal', 'Persediaan pertandingan']]],
+    perT: 'Personal coaching', perL: 'Mohon latihan 1-ke-1, 2-ke-1 atau 3-ke-1. Beritahu admin matlamat anda serta coach, lokasi dan masa pilihan. Admin sahkan kekosongan dan jumlah yuran.',
+    perIntroT: 'Sesi pengenalan personal 60 minit (berbayar)', perIntroL: 'Penilaian 1-ke-1 meliputi matlamat, teknik dan pergerakan anda. Coach kenal pasti keutamaan latihan anda. Admin sahkan coach, court dan jumlah yuran sebelum anda membuat keputusan.',
+    perBtn: 'Mohon sesi pengenalan personal',
+    trialT: 'Trial kumpulan percuma 2 jam', trialL: 'Pelajar baharu boleh memohon satu sesi kumpulan secara percuma (RM0) pada tahap yang sesuai. Pilih lokasi, lengkapkan dan semak borang trial, kemudian tekan Hantar apabila WhatsApp dibuka. Admin sahkan kelayakan, kekosongan, tarikh dan masa. Tidak perlu beli pas untuk memohon trial.',
+    locT: 'Lokasi, yuran & jadual mingguan', locL: 'Semua masa dalam waktu Malaysia (MYT). Kadar bulanan di bawah untuk pelajar baharu bagi pengambilan November 2026, mengikut bilangan sesi seminggu. Pas 4 sesi sah selama 31 hari kalendar, termasuk tarikh latihan pertama.',
+    legend: 'F = Foundation · P = Performance · E = Elite', allLv: 'semua tahap', schedT: 'Jadual mingguan', perWeek: n => `${n}× seminggu`, nSess: n => `${n} sesi`,
+    feeProg: { 'All levels': 'Semua tahap', 'Foundation & Performance': 'Foundation & Performance', 'Elite': 'Elite' },
+    locFoot: ['Admin sahkan tarikh, tempat, coach, cuti akademi dan sebarang caj pendaftaran, jersi atau caj tambahan yang berkaitan.', 'Kelas Foundation mungkin berehat pada hujung minggu kelima dan semasa cuti akademi.', 'Pelajar sedia ada kekal dengan kadar yang telah dipersetujui dan boleh minta admin semak pembaharuan.'],
+    coachT: 'Barisan coach & pembangunan pemain', coachL: 'Coach kumpulan ditetapkan oleh akademi. Permintaan coach tertakluk kepada kekosongan dan kelulusan.',
+    coaches: [['Muhaimin', 'Ketua Jurulatih', 'Bekas pemain perseorangan kebangsaan dan ketua teknikal Maxxima. Fokus pada teknik, footwork dan persediaan pertandingan. Memegang BAM Coaching Level 1, bertanding di Proton-Eon Malaysia Open 2004 dan melatih Leong Jun Hao dari umur sembilan tahun hingga ke peringkat negeri.'],
+              ['Alvi', 'Coach', 'Pemain dan coach dari Indonesia yang fokus pada asas, latihan multi-shuttle dan konsistensi. Membantu di Nanda Badminton (2024) dan bekerja bersama Sigit Pamungkas di DG Badminton Club (2025). Perak beregu lelaki GSA Open 2024 dan emas Teluk Pinang Cup 2025.'],
+              ['Fiqri', 'Coach', 'Coach dari Lampung yang fokus pada teknik, persediaan fizikal dan disiplin latihan. Pengalaman termasuk Intan (2018), Pratama (2020–2021), Buana (2023–2024) dan Yiguang Badminton Club, Fu’an, China (2026).'],
+              ['Zamry', 'Coach', 'Mewakili Kuala Lumpur dari 1987 hingga 1996. Fokus pada kesedaran perlawanan, teknik dan disiplin gelanggang. Separuh akhir beregu lelaki National Circuit di Perlis dan naib juara beregu campuran Kuala Lumpur Closed.'],
+              ['Doryn', 'Pengurus Akademi', 'Menyelaras operasi akademi dan komunikasi dengan ibu bapa. Hubungi Maxxima Admin untuk tempahan, bayaran dan perubahan.']],
+    trainT: 'Apa yang diliputi dalam sesi kumpulan', train: [['Memanaskan badan', 'Koordinasi dan pergerakan.'], ['Pukulan & footwork', 'Latihan dengan maklum balas coach.'], ['Konsistensi', 'Latihan berstruktur dan multi-shuttle.'], ['Permainan berpandu', 'Gunakan kemahiran dalam permainan.']],
+    winT: 'Keputusan pemain terpilih', winL: '',
+    wins: [['2026', 'Teo Ming Xuan', 'Juara Perseorangan Lelaki B12, MSSD Gombak 2026.'], ['2025', 'Gan Giap Han', 'Juara perseorangan dan beregu lelaki, MSSD Kuala Langat 2025.'],
+           ['2026', 'Dashayni', 'Juara Perseorangan Perempuan B13, Four Seasons 2026, pusingan 6 dan 7. Gangsa Perseorangan Perempuan B13 dan naib juara Beregu Perempuan B13, Allianz Junior Badminton Championship 2026.'],
+           ['2026', 'Aydan Naufal', 'Juara perseorangan B7, Allstarz Badminton Tournament 2026, dan juara Perseorangan Lelaki B6, Kumpoo K1 Cup Malaysia–China Qualifying Tournament 2026 di Perak.']],
+    stepsT: 'Tempahan & sesi pertama',
+    steps: [['Pilih latihan', 'Isi maklumat pemain dan untuk dihubungi. Pilih program, lokasi, pas atau pelan bulanan, dan tarikh. Tambah coach dan masa pilihan untuk personal coaching.'],
+            ['Hantar permintaan', 'Simpan nombor rujukan di skrin untuk susulan. Borang tidak mengambil bayaran. Tekan Hantar di WhatsApp supaya admin menerima mesej anda.'],
+            ['Tunggu semakan admin', 'Admin semak tarikh, coach, court dan yuran yang tersedia, kemudian hubungi anda di WhatsApp.'],
+            ['Bayar selepas terima invois', 'Bayar yuran penuh sebelum latihan. Selepas admin sahkan bayaran, semak tarikh, masa dan lokasi yang disahkan.']],
+    stepsNote: 'Permintaan yang dihantar belum lagi tempahan yang disahkan.',
+    infoBlocks: [['Pelajar sedia ada & adik-beradik', 'Hubungi admin untuk semak baki sesi, tarikh luput pas dan pembaharuan pada kadar asal anda. Semakan pas dalam talian tidak tersedia buat sementara. Untuk adik-beradik, hantar satu permintaan keluarga — setiap anak mempunyai pas, baki bayaran dan rekod kehadiran sendiri.'],
+                 ['Apa perlu dibawa', 'Raket, kasut badminton atau sukan yang sesuai, air minuman, tuala dan baju-T ganti. Tiba 10–15 minit sebelum masa yang disahkan. Maklumkan admin lebih awal jika perlukan bantuan peralatan.']],
+    faq: [['Pemula sepenuhnya patut mula di mana?', 'Mulakan dengan Foundation atau mohon trial kumpulan percuma. Beritahu admin umur, pengalaman dan lokasi pilihan supaya pasukan boleh cadangkan kelas yang sesuai.'],
+          ['Dewasa boleh sertai?', 'Boleh. Slot bertanda untuk semua umur mengalu-alukan kanak-kanak, remaja dan dewasa. Admin sahkan kumpulan yang sesuai untuk setiap pemain.'],
+          ['Siapa layak untuk trial percuma?', 'Setiap pelajar baharu boleh memohon satu sesi kumpulan percuma 2 jam, tertakluk kepada kumpulan yang sesuai dan kekosongan. Sesi pengenalan personal ialah penilaian 60 minit berbayar yang berasingan.'],
+          ['Adakah yuran sama di semua lokasi?', 'Yuran bergantung pada lokasi, program dan bilangan sesi seminggu. Lihat jadual yuran setiap lokasi di atas.'],
+          ['Apa maksud nombor rujukan?', 'Sistem telah menyimpan permintaan anda. Admin menyemaknya sebelum mengeluarkan invois. Slot anda disahkan selepas admin mengesahkan bayaran penuh.'],
+          ['Adakah saya akan terima mesej automatik?', 'Nombor rujukan dipaparkan di skrin. Permintaan WhatsApp memerlukan anda menekan Hantar. Admin akan menghubungi anda secara manual.'],
+          ['Bagaimana tukar atau batal kelas Foundation?', 'Hubungi admin sekurang-kurangnya 48 jam sebelum sesi yang disahkan. Pembatalan lewat dan tidak hadir biasanya dikira sebagai sesi digunakan. Pengurusan menyemak kecemasan sebenar dengan dokumen sokongan. Tanya admin tentang terma berasingan untuk latihan personal.'],
+          ['Berapa lama pas sah?', 'Pelan bulanan baharu bermula hari pertama hingga hari terakhir bulan kalendar yang dipilih, jadi bilangan sesi boleh berbeza ikut hari latihan. Pas lama kekal dengan tarikh luput yang direkod, termasuk tempoh 31 hari jika berkaitan.']],
+    contactT: 'Tempahan & hubungi',
+  },
+  en: {
+    sub: 'Maxxima offers badminton coaching for children, teens and adults. Players can start with the fundamentals, build consistency or train for competition. Head Coach Muhaimin leads the technical programme, and the academy helps players choose a group that fits their experience and goals.',
+    stages: [['Foundation', 'Suitable for beginners of all ages', ['Correct grip', 'Basic strokes, footwork and coordination', 'Guided practice']],
+             ['Performance', 'Build more consistent strokes', ['Court movement', 'Tactical awareness', 'Guided match practice']],
+             ['Elite', 'For experienced players working towards competition', ['Higher-intensity technical training', 'Tactical training', 'Competition preparation']]],
+    perT: 'Personal coaching', perL: 'Request 1-to-1, 2-to-1 or 3-to-1 training. Tell Admin your goals and your preferred coach, venue and time. Admin confirms availability and the total fee.',
+    perIntroT: 'Paid 60-minute personal introduction', perIntroL: 'A one-to-one assessment covering your goals, technique and movement. The coach identifies your training priorities. Admin confirms the coach, court and total fee before you commit.',
+    perBtn: 'Request a personal introduction',
+    trialT: 'Free two-hour group trial', trialL: 'New students can request one group session for RM0 at a suitable level. Choose a venue, complete and review the trial form, then press Send when WhatsApp opens. Admin confirms eligibility, availability, date and time. No pass purchase is required to request a trial.',
+    locT: 'Locations, fees & weekly timetable', locL: 'All times are Malaysia time (MYT). Monthly rates below are for new students under the November 2026 intake, shown by sessions per week. Four-session passes are valid for 31 calendar days, including the first training date.',
+    legend: 'F = Foundation · P = Performance · E = Elite', allLv: 'all levels', schedT: 'Weekly schedule', perWeek: n => `${n}× a week`, nSess: n => `${n} sessions`,
+    feeProg: { 'All levels': 'All levels', 'Foundation & Performance': 'Foundation & Performance', 'Elite': 'Elite' },
+    locFoot: ['Admin confirms dates, places, coaches, academy breaks and any applicable registration, jersey or additional charges.', 'Foundation classes may pause on fifth weekends and during academy breaks.', 'Existing students retain their earlier agreed rates and can ask Admin to check their renewal.'],
+    coachT: 'Coaching team & player development', coachL: 'Group coaches are assigned by the academy. Coach requests are subject to availability and approval.',
+    coaches: [['Muhaimin', 'Head Coach', 'Former national singles player and Maxxima’s technical lead. His work focuses on technique, footwork and competition preparation. Holds BAM Coaching Level 1, competed in the 2004 Proton-Eon Malaysia Open and coached Leong Jun Hao from age nine to state-level competition.'],
+              ['Alvi', 'Coach', 'Indonesian player and coach who focuses on fundamentals, multi-shuttle drills and consistency. Assisted at Nanda Badminton (2024) and worked with Sigit Pamungkas at DG Badminton Club (2025). Men’s doubles silver at the 2024 GSA Open and gold at the 2025 Teluk Pinang Cup.'],
+              ['Fiqri', 'Coach', 'Coach from Lampung who focuses on technique, physical preparation and training discipline. His experience includes Intan (2018), Pratama (2020–2021), Buana (2023–2024) and Yiguang Badminton Club, Fu’an, China (2026).'],
+              ['Zamry', 'Coach', 'Represented Kuala Lumpur from 1987 to 1996. Focuses on match awareness, technique and court discipline. Men’s doubles semi-finalist at the National Circuit in Perlis and mixed doubles runner-up at Kuala Lumpur Closed.'],
+              ['Doryn', 'Academy Manager', 'Coordinates academy operations and communication with parents. Contact Maxxima Admin for bookings, payments and changes.']],
+    trainT: 'What a group session covers', train: [['Warm-up', 'Coordination and movement.'], ['Strokes & footwork', 'Practice with coach feedback.'], ['Consistency', 'Drills and multi-shuttle exercises.'], ['Guided play', 'Apply the skills in play.']],
+    winT: 'Selected player results', winL: '',
+    wins: [['2026', 'Teo Ming Xuan', 'Boys’ Singles U12 champion, MSSD Gombak 2026.'], ['2025', 'Gan Giap Han', 'Boys’ singles and doubles champion, MSSD Kuala Langat 2025.'],
+           ['2026', 'Dashayni', 'Girls’ Singles U13 champion at Four Seasons 2026, rounds 6 and 7. Girls’ Singles U13 bronze and Girls’ Doubles U13 runner-up at the 2026 Allianz Junior Badminton Championship.'],
+           ['2026', 'Aydan Naufal', 'U7 singles champion at Allstarz Badminton Tournament 2026 and Boys’ Singles U6 champion at the 2026 Kumpoo K1 Cup Malaysia–China Qualifying Tournament in Perak.']],
+    stepsT: 'Booking & first session',
+    steps: [['Choose your training', 'Enter player and contact details. Select a programme, venue, pass or monthly plan, and dates. Add coach and time preferences for personal coaching.'],
+            ['Submit the request', 'Keep the on-screen reference for follow-up. The form takes no payment. Press Send in WhatsApp so Admin receives the message.'],
+            ['Wait for Admin to review', 'Admin checks the available dates, coach, court and fees, and follows up on WhatsApp.'],
+            ['Pay after receiving the invoice', 'Pay the full applicable fee before training. After Admin verifies payment, check your confirmed date, time and venue.']],
+    stepsNote: 'A submitted request is not a confirmed booking.',
+    infoBlocks: [['Current students & siblings', 'Contact Admin to verify your remaining sessions, pass expiry and renewal at your earlier agreed rate. Online pass checks are temporarily unavailable. Submit one family request for siblings — each child keeps an individual pass, payment balance and attendance record.'],
+                 ['What to bring', 'Bring a racket, suitable badminton or sports shoes, drinking water, a towel and a spare T-shirt. Arrive 10–15 minutes before your confirmed time. Ask Admin in advance if you need help with equipment.']],
+    faq: [['Where should a complete beginner start?', 'Start with Foundation or request a free group trial. Tell Admin your age, experience and preferred venue so the team can recommend a suitable class.'],
+          ['Can adults join?', 'Yes. Slots marked for all ages welcome children, teens and adults. Admin confirms the right group for each player.'],
+          ['Who is eligible for the free trial?', 'Each new student may request one free two-hour group session, subject to a suitable group and availability. The personal introduction is a separate paid 60-minute assessment.'],
+          ['Are fees the same everywhere?', 'Fees depend on venue, programme and weekly frequency. See each location’s fee table above.'],
+          ['What does the booking reference mean?', 'The booking system has saved your request. Admin reviews it before issuing the invoice. Your approved slot is secured after Admin verifies the full applicable payment.'],
+          ['Will I get a message automatically?', 'Your reference is shown on screen. WhatsApp requests need you to press Send. Admin follows up manually.'],
+          ['How do I change or cancel a Foundation class?', 'Contact Admin at least 48 hours before the confirmed session. Late cancellations and no-shows normally count as used sessions. Management reviews genuine emergencies with supporting documents. Ask Admin about the separate terms for personal training.'],
+          ['How long is a pass valid?', 'New monthly plans run from the first to the last day of the selected calendar month, so session counts can vary with your regular days. Earlier passes retain their recorded expiry, including the 31-day term where applicable.']],
+    contactT: 'Bookings & contact',
+  },
+  zh: {
+    sub: 'Maxxima 为儿童、青少年及成人提供羽毛球训练。球员可以从基本功开始、建立稳定性或为比赛而训练。总教练 Muhaimin 领导技术课程，学院协助球员选择符合其经验与目标的小组。',
+    stages: [['Foundation 基础班', '适合各年龄初学者', ['正确握拍', '基本击球、步法与协调', '指导练习']],
+             ['Performance 进阶班', '建立更稳定的击球', ['场上移动', '战术意识', '指导下的比赛练习']],
+             ['Elite 精英班', '为备战比赛的资深球员而设', ['高强度技术训练', '战术训练', '比赛准备']]],
+    perT: '私人教练', perL: '可申请一对一、二对一或三对一训练。告诉管理员您的目标及首选教练、场地和时间。管理员确认名额及总费用。',
+    perIntroT: '收费60分钟私人体验课', perIntroL: '一对一评估，涵盖您的目标、技术与移动。教练会找出您的训练重点。在您决定前，管理员会确认教练、场地及总费用。',
+    perBtn: '申请私人体验课',
+    trialT: '免费2小时小组试课', trialL: '新学员可在合适的级别申请一次免费（RM0）小组课。选择场地，填写并核对试课表格，WhatsApp 打开后按发送。管理员确认资格、名额、日期及时间。申请试课无需购买配套。',
+    locT: '地点、费用与每周时间表', locL: '所有时间均为马来西亚时间（MYT）。以下月费适用于2026年11月新生，按每周节数显示。4节配套有效期为31个自然日，包括第一次训练日期。',
+    legend: 'F = Foundation · P = Performance · E = Elite', allLv: '所有级别', schedT: '每周时间表', perWeek: n => `每周${n}次`, nSess: n => `${n}节`,
+    feeProg: { 'All levels': '所有级别', 'Foundation & Performance': 'Foundation & Performance', 'Elite': 'Elite' },
+    locFoot: ['管理员确认日期、名额、教练、学院假期以及任何适用的报名费、球衣或额外费用。', 'Foundation 课程可能在第五个周末及学院假期暂停。', '现有学员维持原定收费，可请管理员核对续费。'],
+    coachT: '教练团队与球员培养', coachL: '小组教练由学院安排。指定教练视名额及批准而定。',
+    coaches: [['Muhaimin', '总教练', '前国家队单打球员，Maxxima 技术主管。专注技术、步法及比赛准备。持有 BAM 一级教练证书，曾参加2004年 Proton-Eon 马来西亚公开赛，并从九岁起培养 Leong Jun Hao 至州级比赛。'],
+              ['Alvi', '教练', '来自印尼的球员兼教练，专注基本功、多球训练及稳定性。曾在 Nanda Badminton（2024）担任助教，并在 DG Badminton Club（2025）与 Sigit Pamungkas 合作。2024年 GSA 公开赛男双银牌，2025年 Teluk Pinang Cup 金牌。'],
+              ['Fiqri', '教练', '来自楠榜的教练，专注技术、体能准备与训练纪律。经历包括 Intan（2018）、Pratama（2020–2021）、Buana（2023–2024）及中国福安 Yiguang 羽毛球俱乐部（2026）。'],
+              ['Zamry', '教练', '1987至1996年代表吉隆坡。专注比赛意识、技术与场上纪律。曾获玻璃市全国巡回赛男双四强及吉隆坡闭门赛混双亚军。'],
+              ['Doryn', '学院经理', '负责学院运营及与家长沟通。预订、付款及更改请联系 Maxxima 管理员。']],
+    trainT: '小组课内容', train: [['热身', '协调与移动。'], ['击球与步法', '教练即时反馈。'], ['稳定性', '练习与多球训练。'], ['指导对打', '在比赛中运用技能。']],
+    winT: '部分球员成绩', winL: '',
+    wins: [['2026', 'Teo Ming Xuan', 'MSSD 鹅唛 2026 男单U12冠军。'], ['2025', 'Gan Giap Han', 'MSSD 瓜拉冷岳 2025 男单及男双冠军。'],
+           ['2026', 'Dashayni', 'Four Seasons 2026 第6及第7轮女单U13冠军；2026年 Allianz Junior Badminton Championship 女单U13铜牌及女双U13亚军。'],
+           ['2026', 'Aydan Naufal', 'Allstarz Badminton Tournament 2026 U7单打冠军；2026年 Kumpoo K1 Cup 马中资格赛（霹雳）男单U6冠军。']],
+    stepsT: '预订与第一节课',
+    steps: [['选择训练', '填写球员及联络资料。选择课程、场地、配套或月度计划及日期。私人课可注明教练及时间偏好。'],
+            ['提交申请', '保存屏幕上的参考编号以便跟进。表格不收取费用。请在 WhatsApp 按发送，管理员才会收到信息。'],
+            ['等待管理员审核', '管理员核对可用日期、教练、场地及费用，并通过 WhatsApp 跟进。'],
+            ['收到发票后付款', '训练前付清全部费用。管理员核实付款后，请查看已确认的日期、时间及场地。']],
+    stepsNote: '提交的申请并非已确认的预订。',
+    infoBlocks: [['现有学员与兄弟姐妹', '请联系管理员核对剩余节数、配套到期日及按原定价格续费。网上配套查询暂时无法使用。兄弟姐妹可提交一份家庭申请——每个孩子保留各自的配套、付款余额及出席记录。'],
+                 ['需要带什么', '球拍、合适的羽毛球鞋或运动鞋、饮用水、毛巾及替换T恤。请在确认时间前10–15分钟到达。如需器材协助，请提前告知管理员。']],
+    faq: [['完全零基础应从哪里开始？', '从 Foundation 开始或申请免费小组试课。告诉管理员您的年龄、经验及首选场地，团队会推荐合适的课程。'],
+          ['成人可以参加吗？', '可以。标注所有年龄的时段欢迎儿童、青少年及成人。管理员会为每位球员确认合适的小组。'],
+          ['谁可以参加免费试课？', '每位新学员可申请一次免费2小时小组课，视合适小组及名额而定。私人体验课为另行收费的60分钟评估。'],
+          ['各地点收费一样吗？', '收费视场地、课程及每周次数而定。请参阅上方各地点的收费表。'],
+          ['参考编号是什么意思？', '系统已保存您的申请。管理员审核后会开出发票。管理员核实全额付款后，您的时段即获确认。'],
+          ['我会自动收到信息吗？', '参考编号会显示在屏幕上。WhatsApp 申请需要您按发送。管理员会人工跟进。'],
+          ['如何更改或取消 Foundation 课程？', '请在确认课程前至少48小时联系管理员。较迟取消及缺席通常算作已使用一节。管理层会根据证明文件审核真实紧急情况。私人训练另有条款，请询问管理员。'],
+          ['配套有效期多久？', '新的月度计划从所选自然月的第一天至最后一天，因此节数可能因固定上课日而不同。之前的配套保留原有到期日，包括适用的31天期限。']],
+    contactT: '预订与联络',
+  },
+};
+for (const k of ['ms', 'en', 'zh']) Object.assign(T[k], G[k]);
+
+
 
 const L = () => T[LANG];
 
@@ -364,7 +501,7 @@ function page() {
   <div class="tcard"><span class="free">${l.hcFree}</span><h2>${l.trialT}</h2><p class="lead" style="margin:8px 0 14px">${l.trialL}</p>
     <a class="btn btn-y" href="#borang" data-kind="group_trial" data-track="cta_trial">${l.ctaTrial}</a>
     <h3 style="font-size:20px;margin:22px 0 8px">${l.trialLocs}</h3><ul class="locs">${venues().map(v => `<li><b>${esc(v.name)}</b>${v.area ? ' · ' + esc(v.area) : ''}</li>`).join('')}</ul></div>
-  <div class="pcard"><h2>${l.perT}</h2><p style="margin:8px 0 14px">${l.perL}</p><div class="ppts">${l.perPts.map(x => `<span>${x}</span>`).join('')}</div>
+  <div class="pcard"><h2>${l.perT}</h2><p style="margin:8px 0 14px">${l.perL}</p><div class="ppts">${l.perPts.map(x => `<span>${x}</span>`).join('')}</div><div class="pintro"><b>${l.perIntroT}</b><p>${l.perIntroL}</p></div>
     <a class="btn btn-n" href="#borang" data-kind="personal">${l.perBtn}</a></div>
 </div></section>
 
@@ -377,9 +514,10 @@ function page() {
 
 <section class="sec" id="jadual"><div class="wrap">
   <div class="sec-head"><div><h2>${l.locT}</h2><p class="lead">${l.locL}</p></div></div>
-  <div class="finder"><div class="venues" role="group" aria-label="${l.nav[1]}">${venues().map(v => { const n = slotsAt(v.id).length;
+  <div class="finder"><div class="venues" role="group" aria-label="${l.nav[1]}">${venues().map(v => { const n = (v.schedule || []).length || slotsAt(v.id).length;
     return `<button class="venue" data-venue="${v.id}" aria-pressed="${VENUE === v.id}"><span><b>${esc(v.name)}</b><small>${esc(v.area || '')}</small></span>${n ? `<span class="n">${n}</span>` : ''}</button>`; }).join('')}</div>
   <div class="week" id="week">${weekHtml()}</div></div>
+  <ul class="locfoot">${l.locFoot.map(x => `<li>${x}</li>`).join('')}</ul>
 </div></section>
 
 <section class="sec alt" id="coach"><div class="wrap">
@@ -388,7 +526,7 @@ function page() {
 </div></section>
 
 <section class="sec"><div class="wrap">
-  <div class="sec-head"><div><h2>${l.winT}</h2><p class="lead">${l.winL}</p></div></div>
+  <div class="sec-head"><div><h2>${l.winT}</h2>${l.winL ? `<p class="lead">${l.winL}</p>` : ''}</div></div>
   <div class="win-imgs">${img('school-team.webp', 'Pemain meraikan pencapaian pasukan')}${img('team-development.webp', 'Pemain junior bersama coach')}</div>
   <div class="wins">${l.wins.map(([y, n, d]) => `<div class="win"><span class="yr">${y}</span><div><b>${n}</b><p>${d}</p></div></div>`).join('')}</div>
   <p class="win-note">${l.winNote}</p>
@@ -398,6 +536,8 @@ function page() {
   <div class="sec-head"><div><h2>${l.stepsT}</h2></div></div>
   <ol class="steps">${l.steps.map(([b, s]) => `<li><b>${b}</b><span>${s}</span></li>`).join('')}</ol>
   <p class="win-note">${l.stepsNote}</p>
+  <div class="infob">${l.infoBlocks.map(([t, d]) => `<div><h3>${t}</h3><p>${d}</p></div>`).join('')}
+    <div class="contact"><h3>${l.contactT}</h3><ul><li><a href="#borang">${l.bookBtn}</a></li><li><a href="https://wa.me/${WA}" target="_blank" rel="noopener">WhatsApp Maxxima Admin +60 12-496 5324</a></li><li><a href="mailto:maxxima.academy@gmail.com">maxxima.academy@gmail.com</a></li><li><a href="https://instagram.com/maxximaba" target="_blank" rel="noopener">Instagram @maxximaba</a> · <a href="https://www.tiktok.com/@maxximaba" target="_blank" rel="noopener">TikTok @maxximaba</a></li></ul></div></div>
 </div></section>
 
 <section class="sec" id="soalan"><div class="wrap">
@@ -420,9 +560,24 @@ function page() {
 <div class="mbar"><a class="btn btn-n" href="#borang" data-track="cta_trial">${l.bookBtn}</a><a class="btn btn-y" href="https://wa.me/${WA}" target="_blank" rel="noopener" data-track="cta_wa">WhatsApp</a></div>`;
 }
 
+/** Jadual yuran & jadual mingguan rasmi lokasi (Persediaan → Lokasi → Edit → Laman web). */
+const feeLabel = (l, f) => f.freq ? l.perWeek(f.freq) : f.sessions ? l.nSess(f.sessions) : (f.label || '');
+const dayRange = (l, d) => { const s = [...d].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)), m = s.map(x => (x + 6) % 7);
+  return s.length > 2 && m.every((x, i) => !i || x === m[i - 1] + 1) ? `${l.days[s[0]]}–${l.days[s[s.length - 1]]}` : s.map(x => l.days[x]).join(' & '); };
+function feesHtml(v) {
+  const l = L(), fs = (v.fees || []).filter(f => f.prog), groups = [...new Set(fs.map(f => f.prog))];
+  return `<div class="fees"><h4>${l.feesT}</h4>${v.note ? `<p class="fnote">${esc(v.note)}</p>` : ''}
+    ${fs.length ? groups.map(g => `<div class="fg-r"><b>${esc(l.feeProg?.[g] || g)}</b><ul>${fs.filter(f => f.prog === g).map(f => `<li><span>${esc(feeLabel(l, f))}</span><em>${f.price != null ? 'RM' + Number(f.price).toLocaleString('en-MY', { maximumFractionDigits: 2 }) : '—'}</em></li>`).join('')}</ul></div>`).join('') : `<p class="fnote">${l.feesNone}</p>`}</div>`;
+}
+function schedHtml(v) {
+  const l = L(), sc = (v.schedule || []).slice().sort((a, b) => ((a.d[0] + 6) % 7) - ((b.d[0] + 6) % 7) || String(a.s).localeCompare(String(b.s)));
+  return `<div class="sched"><h4>${l.schedT}</h4><ul>${sc.map(r => `<li><b>${dayRange(l, r.d)}</b><span>${r.s}–${r.e}</span><em>${r.lv === 'all' ? l.allLv : esc(r.lv || '')}</em>${r.note ? `<small>${esc(r.note)}</small>` : ''}</li>`).join('')}</ul>
+    <p class="fnote">${l.legend}</p><a class="btn btn-n btn-sm" href="#borang" data-venue-pick="${v.id}">${l.ctaTrial}</a></div>`;
+}
 function weekHtml() {
   const l = L(), v = venues().find(x => x.id === VENUE) || venues()[0];
   if (!v) return `<div class="empty-week">${l.noClass}</div>`;
+  if ((v.schedule || []).length) return `<div class="week-head"><div><h3>${esc(v.name)}</h3><small style="color:var(--muted)">${esc(v.area || '')}</small></div></div><div class="vinfo">${schedHtml(v)}${feesHtml(v)}</div>`;
   const all = slotsAt(v.id), progs = [...new Set(all.map(c => c.programme_id))];
   const list = all.filter(c => !PROG || c.programme_id === PROG);
   const order = [1, 2, 3, 4, 5, 6, 0];
@@ -431,7 +586,7 @@ function weekHtml() {
   ${list.length ? `<div class="days">${order.map(d => { const cs = list.filter(c => c.weekday === d);
       return `<div class="day ${cs.length ? '' : 'none'}"><h4>${l.days[d]}</h4><div>${cs.map(c => `<button class="slot ${c.seats}" data-slot="${d}|${c.start}|${c.programme_id}"><b>${c.start}–${c.end}</b><span>${esc(progName(c.programme_id))}</span><i>${l[c.seats]}</i></button>`).join('')}</div></div>`; }).join('')}</div>
     <div class="legend"><span>${l.open}</span><span class="few">${l.few}</span><span class="full">${l.full}</span></div>`
-    : `<div class="empty-week">${l.noClass}<div style="margin-top:14px"><a class="btn btn-n btn-sm" href="#borang" data-venue-pick="${v.id}">${l.ctaTrial}</a></div></div>`}`;
+    : `<div class="empty-week">${l.noTimes}<div style="margin-top:14px"><a class="btn btn-n btn-sm" href="#borang" data-venue-pick="${v.id}">${l.ctaTrial}</a></div></div>`}${feesHtml(v)}`;
 }
 
 function formHtml() {
@@ -532,8 +687,10 @@ function bindForm() {
 })();
 
 function demoTT() {
-  const vs = FALLBACK_VENUES.map((v, i) => ({ ...v, id: 'v' + i })), ps = [{ id: 'p1', name: 'Foundation' }, { id: 'p2', name: 'Performance' }, { id: 'p3', name: 'Elite' }];
+  const vs = FALLBACK_VENUES.map((v, i) => ({ ...v, id: 'v' + i, fees: i === 0 ? [{ prog: 'Foundation & Performance', freq: 1, price: 180 }, { prog: 'Foundation & Performance', freq: 2, price: 320 }, { prog: 'Foundation & Performance', freq: 3, price: 450 }, { prog: 'Elite', freq: 1, price: 240 }, { prog: 'Elite', freq: 2, price: 440 }] : [],
+    schedule: i === 0 ? [{ d: [3, 5], s: '20:00', e: '22:00', lv: 'F/P' }, { d: [6, 0], s: '09:00', e: '11:00', lv: 'all' }, { d: [6, 0], s: '11:00', e: '13:00', lv: 'F/P' }, { d: [6, 0], s: '16:00', e: '18:00', lv: 'F' }, { d: [6], s: '14:00', e: '16:00', lv: 'E' }]
+      : i === 1 ? [{ d: [1, 2, 3, 4, 5], s: '16:00', e: '18:00', lv: 'all' }] : [] })), ps = [{ id: 'p1', name: 'Foundation' }, { id: 'p2', name: 'Performance' }, { id: 'p3', name: 'Elite' }];
   const cl = []; vs.forEach((v, i) => [[6, '09:00', '11:00', 'p1', 'open'], [6, '11:00', '13:00', 'p2', 'few'], [0, '15:00', '17:00', 'p1', 'open'], [3, '17:00', '19:00', 'p2', 'open'], [5, '20:00', '22:00', 'p3', 'full']]
-    .slice(0, 3 + (i % 3)).forEach(([d, s, e, p, st]) => cl.push({ venue_id: v.id, programme_id: p, weekday: d, start: s, end: e, seats: st })));
+    .slice(0, i === 2 ? 0 : 3 + (i % 3)).forEach(([d, s, e, p, st]) => cl.push({ venue_id: v.id, programme_id: p, weekday: d, start: s, end: e, seats: st })));
   return { venues: vs, programmes: ps, classes: cl, packages: [] };
 }
