@@ -1,6 +1,6 @@
 /* Wizard Sesi Personal: 1) Kelas  2) Jadual  3) Pelajar & pakej  4) Semak & simpan */
 import { ACTIONS, INPUTS } from '../registry.js';
-import { S, insert } from '../data.js';
+import { S, insert, remove } from '../data.js';
 import { esc, val, UI, app, toast, openModal, closeModal, hm, todayISO, addDays, parseISO, fmtDate, fmtShort, DAYS, LABEL } from '../ui.js';
 import { T, byId, studentName, progName, venueName, staffName, livePackages } from './helpers.js';
 import { calItems, langWarn } from './sessions.js';
@@ -21,13 +21,16 @@ function slots() {
 }
 /** Pertindihan: coach yang sama ada sesi lain pada masa yang bertindih. */
 function clash(sl) {
-  if (!W.coach_id) return null;
-  const x = calItems(sl.date, sl.date, { mine: W.coach_id }).find(({ s, c }) => {
+  for (const cid of W.coaches) { const r = clash1(sl, cid); if (r) return r; }
+  return null;
+}
+function clash1(sl, coachId) {
+  const x = calItems(sl.date, sl.date, { mine: coachId }).find(({ s, c }) => {
     if (s?.status === 'cancelled') return false;
     const [t1, t2] = [hm(s?.start_time || c.start_time), hm(s?.end_time || c.end_time)];
     return toMin(t1) < toMin(sl.end) && toMin(sl.start) < toMin(t2);
   });
-  return x ? `${staffName(W.coach_id)} ada ${x.c.title || progName(x.c.programme_id)} ${hm(x.s?.start_time || x.c.start_time)}` : null;
+  return x ? `${staffName(coachId)} ada ${x.c.title || progName(x.c.programme_id)} ${hm(x.s?.start_time || x.c.start_time)}` : null;
 }
 const autoTitle = () => W.students.length ? `Personal · ${W.students.map(id => studentName(id).split(' ')[0]).join(' & ')}` : 'Personal';
 
@@ -38,10 +41,11 @@ function step1() {
     <label class="f full">Tajuk kelas <span class="muted" style="font-weight:500">(pilihan — dipapar di kalendar)</span><input name="pw_title" value="${esc(W.title)}" placeholder="cth. ${esc(autoTitle())} · Isnin" data-on-input="pw-f" data-k="title"></label>
     <label class="f">Program<select data-on-change="pw-f" data-k="programme_id">${progs.map(p => opt(p.id, p.name, W.programme_id)).join('')}</select></label>
     <div class="f">Format<div class="pw-chips">${[1, 2, 3, 4].map(n => `<button type="button" class="pw-chip ${W.format === n ? 'on' : ''}" data-action="pw-format" data-id="${n}"><b>${n === 1 ? '1 : 1' : n + ' : 1'}</b><small>${n === 1 ? 'one-to-one' : n + ' pelajar'}</small></button>`).join('')}</div></div>
-    <label class="f">Coach<select data-on-change="pw-f" data-k="coach_id">${opt('', '— Pilih coach —', W.coach_id)}${T('staff').filter(x => x.active !== false).map(x => opt(x.id, x.full_name, W.coach_id)).join('')}</select></label>
+    <div class="f full">Coach <span class="muted" style="font-weight:500">(boleh pilih lebih daripada seorang — yang pertama dipilih = coach utama)</span><div class="pw-chips">${T('staff').filter(x => x.active !== false).map(x => { const i = W.coaches.indexOf(x.id);
+      return `<button type="button" class="pw-chip sm ${i >= 0 ? 'on' : ''}" data-action="pw-coach" data-id="${x.id}">${esc(x.full_name)}${i === 0 && W.coaches.length > 1 ? ' · utama' : ''}</button>`; }).join('')}</div></div>
     <label class="f">Lokasi<select data-on-change="pw-f" data-k="venue_id">${opt('', '— Pilih lokasi —', W.venue_id)}${T('venues').filter(v => v.active).map(v => opt(v.id, v.name, W.venue_id)).join('')}</select></label>
     <label class="f">Court no. <span class="muted" style="font-weight:500">(pilihan)</span><input value="${esc(W.court)}" placeholder="cth. 5" data-on-input="pw-f" data-k="court"></label>
-  </div>${W.coach_id && W.venue_id ? langWarn(W.coach_id, W.venue_id) : ''}`;
+  </div>${W.coaches[0] && W.venue_id ? langWarn(W.coaches[0], W.venue_id) : ''}`;
 }
 function step2() {
   const L = slots();
@@ -85,7 +89,7 @@ function step4() {
   const L = slots(), monthly = W.students.some(id => ['monthly', 'sponsor'].includes(W.pkg[id])), sell = W.students.filter(id => String(W.pkg[id] || '').startsWith('new:'));
   return `<div class="pw-review">
       <div><span>Kelas</span><b>${esc(W.title || autoTitle())}</b><small>${esc(progName(W.programme_id))} · ${W.format === 1 ? '1 : 1' : W.format + ' : 1'}</small></div>
-      <div><span>Coach & lokasi</span><b>${esc(staffName(W.coach_id))}</b><small>${esc(venueName(W.venue_id))}${W.court ? ' · Court ' + esc(W.court) : ''}</small></div>
+      <div><span>Coach & lokasi</span><b>${W.coaches.map(id => esc(staffName(id))).join(', ')}</b><small>${esc(venueName(W.venue_id))}${W.court ? ' · Court ' + esc(W.court) : ''}</small></div>
       <div><span>Jadual</span><b>${L.length} sesi</b><small>${L.slice(0, 6).map(x => `${fmtShort(x.date)} ${x.start}–${x.end}`).join(', ')}${L.length > 6 ? '…' : ''}</small></div>
       <div><span>Pelajar</span><b>${W.students.map(id => esc(studentName(id))).join(', ')}</b><small>${W.students.map(id => { const v = W.pkg[id] || ''; const p = byId('student_packages', v), t = v.startsWith('new:') && byId('packages', v.slice(4));
         return esc(studentName(id).split(' ')[0]) + ': ' + esc(p ? p.name : t ? 'pakej baharu ' + t.name : v === 'walkin' ? 'walk-in' : v === 'sponsor' ? 'tajaan (court sahaja)' : 'bil bulanan'); }).join(' · ')}</small></div></div>
@@ -102,7 +106,7 @@ function render() {
       ${W.step < 3 ? '<button type="button" class="btn primary" data-action="pw-next">Seterusnya</button>' : `<button type="button" class="btn primary" data-action="pw-save">Simpan ${slots().length} sesi</button>`}</div>`;
 }
 function check(step) {
-  if (step === 0) { if (!W.programme_id) return 'Pilih program.'; if (!W.coach_id) return 'Pilih coach.'; if (!W.venue_id) return 'Pilih lokasi.'; }
+  if (step === 0) { if (!W.programme_id) return 'Pilih program.'; if (!W.coaches.length) return 'Pilih sekurang-kurangnya seorang coach.'; if (!W.venue_id) return 'Pilih lokasi.'; }
   if (step === 1) { const L = slots(); if (!L.length) return 'Tiada tarikh dipilih.'; const bad = L.find(x => toMin(x.end) <= toMin(x.start)); if (bad) return `Masa tamat mesti selepas masa mula (${fmtShort(bad.date)}).`; }
   if (step === 2) { if (!W.students.length) return 'Pilih sekurang-kurangnya seorang pelajar.'; if (W.students.length > W.format) return `Format ${W.format} : 1 — terlalu ramai pelajar.`; }
   return null;
@@ -132,6 +136,7 @@ Object.assign(INPUTS, {
 });
 Object.assign(ACTIONS, {
   'pw-format': n => { W.format = +n; render(); },
+  'pw-coach': id => { const i = W.coaches.indexOf(id); i >= 0 ? W.coaches.splice(i, 1) : W.coaches.push(id); W.coach_id = W.coaches[0] || ''; render(); },
   'pw-weeks': n => { W.weeks = +n; render(); },
   'pw-skip': d => { W.skip.has(d) ? W.skip.delete(d) : W.skip.add(d); render(); },
   'pw-mode': m => { if (m === 'custom' && W.mode === 'weekly') W.rows = slots().map(x => ({ ...x })); W.mode = m; if (!W.rows.length) W.rows = [{ date: W.date, start: W.start, end: W.end }]; render(); },
@@ -151,13 +156,22 @@ Object.assign(ACTIONS, {
       W.pkg[id] = T('student_packages').find(p => p.invoice_id === inv.id)?.id || 'monthly'; }
     const kinds = ids.map(id => W.pkg[id] === 'sponsor' ? 'monthly' : W.pkg[id]), billing = kinds.every(k => k !== 'monthly' && k !== 'walkin') ? 'package' : kinds.includes('monthly') ? 'monthly' : 'walkin';
     const row = { venue_id: W.venue_id, programme_id: W.programme_id, coach_id: W.coach_id, weekday: parseISO(first.date).getDay(), start_time: first.start, end_time: first.end, court: val(W.court), capacity: W.format, active: false, billing, rate_coach: val(W.rate_coach), rate_court: val(W.rate_court) };
+    // Simpan — jika mana-mana langkah gagal, semua rekod yang sudah dicipta dipadam semula (tiada sesi separuh siap / "bertindih" palsu).
+    const made = [], step = { v: 'kelas' }, mk = async (t, r) => { const x = await insert(t, r); (Array.isArray(x) ? x : [x]).forEach(y => made.push([t, y.id])); return x; };
     let cls;
-    try { cls = await insert('classes', W.title ? { ...row, title: W.title } : row); }
-    catch (e) { if (!/title/.test(e.message || '')) throw e; cls = await insert('classes', row); }   // SQL 40 belum dijalankan
-    await insert('class_enrolments', ids.map(id => ({ class_id: cls.id, student_id: id })));
-    for (const x of L) {
-      const s = await insert('class_sessions', { class_id: cls.id, session_date: x.date, status: x.date < todayISO() ? 'held' : 'scheduled', coach_id: W.coach_id, court: val(W.court), start_time: x.start, end_time: x.end });
-      for (const id of ids) { const pk = byId('student_packages', W.pkg[id]); await insert('attendance', { session_id: s.id, session_date: x.date, student_id: id, status: 'booked', ...(pk ? { student_package_id: pk.id } : {}) }); }
+    try {
+      try { cls = await mk('classes', W.title ? { ...row, title: W.title } : row); }
+      catch (e) { if (!/title/.test(e.message || '')) throw e; cls = await mk('classes', row); }   // SQL 40 belum dijalankan
+      step.v = 'pelajar kelas'; await mk('class_enrolments', ids.map(id => ({ class_id: cls.id, student_id: id })));
+      for (const x of L) {
+        step.v = `sesi ${fmtShort(x.date)}`;
+        const s = await mk('class_sessions', { class_id: cls.id, session_date: x.date, status: x.date < todayISO() ? 'held' : 'scheduled', coach_id: W.coach_id, court: val(W.court), start_time: x.start, end_time: x.end });
+        if (W.coaches.length > 1) { step.v = `coach tambahan ${fmtShort(x.date)}`; for (const [n, cid] of W.coaches.entries()) await mk('session_groups', { session_id: s.id, category: `Coach ${n + 1}`, coach_id: cid, court: val(W.court) }); }
+        for (const id of ids) { step.v = `kehadiran ${studentName(id)} ${fmtShort(x.date)}`; const pk = byId('student_packages', W.pkg[id]); await mk('attendance', { session_id: s.id, session_date: x.date, student_id: id, status: 'booked', ...(pk ? { student_package_id: pk.id } : {}) }); }
+      }
+    } catch (e) {
+      for (const [t, id] of made.reverse()) { try { await remove(t, id); } catch (_) { /* teruskan */ } }
+      throw new Error(`Gagal semasa menyimpan ${step.v}: ${e.message || e}. Tiada sesi disimpan — sila hantar mesej ini kepada pembangun jika berulang.`);
     }
     const done = W.onDone; W = null; closeModal();
     Object.assign(UI.cal ||= {}, { mode: 'minggu', date: first.date, venue: '', coach: '', prog: '', type: '' });   // terus tunjuk minggu sesi pertama
@@ -172,7 +186,7 @@ Object.assign(ACTIONS, {
 ACTIONS['cal-personal'] = (preset = {}) => {
   preset = typeof preset === 'object' && preset ? preset : {};
   const progs = T('programmes').filter(p => p.active && p.kind === 'personal');
-  W = { step: 0, max: 0, title: '', programme_id: preset.programme_id || progs[0]?.id || '', format: Math.max(1, Math.min(4, (preset.students || []).length || 1)), coach_id: preset.coach_id || '', venue_id: preset.venue_id || '', court: '',
+  W = { step: 0, max: 0, title: '', programme_id: preset.programme_id || progs[0]?.id || '', format: Math.max(1, Math.min(4, (preset.students || []).length || 1)), coach_id: preset.coach_id || '', coaches: preset.coach_id ? [preset.coach_id] : [], venue_id: preset.venue_id || '', court: '',
     mode: 'weekly', date: preset.date || todayISO(), start: preset.start || '18:00', end: preset.end || '19:00', weeks: 4, skip: new Set(), rows: [], students: [...(preset.students || [])], pkg: {}, why: {}, q: '', rate_coach: '', rate_court: '', onDone: preset.onDone };
   if (preset.date) W.weeks = 1;
   W.students.forEach(setDef);

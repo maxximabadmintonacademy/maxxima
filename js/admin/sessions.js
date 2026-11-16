@@ -62,8 +62,8 @@ export function sessionAlerts(s, c) {
     for (const [k, list] of byCategory(s, c)) {
       if (!list.length && !cats.includes(k)) continue;
       const g = gs.find(x => x.category === k);
-      if (!(g?.coach_id || (gs.length === 0 && sCoach(s, c)))) out.push(`${k}: tiada coach`);
-      if (!(g?.court || (gs.length === 0 && sCourt(s, c)))) out.push(`${k}: tiada court`);
+      if (!(g?.coach_id || sCoach(s, c))) out.push(`${k}: tiada coach`);       // kumpulan ikut coach / court sesi jika tidak ditetapkan
+      if (!(g?.court || sCourt(s, c))) out.push(`${k}: tiada court`);
     }
   } else {
     if (!sCoach(s, c)) out.push('tiada coach');
@@ -126,11 +126,13 @@ export function openSession(sid) {
       ${multi && !isCoach() ? `<select class="att-select" title="Kategori" data-on-change="sp-cat" data-key="${s.id}|${st.id}">${[...new Set([...(c.categories || []), ...ageGroups().map(g => g.code)])].map(k => `<option ${catFor(st, s, c) === k ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select>` : ''}
       <select class="att-select ${a ? 'a-' + a.status : ''}" data-on-change="sp-att" data-key="${s.id}|${st.id}"><option value="">${a?.status === 'booked' ? 'ditempah — belum direkod' : '— belum direkod —'}</option>${ATT_OPTS.map(o => `<option value="${o}" ${a?.status === o ? 'selected' : ''}>${LABEL[o]}</option>`).join('')}</select>${isCoach() ? '' : `<button type="button" class="sp-x" data-action="sp-rm" data-id="${s.id}|${st.id}" title="Keluarkan ${esc(st.full_name)} dari sesi">✕</button>`}</li>`;
   };
-  const assign = (k, g) => isCoach() ? `<span class="muted" style="font-size:12.5px">${esc(staffName(g?.coach_id))} · ${esc(g?.court || '—')}</span>` : `
+  // Satu kumpulan sahaja → ikut coach & court sesi (tiada isian berulang). Beberapa kumpulan → boleh asingkan, kosong = ikut sesi.
+  const oneGroup = cats.size <= 1, sc = sCoach(s, c), sct = sCourt(s, c);
+  const assign = (k, g) => oneGroup ? '' : isCoach() ? `<span class="muted" style="font-size:12.5px">${esc(staffName(g?.coach_id || sc))} · ${esc(g?.court || sct || '—')}</span>` : `
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      <label class="field"><select data-on-change="sp-gcoach" data-key="${s.id}|${esc(k)}">${coachOpts().map(([v, l]) => `<option value="${v}" ${g?.coach_id === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
-      <input class="date-input" style="width:110px" placeholder="Court no." value="${esc(g?.court || '')}" data-on-change="sp-gcourt" data-key="${s.id}|${esc(k)}">
-    </div>${g?.coach_id ? langWarn(g.coach_id, c.venue_id) : ''}`;
+      <label class="field"><select data-on-change="sp-gcoach" data-key="${s.id}|${esc(k)}"><option value="">Ikut sesi${sc ? ' (' + esc(staffName(sc)) + ')' : ''}</option>${coachOpts().filter(([v]) => v).map(([v, l]) => `<option value="${v}" ${g?.coach_id === v && g.coach_id !== sc ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+      <input class="date-input" style="width:120px" placeholder="${sct ? 'Ikut sesi (' + esc(sct) + ')' : 'Court no.'}" value="${esc(g?.court && g.court !== sct ? g.court : '')}" data-on-change="sp-gcourt" data-key="${s.id}|${esc(k)}">
+    </div>${g?.coach_id && g.coach_id !== sc ? langWarn(g.coach_id, c.venue_id) : ''}`;
   const body = `
     <div class="sp-when"><span class="muted">${DAYS[parseISO(s.session_date).getDay()]}, ${fmtDate(s.session_date)} · ${t1}–${t2} · ${esc(venueName(c.venue_id))}${s.status === 'cancelled' ? ' · <b style="color:var(--bad)">Dibatalkan</b>' : ''}</span>
       ${isCoach() ? '' : `<span class="sp-when-a">${s.status !== 'cancelled' ? `<button type="button" class="btn sm" data-action="sp-move" data-id="${s.id}">${ic('calendar', 'sm')} ${personal ? 'Ubah tarikh / masa / lokasi' : 'Ubah tarikh / masa sesi ini'}</button>` : ''}${personal ? '' : `<button type="button" class="btn sm ghost" data-action="sp-class-edit" data-id="${c.id}" title="Ubah hari, masa, lokasi, program & coach untuk setiap minggu">${ic('edit', 'sm')} Edit kelas mingguan</button>`}</span>`}</div>
@@ -139,7 +141,8 @@ export function openSession(sid) {
     ${isCoach() ? '' : `<div class="form-grid" style="margin-bottom:8px">
       <label class="f">Coach sesi<select data-on-change="sp-coach" data-key="${s.id}">${coachOpts().map(([v, l]) => `<option value="${v}" ${sCoach(s, c) === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
       <label class="f">Court no.<input value="${esc(sCourt(s, c) || '')}" placeholder="cth. 3" data-on-change="sp-court" data-key="${s.id}"></label>
-    </div>${langWarn(sCoach(s, c), c.venue_id)}`}
+    </div>${personal ? (() => { const extra = gs.map(g => g.coach_id).filter(x => x && x !== sCoach(s, c));
+      return `<div class="f" style="margin-bottom:8px">Coach tambahan <span class="muted" style="font-weight:500">(cth. 2 coach untuk 3:1 — setiap coach dikira dalam gaji)</span><div class="pw-chips">${T('staff').filter(x => x.active !== false && x.id !== sCoach(s, c)).map(x => `<button type="button" class="pw-chip sm ${extra.includes(x.id) ? 'on' : ''}" data-action="sp-xcoach" data-id="${s.id}|${x.id}">${esc(x.full_name)}</button>`).join('')}</div></div>`; })() : ''}${langWarn(sCoach(s, c), c.venue_id)}`}
     ${multi ? [...cats].map(([k, list]) => `<div class="card card-pad" style="margin:10px 0;padding:10px 12px">
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><b>${esc(k)} <span class="muted">(${list.length})</span></b>${assign(k, gs.find(g => g.category === k))}</div>
         <ul class="list">${list.map(stRow).join('') || '<li class="empty" style="padding:8px">Belum ada pelajar</li>'}</ul></div>`).join('')
@@ -242,10 +245,19 @@ Object.assign(INPUTS, {
   },
   'sp-hours': async (v, el) => { const [sid, stid] = keyOf(el); await setAtt(sid, stid, { hours: v === '' ? null : Number(v) }); reopen(); },
   'sp-cat': async (v, el) => { const [sid, stid] = keyOf(el); await setAtt(sid, stid, { category: v }); reopen(); },
-  'sp-coach': async (v, el) => { await update('class_sessions', keyOf(el)[0], { coach_id: val(v) }); reopen(); },
-  'sp-court': async (v, el) => { await update('class_sessions', keyOf(el)[0], { court: val(v.trim()) }); reopen(); },
-  'sp-gcoach': async (v, el) => { const [sid, k] = keyOf(el); await setGroup(sid, k, { coach_id: val(v) }); reopen(); },
-  'sp-gcourt': async (v, el) => { const [sid, k] = keyOf(el); await setGroup(sid, k, { court: val(v.trim()) }); reopen(); },
+  // Tukar coach / court sesi → kumpulan yang ikut nilai lama (atau kosong) turut dikemas kini, supaya tiada isian berulang.
+  'sp-coach': async (v, el) => { const sid = keyOf(el)[0], s = byId('class_sessions', sid), old = sCoach(s, byId('classes', s.class_id));
+    await update('class_sessions', sid, { coach_id: val(v) });
+    const one = !isPersonal(byId('classes', s.class_id)) && (byId('classes', s.class_id)?.categories || []).length <= 1;
+    for (const g of groupsOf(sid)) if (one || !g.coach_id || g.coach_id === old) await update('session_groups', g.id, { coach_id: val(v) });
+    reopen(); },
+  'sp-court': async (v, el) => { const sid = keyOf(el)[0], s = byId('class_sessions', sid), old = sCourt(s, byId('classes', s.class_id));
+    await update('class_sessions', sid, { court: val(v.trim()) });
+    const one = !isPersonal(byId('classes', s.class_id)) && (byId('classes', s.class_id)?.categories || []).length <= 1;
+    for (const g of groupsOf(sid)) if (one || !g.court || g.court === old) await update('session_groups', g.id, { court: val(v.trim()) });
+    reopen(); },
+  'sp-gcoach': async (v, el) => { const [sid, k] = keyOf(el), s = byId('class_sessions', sid); await setGroup(sid, k, { coach_id: val(v) || sCoach(s, byId('classes', s.class_id)) || null }); reopen(); },
+  'sp-gcourt': async (v, el) => { const [sid, k] = keyOf(el), s = byId('class_sessions', sid); await setGroup(sid, k, { court: val(v.trim()) || sCourt(s, byId('classes', s.class_id)) || null }); reopen(); },
   'sp-plan': async (v, el) => { await update('class_sessions', keyOf(el)[0], { lesson_plan: val(v) }); toast('Nota disimpan'); },
 });
 Object.assign(ACTIONS, {
@@ -258,6 +270,14 @@ Object.assign(ACTIONS, {
     toast('Semua ditandakan hadir'); reopen();
   },
   'sp-class-edit': id => { ACTIONS['class-edit'](id); },
+  /** Sesi personal: coach tambahan disimpan sebagai session_groups (satu rekod setiap coach, termasuk coach utama) supaya gaji & portal coach mengira semua. */
+  'sp-xcoach': async key => {
+    const [sid, cid] = key.split('|'), s = byId('class_sessions', sid), c = byId('classes', s.class_id), main = sCoach(s, c), gs = groupsOf(sid);
+    const cur = [...new Set([main, ...gs.map(g => g.coach_id)].filter(Boolean))], next = cur.includes(cid) ? cur.filter(x => x !== cid) : [...cur, cid];
+    for (const g of gs) await remove('session_groups', g.id);
+    if (next.length > 1) for (const [n, x] of next.entries()) await insert('session_groups', { session_id: sid, category: `Coach ${n + 1}`, coach_id: x, court: sCourt(s, c) });
+    toast(next.length > 1 ? `${next.length} coach untuk sesi ini` : 'Coach tambahan dibuang'); reopen();
+  },
   'sp-move': sid => {
     const s = byId('class_sessions', sid), c = byId('classes', s.class_id), [t1, t2] = sTime(s, c);
     openModal({ title: 'Ubah Tarikh / Masa Sesi', submit: 'Simpan', body: `<p class="muted" style="font-size:13px;margin-bottom:10px">${esc(progName(c.programme_id))} · ${esc(venueName(c.venue_id))} — asal ${DAYS[parseISO(s.session_date).getDay()]} ${fmtDate(s.session_date)} ${t1}–${t2}</p><div class="form-grid">

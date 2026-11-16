@@ -1,6 +1,6 @@
 // v26: Admin — Check-in & Tugasan coach, sunting SOP sesi, jalankan peringatan secara manual.
 import { VIEWS, ACTIONS } from '../registry.js';
-import { S, update, saveSetting, rpc } from '../data.js';
+import { S, update, saveSetting, rpc, setting } from '../data.js';
 import { esc, UI, app, toast, openModal, pageHead, todayISO, addDays, fmtShort, hm, DAYS } from '../ui.js';
 import { T, byId, staffName, venueName, progName } from './helpers.js';
 import { calItems, sTime, sCoach, groupsOf } from './sessions.js';
@@ -37,11 +37,11 @@ VIEWS.checkin = () => {
   return `${head}${tabBar}
   <div class="kv-mini mb"><div><b>${rows.length}</b><small>Tugasan coach</small></div><div><b>${nIn}</b><small>Sudah check in</small></div><div><b style="color:${nLate ? 'var(--bad)' : 'inherit'}">${nLate}</b><small>Lewat</small></div><div><b>${rows.length - nIn}</b><small>Belum / tiada check in</small></div></div>
   <div class="card"><div class="table-wrap"><table><thead><tr><th>Sesi</th><th>Coach</th><th>Check in</th><th>Check out</th><th>Gambar</th></tr></thead><tbody>
-  ${rows.map(({ s, c, date, cid, ins, out }) => { const [a] = sTime(s, c), past = new Date(`${date}T${a}:00`) < new Date();
+  ${rows.map(({ s, c, date, cid, ins, out }) => { const [a] = sTime(s, c), past = new Date(`${date}T${a}:00`) < new Date(), pre = date < (setting('coach_portal', {})?.from || '');
     return `<tr><td><a href="javascript:void 0" data-action="${s ? 'sess-open' : ''}" data-id="${s?.id || ''}">${tab === 'hari' ? '' : DAYS[new Date(date + 'T00:00').getDay()].slice(0, 3) + ' ' + fmtShort(date) + ' · '}${a} · ${esc(progName(c.programme_id))}</a><div class="muted" style="font-size:12px">${esc(venueName(c.venue_id))}</div></td>
       <td>${esc(staffName(cid))}</td>
       <td>${ins ? `<b>${fmtT(ins.at)}</b> <span class="badge ${ins.late_min > 0 ? 'b-bad' : 'b-ok'}">${ins.late_min > 0 ? `lewat ${ins.late_min}m` : `awal ${-ins.late_min}m`}</span>${ins.distance_m != null ? `<div class="muted" style="font-size:11.5px">${ins.distance_m > (byId('venues', c.venue_id)?.radius_m || 300) ? '⚠️ ' : ''}${ins.distance_m} m dari dewan</div>` : ins.lat == null ? '<div class="muted" style="font-size:11.5px">tiada lokasi</div>' : ''}${ins.note ? `<div class="muted" style="font-size:11.5px">${esc(ins.note)}</div>` : ''}`
-        : `<span class="badge ${past ? 'b-bad' : 'b-muted'}">${past ? 'Tiada check in' : 'Belum'}</span>`}</td>
+        : pre ? '<span class="badge b-muted" title="Sebelum tarikh coach mula guna sistem">Belum guna sistem</span>' : `<span class="badge ${past ? 'b-bad' : 'b-muted'}">${past ? 'Tiada check in' : 'Belum'}</span>`}</td>
       <td>${out ? fmtT(out.at) : '—'}</td>
       <td>${ins?.photo_path ? `<img data-pmedia="checkins::${esc(ins.photo_path)}" class="ck-thumb" alt="" data-action="ck-photo" data-id="${esc(ins.photo_path)}">` : '—'}</td></tr>`; }).join('') || '<tr><td colspan="5" class="empty">Tiada sesi.</td></tr>'}</tbody></table></div></div>
   ${Object.keys(byCoach).length ? `<div class="card card-pad" style="margin-top:14px"><h3 style="font-size:14.5px;margin-bottom:8px">Ketepatan masa (30 hari)</h3><div class="table-wrap"><table><thead><tr><th>Coach</th><th>Check in</th><th>Lewat</th><th>Purata lewat</th></tr></thead><tbody>

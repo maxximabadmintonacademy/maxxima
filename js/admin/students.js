@@ -598,6 +598,7 @@ Object.assign(ACTIONS, {
       <div class="actions" style="margin-top:18px">
         ${['active', 'awaiting_payment', 'paused'].includes(s.status) ? `<button type="button" class="btn primary" data-action="sell" data-id="${id}">${ic('tag', 'sm')} Jual Pakej</button>` : ''}
         <button type="button" class="btn" data-action="student-edit" data-id="${id}">${ic('edit', 'sm')} Edit</button>
+        ${['active', 'awaiting_payment', 'paused'].includes(s.status) ? `<button type="button" class="btn" data-action="st-level" data-id="${id}" title="Tukar program (cth. Foundation → Performance), kelas dan baki pakej sekali gus">${ic('trend', 'sm')} Naik tahap</button>` : ''}
         ${['active', 'paused'].includes(s.status) ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|${s.status === 'active' ? 'paused' : 'active'}">${s.status === 'active' ? 'Gantung' : 'Aktifkan semula'}</button>` : ''}
         ${s.status !== 'left' ? `<button type="button" class="btn" data-action="student-status" data-id="${id}|left">Berhenti</button>` : `<button type="button" class="btn" data-action="student-status" data-id="${id}|active">Aktifkan semula</button>`}
         <button type="button" class="btn" data-action="st-archive" data-id="${id}" title="Sembunyikan daripada senarai (rekod kekal)">${s.archived_at ? 'Keluarkan dari arkib' : 'Arkib'}</button>
@@ -665,6 +666,7 @@ ACTIONS['parent-acct'] = (id, el) => {
 };
 
 import { openMonthlyReport } from '../docs2.js';
+import './level.js';
 ACTIONS['st-report'] = id => openModal({ title: 'Laporan Progres Bulanan', submit: 'Buka laporan', body: F('Bulan', 'month', { type: 'month', value: todayISO().slice(0, 7), req: true }), onSubmit: d => openMonthlyReport(id, d.month) });
 
 ACTIONS['st-show-all'] = () => { const q = (UI.studentQ || '').toLowerCase(), arch = T('students').some(s => s.archived_at && s.full_name.toLowerCase().includes(q)) && !T('students').some(s => !s.archived_at && s.status !== UI.studentStatus && s.full_name.toLowerCase().includes(q));
