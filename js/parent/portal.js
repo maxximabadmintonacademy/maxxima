@@ -79,12 +79,15 @@ export async function enterParent() {
   setTimeout(() => { if (!UI.ob && !showTour('parent', false, () => showAnnPopup(t))) showAnnPopup(t); }, 900);
 }
 /* ---- Log masuk kali pertama: kata laluan → bahasa/tema → profil anak → Terma & Syarat ---- */
+const tempLogin = () => /@maxxima\.app$/i.test(S.profile?.email || S.session?.user?.email || '') || (S.mode === 'demo' && /onboard/.test(location.search));
 const needsOnboard = () => S.mode === 'supabase' ? (!!S.profile.must_change_pw || !S.profile.tc_accepted_at) : /onboard/.test(location.search);
 function onboardView() {
   const step = UI.ob, steps = [t('Kata laluan'), t('Paparan'), t('Profil anak'), t('Terma & Syarat')];
   const bar = `<div class="chips mb">${steps.map((l, i) => `<span class="chip ${step === i + 1 ? 'on' : ''}">${i + 1}. ${l}</span>`).join('')}</div>`;
   let body = '';
   if (step === 1) body = `<h3>${t('Tukar kata laluan sementara')}</h3><p class="muted" style="font-size:13px;margin:4px 0 12px">${t('Untuk keselamatan, sila tetapkan kata laluan anda sendiri (sekurang-kurangnya 8 aksara).')}</p>
+    ${tempLogin() ? `<div class="hint" style="margin-bottom:12px">${t('Anda log masuk dengan no. telefon. Sila masukkan e-mel anda — selepas ini log masuk menggunakan e-mel ini, dan "Lupa kata laluan" akan dihantar ke e-mel ini.')}</div>
+    <div class="form-grid" style="margin-bottom:6px"><label class="f full">${t('E-mel anda')}<input type="email" id="obE1" autocomplete="email" inputmode="email" placeholder="nama@gmail.com"></label><label class="f full">${t('Ulang e-mel')}<input type="email" id="obE2" autocomplete="off" inputmode="email"></label></div>` : ''}
     <div class="form-grid"><label class="f full">${t('Kata laluan baharu')}<input type="password" id="obP1" autocomplete="new-password"></label><label class="f full">${t('Ulang kata laluan')}<input type="password" id="obP2" autocomplete="new-password"></label></div>
     <button class="btn primary" style="margin-top:14px" data-action="ob-pw">${t('Simpan & teruskan')}</button>`;
   if (step === 2) body = `<h3>${t('Pilih bahasa dan tema')}</h3>
@@ -358,7 +361,20 @@ Object.assign(ACTIONS, {
     const a = $('#obP1').value, b = $('#obP2').value;
     if (a.length < 8) return toast(t('Kata laluan mesti sekurang-kurangnya 8 aksara.'), true);
     if (a !== b) return toast(t('Kata laluan tidak sepadan.'), true);
-    try { if (S.mode === 'supabase') await setPassword(a); UI.ob = 2; render(); } catch (e) { toast(friendlyError(e), true); }
+    let em = '';
+    if (tempLogin()) {
+      em = ($('#obE1').value || '').trim().toLowerCase(); const em2 = ($('#obE2').value || '').trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(em)) return toast(t('Sila masukkan e-mel yang sah.'), true);
+      if (em !== em2) return toast(t('E-mel tidak sepadan.'), true);
+    }
+    try {
+      if (S.mode === 'supabase') {
+        if (em) { await rpc('set_my_login_email', { p_email: em }); S.profile.email = em; }
+        await setPassword(a);
+      }
+      if (em) toast(t('Disimpan. Log masuk seterusnya: ') + em);
+      UI.ob = 2; render();
+    } catch (e) { toast(friendlyError(e), true); }
   },
   'ob-next': () => { UI.ob = 3; render(); },
   'ob-kids': async () => {

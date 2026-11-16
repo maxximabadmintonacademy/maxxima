@@ -67,7 +67,10 @@ export async function signIn(email, password) {
   email = String(email || '').trim();
   if (!email.includes('@')) { let d = email.replace(/\D/g, ''); if (d.startsWith('0')) d = '6' + d; else if (d.startsWith('1')) d = '60' + d; email = d + '@maxxima.app'; }
   const { data, error } = await S.client.auth.signInWithPassword({ email, password });
-  if (error) throw error;
+  if (error) {
+    if (/@maxxima\.app$/.test(email) && /invalid/i.test(error.message || '')) throw new Error('No. telefon atau kata laluan salah. Jika anda sudah menukar kepada e-mel, sila log masuk menggunakan e-mel anda. / If you have set an email, please sign in with your email.');
+    throw error;
+  }
   S.session = data.session; await loadProfile();
 }
 export async function signOut() {

@@ -3,7 +3,7 @@ import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove } from '../data.js';
 import { ic, esc, F, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, hm, todayISO, addDays, parseISO, iso, monthKey, monthLabel, DAYS, LABEL, barColor, $ } from '../ui.js';
 import { T, byId, venueName, progName, staffName, studentName, progColor, enrolledIn, classLabel, attRate, activeStudents, livePackages, pkgRemaining } from './helpers.js';
-import { ageGroups, langWarn, langGap, langName } from './sessions.js';
+import { ageGroups, langWarn, langGap, langName, calItems, sTime, sCoach, sCourt, groupsOf, rosterOf } from './sessions.js';
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0];
 
@@ -122,8 +122,8 @@ const pkgChip = (studentId, a) => {
 
 VIEWS.kehadiran = () => {
   const date = UI.attDate || todayISO();
-  const sessions = T('class_sessions').filter(s => s.session_date === date).map(s => ({ s, c: byId('classes', s.class_id) })).filter(x => x.c)
-    .sort((a, b) => a.c.start_time.localeCompare(b.c.start_time));
+  // Sama sumber dengan Kalendar Sesi: sesi sebenar + sesi jadual mingguan yang belum dijana; masa/coach/court ikut sesi (bukan kelas)
+  const sessions = calItems(date, date).filter(x => x.c).sort((a, b) => sTime(a.s, a.c)[0].localeCompare(sTime(b.s, b.c)[0]));
   const weekdayClasses = T('classes').filter(c => c.active && c.weekday === parseISO(date).getDay());
   const dateLabel = `${DAYS[parseISO(date).getDay()]}, ${fmtDate(date)}`;
 
@@ -150,12 +150,17 @@ VIEWS.kehadiran = () => {
   </div>
 
   ${sessions.length ? sessions.map(({ s, c }) => {
+    const [t1, t2] = sTime(s, c), court = sCourt(s, c);
+    const coaches = [...new Set([sCoach(s, c), ...(s ? groupsOf(s.id).map(g => g.coach_id) : [])].filter(Boolean))].map(staffName).join(', ') || 'tiada coach';
+    const head = `<div><h3>${t1}–${t2} · ${esc(c.title || progName(c.programme_id))}</h3><div class="sub">${c.title ? esc(progName(c.programme_id)) + ' · ' : ''}${esc(venueName(c.venue_id))}${court ? ' · ' + esc(court) : ''} · ${esc(coaches)}</div></div>`;
+    if (!s) return `<div class="card mb" style="border-style:dashed"><div class="card-head" style="flex-wrap:wrap">${head}
+        <div class="actions"><span class="badge b-muted">belum dijana</span><button class="btn sm primary" data-action="sess-open-v" data-id="${c.id}|${date}">${ic('users', 'sm')} Buka & rekod kehadiran</button></div></div>
+        <div class="att-summary muted">${enrolledIn(c.id).length} pelajar tetap · sesi dijana automatik bila dibuka</div></div>`;
     const marked = T('attendance').filter(a => a.session_id === s.id);
-    const rosterIds = new Set([...enrolledIn(c.id).map(e => e.student_id), ...marked.map(a => a.student_id)]);   // tetap + tempahan fleksibel
-    const roster = [...rosterIds].map(id => byId('students', id)).filter(Boolean).sort((a, b) => a.full_name.localeCompare(b.full_name));
+    const roster = rosterOf(s, c).filter(Boolean).sort((a, b) => a.full_name.localeCompare(b.full_name));   // sama seperti panel sesi
     return `<div class="card mb">
       <div class="card-head" style="flex-wrap:wrap">
-        <div><h3>${hm(c.start_time)}–${hm(c.end_time)} · ${esc(progName(c.programme_id))}</h3><div class="sub">${esc(venueName(c.venue_id))}${c.court ? ' · ' + esc(c.court) : ''} · ${esc(staffName(s.coach_id || c.coach_id))}</div></div>
+        ${head}
         <div class="actions">${badge(s.status === 'scheduled' ? 'scheduled' : s.status)}<button class="btn sm" data-action="sess-open" data-id="${s.id}">${ic('users', 'sm')} Panel sesi</button>
           ${s.status !== 'cancelled' ? `<button class="btn sm" data-action="att-all" data-id="${s.id}">Semua hadir</button>` : ''}
           ${s.status === 'scheduled' ? `<button class="btn sm" data-action="sess-held" data-id="${s.id}">Tandakan selesai</button>` : ''}
