@@ -1,35 +1,12 @@
 // Titik masuk: log masuk, penghalaan peranan, shell Portal Admin, router.
 import { S, init, loadAll, signIn, signOut, resetPassword, setPassword, demoLogin, expirePackages, markRead, subscribeNotifications, subscribeTables, ensurePush } from './data.js';
-import { $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError, liveRender , loadErrorBox } from './ui.js';
+import { APP_VERSION, $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError, liveRender , loadErrorBox } from './ui.js';
 import { VIEWS, ACTIONS, INPUTS } from './registry.js';
 import { t, setLang, setI18nActive, langSwitch } from './i18n.js';
 import { setTheme } from './theme.js';
 import { startDomI18n } from './i18n-dom.js';
 import { NAV, ALL_ITEMS, BOTTOM_NAV } from './admin/nav.js';
 import { tasks, academy } from './admin/helpers.js';
-import './admin/dashboard.js';
-import './admin/students.js';
-import './admin/schedule.js';
-import './admin/finance.js';
-import './admin/expenses.js';
-import './admin/tournaments.js';
-import './admin/team.js';
-import './admin/system.js';
-import './admin/setup.js';
-import './admin/review.js';
-import './admin/sessions.js';
-import './admin/calendar.js';
-import './admin/ops.js';
-import './admin/announce.js';
-import './admin/ops2.js';
-import './admin/auto.js';
-import './admin/v22.js';
-import './admin/scoring.js';
-import './admin/v25.js';
-import './admin/v26.js';
-import './admin/v28.js';
-import './admin/v29.js';
-import './admin/v30.js';
 
 const root = () => $('#root');
 const logoSvg = `<img src="assets/logo.png" alt="MBA" class="brand-img">`;
@@ -121,8 +98,10 @@ async function enter() {
   if (p.lang) setLang(p.lang);   // bahasa diingat pada akaun, bukan hanya peranti
   if (p.role === 'parent') { const pp = await import('./parent/portal.js'); return pp.enterParent(); }
   if (p.role === 'coach') { const cp = await import('./coach/portal.js'); return cp.enterCoach(); }
+  if (p.role !== 'admin' && p.role !== 'official') return showPortalSoon(p.role);
+  root().innerHTML = `<div class="boot">Memuatkan…</div>`;
+  await import('./admin/all.js');   // modul admin dimuat selepas peranan diketahui
   if (p.role === 'official') setupOfficial();
-  else if (p.role !== 'admin') return showPortalSoon(p.role);
   setI18nActive(true); startDomI18n(); app.relang = () => { renderShell(); route(); };   // Portal Admin: teks diterjemah oleh i18n-dom.js
   renderShell();
   $('#view').innerHTML = `<div class="boot">Memuatkan data akademi…</div>`;
@@ -156,7 +135,7 @@ function renderShell() {
       <nav class="nav" id="nav"></nav>
       <div class="side-foot">
         <div class="avatar lime">${esc((S.profile.full_name || 'A').slice(0, 2).toUpperCase())}</div>
-        <div style="min-width:0;flex:1"><div class="who">${esc(S.profile.full_name || 'Admin')}</div><div class="role">${S.profile.role === 'official' ? 'Urus Setia Kejohanan' : 'Pentadbir Sistem'}</div></div>
+        <div style="min-width:0;flex:1"><div class="who">${esc(S.profile.full_name || 'Admin')}</div><div class="role">${S.profile.role === 'official' ? 'Urus Setia Kejohanan' : 'Pentadbir Sistem'} · ${APP_VERSION}</div></div>
         <button class="icon-btn dark" data-action="logout" title="Log keluar" aria-label="Log keluar">${ic('logout', 'sm')}</button>
       </div>
     </aside>

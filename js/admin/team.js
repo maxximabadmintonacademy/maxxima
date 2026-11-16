@@ -2,8 +2,8 @@ import { uploadMedia, photoAvatar } from '../media.js';
 // Coach dan HR & Staf.
 import { VIEWS, ACTIONS } from '../registry.js';
 import { S, insert, update, remove, rpc, setting, saveSetting } from '../data.js';
-import { LANGS_ALL, langName } from './sessions.js';
-import { ic, esc, F, RM, sum, num, val, badge, avatar, app, toast, openModal, confirmModal, pageHead, fmtShort, fmtDate, todayISO, LABEL, DAYS, hm } from '../ui.js';
+import { LANGS_ALL, langName, calItems, sHours, rosterOf } from './sessions.js';
+import { ic, esc, F, RM, sum, num, val, badge, avatar, app, toast, openModal, confirmModal, pageHead, fmtShort, fmtDate, todayISO, addDays, LABEL, DAYS, hm } from '../ui.js';
 import { T, byId, venueName, progName, staffName, classHours, enrolledIn } from './helpers.js';
 
 const thisMonth = () => todayISO().slice(0, 7);
@@ -18,21 +18,42 @@ function hoursThisMonth(staffId) {
 /* =====================================================================
    COACH
    ===================================================================== */
+/** Semakan sedia check in: coach bersesi tanpa akaun, lokasi tanpa GPS, sesi tanpa coach. */
+function readiness(coaches, wkFrom) {
+  const td = todayISO(), wk = calItems(td, addDays(td, 6)).filter(x => x.s?.status !== 'cancelled');
+  const coachIds = new Set(wk.flatMap(x => [x.s?.coach_id || x.c.coach_id, ...(x.s ? T('session_groups').filter(g => g.session_id === x.s.id).map(g => g.coach_id) : [])]).filter(Boolean));
+  const noAcct = T('staff').filter(st => st.active && coachIds.has(st.id) && !st.profile_id);
+  const vIds = new Set(wk.map(x => x.c.venue_id)), noGps = T('venues').filter(v => vIds.has(v.id) && (v.lat == null || v.lng == null));
+  const noCoach = wk.filter(x => !(x.s?.coach_id || x.c.coach_id) && !(x.s && T('session_groups').some(g => g.session_id === x.s.id && g.coach_id)));
+  const from = setting('coach_portal', {})?.from;
+  const rows = [
+    noAcct.length && `<li><b>${noAcct.length} coach ada sesi 7 hari ini tetapi belum ada akaun portal</b> — tidak boleh check in / terima tugasan: ${noAcct.map(x => `<a href="javascript:void 0" data-action="staff-acct" data-id="${x.id}">${esc(x.full_name)}</a>`).join(', ')}</li>`,
+    noGps.length && `<li><b>${noGps.length} lokasi tiada koordinat GPS</b> — jarak check in tidak dapat disahkan: ${noGps.map(v => esc(v.name)).join(', ')}. Isi di Persediaan → Lokasi → Edit → "Latitud, longitud".</li>`,
+    noCoach.length && `<li><b>${noCoach.length} sesi 7 hari ini tiada coach</b> — buka Kalendar (tapis "Ada amaran") dan tetapkan coach.</li>`,
+  ].filter(Boolean);
+  return `<div class="card card-pad mb" style="border-left:4px solid ${rows.length ? 'var(--warn)' : 'var(--ok)'}"><h3 style="font-size:14.5px;margin-bottom:6px">Sedia untuk check in${from ? ` · mula ${fmtDate(from)}` : ''}</h3>
+    ${rows.length ? `<ul style="margin:0 0 0 18px;font-size:13px;line-height:1.6">${rows.join('')}</ul>` : '<div class="muted" style="font-size:13px">✓ Semua coach yang bersesi minggu ini ada akaun, semua lokasi ada GPS, semua sesi ada coach.</div>'}</div>`;
+}
+
 VIEWS.coach = () => {
   const coaches = T('staff').filter(s => s.active && (/jurulatih|coach/i.test(s.position) || T('classes').some(c => c.coach_id === s.id)));
+  const td = todayISO(), wkFrom = addDays(td, -((new Date(td + 'T00:00').getDay() + 6) % 7));   // Isnin minggu ini
   return `
   ${pageHead('Coach', `${coaches.length} jurulatih aktif`, `<button class="btn" data-action="coach-from" title="Sesi sebelum tarikh ini tidak dipaparkan di portal coach">${ic('calendar', 'sm')} Jadual coach mula: ${setting('coach_portal', {})?.from ? fmtDate(setting('coach_portal', {}).from) : 'semua'}</button><a class="btn" href="#hr">${ic('briefcase', 'sm')} HR & Gaji</a><button class="btn primary" data-action="staff-add">${ic('plus', 'sm')} Tambah Staf</button>`)}
+  ${readiness(coaches, wkFrom)}
   <div class="grid g-3">${coaches.map(c => {
-    const cls = T('classes').filter(k => k.active && k.coach_id === c.id), hrs = sum(cls, classHours);
-    const studs = new Set(cls.flatMap(k => enrolledIn(k.id).map(e => e.student_id)));
-    const venues = [...new Set(cls.map(k => venueName(k.venue_id)))];
+    // Kira daripada sesi sebenar minggu ini (termasuk personal, coach ganti sesi & coach kumpulan), bukan hanya coach utama kelas.
+    const wk = calItems(wkFrom, addDays(wkFrom, 6), { coach: c.id }).filter(x => x.s?.status !== 'cancelled');
+    const hrs = sum(wk, x => sHours(x.s, x.c)), cls = wk;
+    const studs = new Set(wk.flatMap(x => rosterOf(x.s, x.c).map(st => st.id)));
+    const venues = [...new Set(wk.map(x => venueName(x.c.venue_id)))];
     const acct = c.profile_id ? byId('profiles', c.profile_id) : null;
     return `<div class="card coach-card">
-      <div class="coach-top">${photoAvatar(c.full_name, c.photo_path, { cls: 'lg' })}<div style="flex:1;min-width:0"><h4>${esc(c.full_name)}</h4><div class="muted" style="font-size:12.5px">${esc(c.position)}${c.certification ? ' · ' + esc(c.certification) : ''}</div></div><button class="btn sm" data-action="staff-edit" data-id="${c.id}">${ic('edit', 'sm')}</button></div>
-      <div class="stats3"><div><b>${cls.length}</b><small>Kelas/minggu</small></div><div><b>${Math.round(hrs * 10) / 10}</b><small>Jam/minggu</small></div><div><b>${studs.size}</b><small>Pelajar</small></div></div>
+      <div class="coach-top">${photoAvatar(c.full_name, c.photo_path, { cls: 'lg' })}<div style="flex:1;min-width:0"><h4>${esc(c.full_name)}</h4><div class="muted" style="font-size:12.5px">${esc(c.position)}${c.certification ? ' · ' + esc(c.certification) : ''}</div>${c.employment_type === 'full_time' || c.pay_basis === 'monthly' ? '<span class="badge b-ok" style="margin-top:4px" title="Tugasan sesi diterima automatik">Sepenuh masa · auto terima</span>' : `<span class="badge b-muted" style="margin-top:4px" title="Coach perlu Terima / Tolak setiap tugasan sesi baharu">${c.employment_type === 'part_time' ? 'Sambilan' : 'Jenis belum diisi'} · perlu Terima/Tolak</span>`}</div><button class="btn sm" data-action="staff-edit" data-id="${c.id}">${ic('edit', 'sm')}</button></div>
+      <div class="stats3"><div><b>${cls.length}</b><small>Sesi minggu ini</small></div><div><b>${Math.round(hrs * 10) / 10}</b><small>Jam/minggu</small></div><div><b>${studs.size}</b><small>Pelajar</small></div></div>
       ${(c.languages || []).length ? `<div class="chips" style="margin:0">${c.languages.map(l => `<span class="chip">${esc(langName(l))}</span>`).join('')}</div>` : '<div class="muted" style="font-size:12px;color:var(--warn)">Bahasa belum diisi</div>'}
       ${c.qualifications ? `<div class="muted" style="font-size:12.5px;white-space:pre-line">${ic('award', 'sm')} ${esc(c.qualifications)}</div>` : ''}
-      <div class="muted" style="font-size:12.5px;display:flex;gap:8px;align-items:flex-start">${ic('pin', 'sm')}<span>${venues.length ? esc(venues.join(', ')) : 'Belum ada kelas'}</span></div>
+      <div class="muted" style="font-size:12.5px;display:flex;gap:8px;align-items:flex-start">${ic('pin', 'sm')}<span>${venues.length ? esc(venues.join(', ')) : 'Tiada sesi minggu ini'}</span></div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">${acct || c.profile_id ? `<span class="badge b-ok">Akaun portal aktif</span><button class="btn sm" data-action="staff-acct" data-id="${c.id}|reset">Reset kata laluan</button>` : `<button class="btn sm primary" data-action="staff-acct" data-id="${c.id}">${ic('key', 'sm')} Cipta akaun Portal Coach</button>`}${c.phone ? `<span class="muted" style="font-size:12.5px">${esc(c.phone)}</span>` : ''}</div>
     </div>`; }).join('') || `<div class="card empty" style="grid-column:1/-1">Belum ada coach.</div>`}</div>`;
 };

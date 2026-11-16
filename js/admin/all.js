@@ -1,0 +1,24 @@
+// Semua modul Portal Admin — dimuat HANYA untuk admin / urus setia (coach & ibu bapa tidak perlu memuat turun ~700 KB ini).
+import './dashboard.js';
+import './students.js';
+import './schedule.js';
+import './finance.js';
+import './expenses.js';
+import './tournaments.js';
+import './team.js';
+import './system.js';
+import './setup.js';
+import './review.js';
+import './sessions.js';
+import './calendar.js';
+import './ops.js';
+import './announce.js';
+import './ops2.js';
+import './auto.js';
+import './v22.js';
+import './scoring.js';
+import './v25.js';
+import './v26.js';
+import './v28.js';
+import './v29.js';
+import './v30.js';
