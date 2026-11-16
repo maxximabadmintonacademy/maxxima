@@ -37,6 +37,7 @@ export const refundOf = inv => Math.max(Math.round((paidOf(inv) + creditOf(inv) 
 /** Status paparan: invois "issued" yang bakinya 0 (dilunaskan oleh kredit/bayaran) dianggap Dibayar / Dibatalkan walaupun pelayan belum dikemas kini. */
 export const invStatus = inv => {
   if (inv.status === 'issued' && Number(inv.amount) > 0 && dueOf(inv) <= 0) return paidOf(inv) > 0 ? 'paid' : 'void';
+  if (inv.status === 'paid' && Number(inv.amount) > 0 && paidOf(inv) === 0 && creditOf(inv) >= Number(inv.amount)) return 'void';   // ditanda dibayar tanpa rekod bayaran, kemudian dikreditkan penuh
   return inv.status === 'issued' && inv.due_date < todayISO() ? 'overdue' : inv.status;
 };
 

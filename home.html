@@ -7,7 +7,7 @@
 <title>Maxxima Badminton Academy — Kelas badminton kanak-kanak, remaja & dewasa · Trial percuma</title>
 <meta name="description" content="Kelas badminton di 9 lokasi sekitar Klang, Setia Alam, Puchong, Cyberjaya, Selayang & Batu Caves. Diketuai bekas pemain kebangsaan. Mohon trial kumpulan percuma 2 jam.">
 <meta property="og:title" content="Maxxima Badminton Academy — Trial kumpulan percuma 2 jam">
-<meta property="og:description" content="Foundation, Performance & Elite untuk umur 5 hingga dewasa. Personal coaching & kem latihan antarabangsa.">
+<meta property="og:description" content="TRAIN. IMPROVE. ACHIEVE. Foundation, Performance & Elite di 9 lokasi. Trial kumpulan percuma 2 jam untuk pelajar baharu.">
 <meta property="og:image" content="assets/logo.png">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -43,7 +43,7 @@ p{margin:0}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--disp);font-weight:800;font-size:21px;letter-spacing:.02em;white-space:nowrap}
 .brand img{width:38px;height:38px}
 .nav{display:flex;gap:2px;margin-left:auto}
-.nav a{font-size:14px;font-weight:600;text-decoration:none;padding:8px 12px;border-radius:999px;color:var(--navy)}
+.nav a{white-space:nowrap;font-size:14px;font-weight:600;text-decoration:none;padding:8px 12px;border-radius:999px;color:var(--navy)}
 .nav a:hover{background:#e3ebe8}
 .lang{display:flex;border:1px solid var(--rule);border-radius:999px;overflow:hidden;background:#fff}
 .lang button{border:0;background:none;padding:6px 10px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--muted)}
@@ -56,6 +56,8 @@ p{margin:0}
 .btn-n{background:var(--navy);color:#fff}
 .btn-sm{padding:8px 14px;font-size:13.5px}
 .login{font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;white-space:nowrap}
+@media (max-width:1240px){.nav a{padding:8px 8px;font-size:13.5px}}
+@media (max-width:1140px){.nav{display:none}.login{margin-left:auto}}
 @media (max-width:960px){.nav{display:none}.top .wrap{gap:10px}.login{margin-left:auto}}
 @media (max-width:520px){.brand span{display:none}.top .btn{display:none}}
 
@@ -220,6 +222,45 @@ footer ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 @media (max-width:760px){.mbar{display:flex}}
 .toast{position:fixed;left:50%;bottom:90px;transform:translate(-50%,20px);opacity:0;background:var(--navy);color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;transition:.25s;z-index:60;pointer-events:none;max-width:90vw}
 .toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* v44: kandungan rasmi */
+.tagline{font-family:var(--disp);font-weight:800;font-size:clamp(18px,2.2vw,24px);letter-spacing:.14em;color:var(--shuttle);margin-bottom:14px}
+.offers{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.offer{background:#fff;border:1px solid var(--rule);border-radius:var(--r-lg);padding:22px;display:flex;flex-direction:column;gap:6px}
+.offer small{font-size:13px;font-weight:600;color:var(--muted)}
+.offer .price{font-family:var(--disp);font-size:40px;line-height:1;color:var(--navy)}
+.offer p{font-size:14.5px;color:var(--muted);flex:1;margin:4px 0 12px}
+.offer .btn{align-self:flex-start}
+.offer.hl{background:var(--court);border-color:var(--court);color:#fff}.offer.hl small{color:#cfe7df}.offer.hl .price{color:var(--shuttle);font-size:56px}.offer.hl p{color:#dcefe8}
+@media (max-width:900px){.offers{grid-template-columns:1fr}}
+.train-t{margin:40px 0 14px;font-size:28px}
+.train{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:0;margin:0;list-style:none;counter-reset:t;border-top:2px solid var(--navy)}
+.train li{counter-increment:t;padding:16px 18px 4px 0;position:relative}
+.train li::before{content:"0" counter(t);font-family:var(--disp);font-weight:800;font-size:15px;color:var(--court);display:block;margin-bottom:4px}
+.train b{display:block;font-size:16.5px}.train span{font-size:14.5px;color:var(--muted)}
+@media (max-width:800px){.train{grid-template-columns:1fr 1fr}}@media (max-width:480px){.train{grid-template-columns:1fr}}
+.win-note{margin-top:14px;font-size:13.5px;color:var(--muted)}
+
+/* v46: susunan laman asal */
+.hero-img:empty,.train-img:empty,.win-imgs:empty{display:none}
+.train-row:has(.train-img:empty){grid-template-columns:1fr}
+.intake{margin-top:14px;display:inline-block;background:rgba(255,207,51,.14);border:1px solid rgba(255,207,51,.45);color:#fff3c4;border-radius:12px;padding:8px 14px;font-size:14.5px;font-weight:600}
+.hero-img{border-radius:var(--r-lg);overflow:hidden;box-shadow:0 30px 60px -20px rgba(0,0,0,.45);aspect-ratio:4/3;background:var(--court-2)}
+.hero-img img{width:100%;height:100%;object-fit:cover}
+.two{display:grid;grid-template-columns:1.2fr .8fr;gap:20px;align-items:start}
+.tcard,.pcard{border-radius:var(--r-lg);padding:28px}
+.tcard{background:#fff;border:1px solid var(--rule)}
+.tcard .free{display:inline-block;background:var(--shuttle);color:var(--navy);font-family:var(--disp);font-weight:800;font-size:22px;border-radius:8px;padding:2px 10px;margin-bottom:10px}
+.locs{list-style:none;padding:0;margin:0;columns:2;column-gap:24px;font-size:14.5px}.locs li{break-inside:avoid;padding:5px 0;border-bottom:1px dashed var(--rule);color:var(--muted)}.locs b{color:var(--ink);font-weight:600}
+.pcard{background:var(--navy);color:#fff}.pcard p{color:#c7d2ec}
+.ppts{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}.ppts span{border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:4px 14px;font-weight:700;font-family:var(--disp);font-size:18px}
+.pcard .btn-n{background:var(--shuttle);color:var(--navy)}
+.train-row{display:grid;grid-template-columns:.8fr 1.2fr;gap:28px;align-items:center;margin-top:40px}
+.train-img{border-radius:var(--r-lg);overflow:hidden;aspect-ratio:4/3;background:#e6ece9}.train-img img{width:100%;height:100%;object-fit:cover}
+.train-row .train{grid-template-columns:1fr 1fr}
+.win-imgs{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px}.win-imgs img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:var(--r-lg)}
+@media (max-width:900px){.two,.train-row{grid-template-columns:1fr}.locs{columns:1}}
+@media (max-width:560px){.win-imgs{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
