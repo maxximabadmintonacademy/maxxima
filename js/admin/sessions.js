@@ -102,7 +102,7 @@ export async function ensureSession(classId, date) {
 }
 
 /* ---------------------------------------------------------------- PANEL SESI */
-const ATT_OPTS = ['present', 'late', 'absent', 'excused', 'late_cancel'];
+const ATT_OPTS = ['present', 'late', 'absent', 'excused', 'late_cancel', 'trial'];   // trial = percuma, tidak tolak pakej
 const isCoach = () => S.profile?.role === 'coach';
 const markedBy = () => (S.mode === 'demo' ? null : S.profile.id);
 const coachOpts = () => [['', '— Pilih coach —'], ...T('staff').filter(x => x.active !== false).map(x => [x.id, x.full_name + ((x.languages || []).length ? ' (' + x.languages.join('/') + ')' : '')])];

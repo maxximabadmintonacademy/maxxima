@@ -280,7 +280,7 @@ Object.assign(ACTIONS, {
           if (pkgAmt > 0 && invoiceStudentIds({ ...inv, id }).length < 2) for (const sp of T('student_packages').filter(x => x.invoice_id === id && x.status === 'pending')) await update('student_packages', sp.id, { price: pkgAmt });
         } else await update('invoices', id, patch);
         if (pkgs.length === 1 && d.sessions_total && Number(d.sessions_total) !== Number(pkgs[0].sessions_total)) {
-          const tot = Number(d.sessions_total), sp = pkgs[0], used = Number(sp.sessions_used || 0), pp = { sessions_total: tot };
+          const tot = Number(d.sessions_total), sp = pkgs[0], used = Number(sp.sessions_used || 0), pp = { sessions_total: tot, name: nameForTotal(sp.name, tot) };
           if (sp.status === 'completed' && used < tot) pp.status = 'active'; if (sp.status === 'active' && used >= tot) pp.status = 'completed';
           await update('student_packages', sp.id, pp);
         }
@@ -346,7 +346,7 @@ Object.assign(ACTIONS, {
       onSubmit: async d => {
         const total = Number(d.sessions_total), off = Math.max(Number(d.used_offset || 0), 0), used = Number(sp.sessions_used || 0) - Number(sp.used_offset || 0) + off; let st = d.status;
         if (st === 'active' && used >= total) st = 'completed'; if (st === 'completed' && used < total) st = 'active';
-        const patch = { name: d.name, sessions_total: total, used_offset: off, sessions_used: used, starts_on: val(d.starts_on), expires_on: val(d.expires_on), status: st }; if (val(d.expires_on) && val(d.expires_on) !== sp.expires_on) patch.auto_start = false;   // tarikh ditetapkan admin — tidak dikira semula
+        const patch = { name: d.name === sp.name ? nameForTotal(d.name, total) : d.name, sessions_total: total, used_offset: off, sessions_used: used, starts_on: val(d.starts_on), expires_on: val(d.expires_on), status: st }; if (val(d.expires_on) && val(d.expires_on) !== sp.expires_on) patch.auto_start = false;   // tarikh ditetapkan admin — tidak dikira semula
         if (total - used > 1) patch.renewal_sent = false;
         await update('student_packages', id, patch); toast('Pakej dikemas kini'); app.render();
       } });
@@ -599,3 +599,6 @@ Object.assign(ACTIONS, {
   },
   'sp-cancel': id => confirmModal({ title: 'Batalkan pakej?', message: 'Pakej tidak lagi digunakan. Invois berkaitan perlu dibatalkan secara berasingan jika belum dibayar.', ok: 'Batalkan Pakej', danger: true, onOk: async () => { await update('student_packages', id, { status: 'cancelled' }); toast('Pakej dibatalkan'); app.render(); } }),
 });
+
+/** Nama pakej ikut bilangan sesi sebenar: "Performance · 4 sessions" + 3 sesi → "Performance · 3 sessions". */
+export function nameForTotal(name, tot) { return String(name || '').replace(/\b\d+(\s*)(sessions?|sesi|kali|x)\b/i, (m, sp, u) => `${tot}${sp}${u}`); }

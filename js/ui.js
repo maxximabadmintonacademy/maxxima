@@ -1,4 +1,4 @@
-export const APP_VERSION = 'v61';
+export const APP_VERSION = 'v63';
 // Pembantu UI dikongsi: ikon, format, lencana, modal, toast, borang.
 import { t, getLang } from './i18n.js';
 export const $ = (s, r = document) => r.querySelector(s);
@@ -94,7 +94,7 @@ const LABEL_MS = {
   // invois
   issued: 'Belum Bayar', paid: 'Dibayar', void: 'Dibatalkan', refunded: 'Dipulangkan', overdue: 'Lewat',
   // kehadiran
-  booked: 'Ditempah', present: 'Hadir', late: 'Lewat Hadir', absent: 'Tidak Hadir', excused: 'Dimaafkan', late_cancel: 'Batal Lewat',
+  booked: 'Ditempah', present: 'Hadir', late: 'Lewat Hadir', absent: 'Tidak Hadir', excused: 'Dimaafkan', late_cancel: 'Batal Lewat', trial: 'Hadir (percuma / trial)',
   // sesi
   held: 'Selesai',
   // pakej
@@ -117,7 +117,7 @@ const LABEL_EN = {
   scheduled: 'Scheduled', done: 'Done', no_show: 'No-show', cancelled: 'Cancelled',
   pending: 'Pending Review', awaiting_payment: 'Awaiting Payment', active: 'Active', paused: 'Paused', left: 'Left',
   issued: 'Unpaid', paid: 'Paid', void: 'Cancelled', refunded: 'Refunded', overdue: 'Overdue',
-  booked: 'Booked', present: 'Present', late: 'Late', absent: 'Absent', excused: 'Excused', late_cancel: 'Late Cancel',
+  booked: 'Booked', present: 'Present', late: 'Late', absent: 'Absent', excused: 'Excused', late_cancel: 'Late Cancel', trial: 'Present (free / trial)',
   held: 'Completed', expired: 'Expired', fixed: 'Fixed Schedule', flexible: 'Flexible', package: 'Session Package',
   draft: 'Draft', open: 'Registration Open', closed: 'Registration Closed', ongoing: 'Ongoing', completed: 'Completed',
   registered: 'Registered', confirmed: 'Confirmed', withdrawn: 'Withdrawn', walkover: 'Walkover',
@@ -132,7 +132,7 @@ const LABEL_ZH = {
   scheduled: '已安排', done: '完成', no_show: '未出席', cancelled: '已取消',
   pending: '待审核', awaiting_payment: '待付款', active: '在读', paused: '暂停', left: '已退出',
   issued: '未付款', paid: '已付款', void: '已取消', overdue: '逾期',
-  booked: '已预约', present: '出席', late: '迟到', absent: '缺席', excused: '请假', late_cancel: '临时取消',
+  booked: '已预约', present: '出席', late: '迟到', absent: '缺席', excused: '请假', late_cancel: '临时取消', trial: '出席（免费/试课）',
   held: '已完成', expired: '已过期', fixed: '固定时间', flexible: '灵活预约', package: '课时配套',
   draft: '草稿', open: '报名开放', closed: '报名截止', ongoing: '进行中', completed: '已完成',
   registered: '已登记', confirmed: '已确认', withdrawn: '退出', walkover: '弃权',
@@ -149,7 +149,7 @@ const TONE = {
   scheduled: 'warn', done: 'ok', no_show: 'bad', cancelled: 'muted',
   pending: 'warn', awaiting_payment: 'info', active: 'ok', paused: 'muted', left: 'muted',
   issued: 'warn', paid: 'ok', void: 'muted', overdue: 'bad',
-  booked: 'info', expired: 'bad', present: 'ok', late: 'warn', absent: 'bad', excused: 'info', late_cancel: 'bad', held: 'ok',
+  booked: 'info', expired: 'bad', present: 'ok', late: 'warn', absent: 'bad', excused: 'info', late_cancel: 'bad', trial: 'ok', held: 'ok',
   draft: 'muted', open: 'ok', closed: 'warn', ongoing: 'info', completed: 'purple',
   registered: 'warn', confirmed: 'ok', withdrawn: 'muted', walkover: 'muted',
   approved: 'ok', rejected: 'bad', admin: 'purple', coach: 'info', parent: 'lime',

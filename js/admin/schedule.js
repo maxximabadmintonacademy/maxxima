@@ -111,7 +111,7 @@ Object.assign(ACTIONS, {
 /* =====================================================================
    KEHADIRAN
    ===================================================================== */
-const ATT_OPTS = ['present', 'late', 'absent', 'excused', 'late_cancel'];
+const ATT_OPTS = ['present', 'late', 'absent', 'excused', 'late_cancel', 'trial'];   // trial = percuma, tidak tolak pakej
 /* Baki pakej: kehadiran ini menolak 1 sesi (kecuali "Dimaafkan"). */
 const pkgChip = (studentId, a) => {
   const sp = a?.student_package_id ? byId('student_packages', a.student_package_id) : livePackages(studentId)[0];

@@ -9,7 +9,7 @@ import { esc, RM, LABEL, badge, openModal, closeModal, toast, todayISO, addDays,
 import { T, byId, progName, venueName, pkgRemaining, studentPackages } from './helpers.js';
 import { calItems, ensureSession, sTime, isPersonal } from './sessions.js';
 
-const ATT = ['present', 'late', 'absent', 'excused', 'late_cancel'];
+const ATT = ['present', 'late', 'absent', 'excused', 'late_cancel', 'trial'];
 const by = () => (S.mode === 'demo' ? null : S.profile?.id || null);
 const reopen = (act, id) => { closeModal(); ACTIONS[act](id); };
 
@@ -98,7 +98,7 @@ ACTIONS['sq-att-old'] = async id => {
     body: `<p class="muted" style="margin-bottom:10px">Untuk sesi yang sudah berlaku sebelum sistem digunakan. Ibu bapa akan nampak rekod ini di portal, dan sesi ditolak daripada pakej yang dipilih.</p>
     <div class="form-grid">
       <label class="f full">Kelas<select name="class_id">${cls.map(c => `<option value="${c.id}" ${c.id === defC?.id ? 'selected' : ''}>${esc(c.title || progName(c.programme_id))} · ${DAYS[c.weekday]} ${String(c.start_time).slice(0, 5)} · ${esc(venueName(c.venue_id))}</option>`).join('')}</select></label>
-      <label class="f">Status<select name="status">${['present', 'late', 'absent', 'excused'].map(o => `<option value="${o}">${LABEL[o]}</option>`).join('')}</select></label>
+      <label class="f">Status<select name="status">${['present', 'late', 'absent', 'excused', 'trial'].map(o => `<option value="${o}">${LABEL[o]}</option>`).join('')}</select></label>
       <label class="f">Tolak daripada pakej<select name="pkg"><option value="">— Tiada (rekod sahaja) —</option>${pk.map(p => `<option value="${p.id}" ${p.id === defPk?.id ? 'selected' : ''}>${esc(p.name)} · ${pkgRemaining(p)}/${p.sessions_total} baki${Number(p.used_offset || 0) ? ' (' + p.used_offset + ' ditanda sebelum sistem)' : ''}</option>`).join('')}</select></label>
     </div>
     <div class="f" style="margin-top:12px"><span>Tanda tarikh dia hadir (12 minggu lepas)</span><div class="checklist" id="sqOldDates">${defC ? oldDatesHtml(id, defC.id, defPk?.id) : ''}</div></div>`,

@@ -46,7 +46,7 @@ export function attRate(studentId, days = 60) {
   const since = addDays(todayISO(), -days);
   const rows = T('attendance').filter(a => a.student_id === studentId && a.session_date >= since && a.session_date <= todayISO() && !['excused', 'booked'].includes(a.status));
   if (!rows.length) return null;
-  const ok = rows.filter(a => a.status === 'present' || a.status === 'late').length;
+  const ok = rows.filter(a => a.status === 'present' || a.status === 'late' || a.status === 'trial').length;
   return Math.round(ok / rows.length * 100);
 }
 

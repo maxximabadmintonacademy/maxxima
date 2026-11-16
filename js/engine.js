@@ -34,6 +34,7 @@ export function createEngine(t, newId) {
 
     /* ---- kehadiran ---- */
     assign(att) {
+      if (att.status === 'trial') { att.student_package_id = null; return; }   // percuma — tidak tolak pakej
       if (!consumes(att.status) || att.student_package_id) return;
       const ses = t.class_sessions.find(s => s.id === att.session_id), cls = ses && t.classes.find(c => c.id === ses.class_id);
       if (!cls) return;
