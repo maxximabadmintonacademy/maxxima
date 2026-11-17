@@ -82,13 +82,21 @@ INPUTS['sq-att-set'] = async (v, el) => {
 };
 
 /* ---------- Rekod kehadiran lama (sebelum sistem) — supaya ibu bapa nampak sejarah & pakej ditolak dengan betul ---------- */
-const pastDates = (c, n = 12) => { const out = []; let d = todayISO(); for (let i = 0; i < 120 && out.length < n; i++) { if (new Date(d + 'T00:00').getDay() === c.weekday) out.push(d); d = addDays(d, -1); } return out; };
-function oldDatesHtml(stid, cid, pkgId) {
+/** Tarikh hari kelas dari "from" hingga hari ini (terbaru dahulu) + tarikh tambahan pilihan admin. */
+const pastDates = (c, from, extra = []) => { const out = new Set(extra.filter(x => x && x <= todayISO())); const lim = from || addDays(todayISO(), -84); let d = todayISO();
+  for (let i = 0; i < 400 && d >= lim; i++) { if (new Date(d + 'T00:00').getDay() === c.weekday) out.add(d); d = addDays(d, -1); }
+  return [...out].sort().reverse(); };
+/** Tarikh mula lalai: sesi pertama pakej (starts_on), atau tarikh invois / jualan, atau 12 minggu lepas. */
+const pkgFrom = p => p ? (p.starts_on || byId('invoices', p.invoice_id)?.issued_on || String(p.created_at || '').slice(0, 10) || addDays(todayISO(), -84)) : addDays(todayISO(), -84);
+function oldDatesHtml(stid, cid, pkgId, from, extra = []) {
   const c = byId('classes', cid); if (!c) return '<div class="muted">Pilih kelas.</div>';
   const CONS = ['present', 'late', 'absent', 'late_cancel'];
-  return pastDates(c).map(d => { const ss = T('class_sessions').find(x => x.class_id === cid && x.session_date === d), a = ss && T('attendance').find(x => x.session_id === ss.id && x.student_id === stid);
-    const rec = a && a.status !== 'booked', linked = rec && pkgId && a.student_package_id === pkgId, lock = rec && (!pkgId || linked || !CONS.includes(a.status));
-    const tag = !rec ? '' : linked ? `${esc(LABEL[a.status] || a.status)} ✓ · ditolak pakej ini` : CONS.includes(a.status) ? `<span style="color:var(--warn)">${esc(LABEL[a.status] || a.status)} · ${a.student_package_id ? 'pakej lain' : 'belum ditolak pakej'} — tanda untuk tolak</span>` : esc(LABEL[a.status] || a.status);
+  return pastDates(c, from, extra).map(d => { const ss = T('class_sessions').find(x => x.class_id === cid && x.session_date === d), a = ss && T('attendance').find(x => x.session_id === ss.id && x.student_id === stid);
+    const rec = a && a.status !== 'booked', linked = rec && pkgId && a.student_package_id === pkgId, lock0 = rec && (!pkgId || linked || !CONS.includes(a.status));
+    // rekod pada tarikh sama di kelas lain (cth. sesi lama direkod dalam kelas Personal / Sabtu)
+    const o = !rec && T('attendance').find(x => x.student_id === stid && x.session_date === d && x.status !== 'booked' && byId('class_sessions', x.session_id)?.class_id !== cid);
+    const oc = o && byId('classes', byId('class_sessions', o.session_id)?.class_id), lock = lock0 || !!o;
+    const tag = o ? `<span class="muted">${esc(LABEL[o.status] || o.status)} · sudah direkod di ${esc(oc ? progName(oc.programme_id) + ' ' + DAYS[oc.weekday].slice(0, 3) : 'kelas lain')}${o.student_package_id === pkgId && pkgId ? ' ✓ · ditolak pakej ini' : ''}</span>` : !rec ? '' : linked ? `${esc(LABEL[a.status] || a.status)} ✓ · ditolak pakej ini` : CONS.includes(a.status) ? `<span style="color:var(--warn)">${esc(LABEL[a.status] || a.status)} · ${a.student_package_id ? 'pakej lain' : 'belum ditolak pakej'} — tanda untuk tolak</span>` : esc(LABEL[a.status] || a.status);
     return `<label class="check-row"><input type="checkbox" name="dates" value="${d}" ${lock ? 'disabled' : ''}><span>${DAYS[new Date(d + 'T00:00').getDay()]} ${fmtShort(d)}${ss?.status === 'cancelled' ? ' · <i>sesi dibatalkan</i>' : ''}</span><em>${tag}</em></label>`; }).join('');
 }
 ACTIONS['sq-att-old'] = async id => {
@@ -106,7 +114,9 @@ ACTIONS['sq-att-old'] = async id => {
       <label class="f">Status<select name="status">${['present', 'late', 'absent', 'excused', 'trial'].map(o => `<option value="${o}">${LABEL[o]}</option>`).join('')}</select></label>
       <label class="f">Tolak daripada pakej<select name="pkg"><option value="">— Tiada (rekod sahaja) —</option>${pk.map(p => `<option value="${p.id}" ${p.id === defPk?.id ? 'selected' : ''}>${esc(p.name)} · ${pkgRemaining(p)}/${p.sessions_total} baki${Number(p.used_offset || 0) ? ' (' + p.used_offset + ' ditanda sebelum sistem)' : ''}</option>`).join('')}</select></label>
     </div>
-    <div class="f" style="margin-top:12px"><span>Tanda tarikh dia hadir (12 minggu lepas)</span><div class="checklist" id="sqOldDates">${defC ? oldDatesHtml(id, defC.id, defPk?.id) : ''}</div></div>`,
+    <div class="form-grid" style="margin-top:12px"><label class="f">Senaraikan tarikh dari<input type="date" name="from" value="${pkgFrom(defPk)}" max="${todayISO()}"><span class="hint">Lalai: tarikh mula pakej dipilih</span></label>
+      <div class="f">Tarikh lain (hari berbeza)<div style="display:flex;gap:6px"><input type="date" id="sqOldAdd" max="${todayISO()}"><button type="button" class="btn sm" id="sqOldAddBtn">+ Tambah</button></div></div></div>
+    <div class="f" style="margin-top:12px"><span>Tanda tarikh dia hadir</span><div class="checklist" id="sqOldDates" style="max-height:340px;overflow:auto">${defC ? oldDatesHtml(id, defC.id, defPk?.id, pkgFrom(defPk)) : ''}</div></div>`,
     onSubmit: async d => {
       const dates = [].concat(d.dates || []).sort(); if (!dates.length) { toast('Tandakan sekurang-kurangnya satu tarikh', true); return false; }
       const p = d.pkg ? byId('student_packages', d.pkg) : null, consumes = ['present', 'late', 'absent'].includes(d.status);
@@ -125,8 +135,14 @@ ACTIONS['sq-att-old'] = async id => {
       const np = p && byId('student_packages', p.id);
       toast(`${n} rekod kehadiran disimpan${np && consumes ? ` · ${np.name}: baki ${pkgRemaining(np)}/${np.sessions_total}` : ''}`); app.render(); setTimeout(() => ACTIONS['sq-att'](id), 50);
     } });
-  const redraw = () => { f.querySelector('#sqOldDates').innerHTML = oldDatesHtml(id, f.elements.class_id.value, f.elements.pkg.value); };
-  f.elements.class_id.addEventListener('change', redraw); f.elements.pkg.addEventListener('change', redraw);
+  const extra = [];
+  const redraw = () => { const keep = new Set([...f.querySelectorAll('#sqOldDates input[name=dates]:checked')].map(x => x.value));
+    f.querySelector('#sqOldDates').innerHTML = oldDatesHtml(id, f.elements.class_id.value, f.elements.pkg.value, f.elements.from.value, extra);
+    f.querySelectorAll('#sqOldDates input[name=dates]').forEach(x => { if (keep.has(x.value) && !x.disabled) x.checked = true; }); };
+  f.elements.class_id.addEventListener('change', redraw); f.elements.from.addEventListener('change', redraw);
+  f.elements.pkg.addEventListener('change', () => { f.elements.from.value = pkgFrom(byId('student_packages', f.elements.pkg.value)); redraw(); });
+  f.querySelector('#sqOldAddBtn').addEventListener('click', () => { const v = f.querySelector('#sqOldAdd').value; if (!v) return; if (!extra.includes(v)) extra.push(v); redraw();
+    const cb = f.querySelector(`#sqOldDates input[value="${v}"]`); if (cb && !cb.disabled) cb.checked = true; });
 };
 
 /* ---------- Pindah satu rekod kehadiran ke kelas / program lain (tarikh sama) — cth. sesi direkod dalam kelas Personal tetapi sepatutnya Performance ---------- */
@@ -134,11 +150,22 @@ ACTIONS['sq-att-move'] = attId => {
   const a = byId('attendance', attId); if (!a) return;
   const s0 = byId('class_sessions', a.session_id), c0 = s0 && byId('classes', s0.class_id), stu = byId('students', a.student_id);
   const [t1, t2] = sTime(s0, c0);
-  const cls = T('classes').filter(c => c.id !== c0?.id && (c.active !== false || c.programme_id !== c0?.programme_id))
-    .sort((x, y) => (x.venue_id === c0?.venue_id ? 0 : 1) - (y.venue_id === c0?.venue_id ? 0 : 1) || (x.weekday === new Date(a.session_date + 'T00:00').getDay() ? 0 : 1) - (y.weekday === new Date(a.session_date + 'T00:00').getDay() ? 0 : 1) || progName(x.programme_id).localeCompare(progName(y.programme_id)));
-  openModal({ title: `Tukar kelas — ${esc(stu?.full_name || '')}`, submit: 'Pindah',
+  // Kelas berkaitan sahaja: lokasi pelajar / sesi ini + program pakej & kelas pelajar, aktif, hari yang sama didahulukan
+  const dow = new Date(a.session_date + 'T00:00').getDay();
+  const pkOf = st => T('student_packages').filter(p => p.student_id === a.student_id && st.includes(p.status)).map(p => p.programme_id);
+  let progs = new Set([stu?.programme_id, ...pkOf(['active', 'pending']), ...T('class_enrolments').filter(e => e.student_id === a.student_id).map(e => byId('classes', e.class_id)?.programme_id)].filter(x => x && !isPersonal({ programme_id: x })));
+  if (!progs.size) progs = new Set(pkOf(['completed', 'expired']).filter(Boolean));
+  const vens = new Set([c0?.venue_id, stu?.venue_id, ...T('class_enrolments').filter(e => e.student_id === a.student_id).map(e => byId('classes', e.class_id)?.venue_id)].filter(Boolean));
+  const sortC = L => L.sort((x, y) => (x.weekday === dow ? 0 : 1) - (y.weekday === dow ? 0 : 1) || (x.venue_id === c0?.venue_id ? 0 : 1) - (y.venue_id === c0?.venue_id ? 0 : 1) || progName(x.programme_id).localeCompare(progName(y.programme_id)) || String(x.start_time).localeCompare(String(y.start_time)));
+  const all = sortC(T('classes').filter(c => c.id !== c0?.id));
+  let rel = all.filter(c => c.active !== false && vens.has(c.venue_id) && (!progs.size || progs.has(c.programme_id)) && !isPersonal(c));
+  if (!rel.length) rel = all.filter(c => c.active !== false && vens.has(c.venue_id));
+  const optsHtml = L => L.map(c => `<option value="${c.id}">${esc(progName(c.programme_id))}${c.title ? ' · ' + esc(c.title) : ''} · ${DAYS[c.weekday].slice(0, 3)} ${String(c.start_time).slice(0, 5)} · ${esc(venueName(c.venue_id))}${c.active === false ? ' (tidak aktif)' : ''}</option>`).join('');
+  const cls = rel;
+  const f = openModal({ title: `Tukar kelas — ${esc(stu?.full_name || '')}`, submit: 'Pindah',
     body: `<p class="muted" style="margin-bottom:10px">${fmtShort(a.session_date)} · ${t1}–${t2} · sekarang dalam ${esc(c0?.title || progName(c0?.programme_id))} (${esc(venueName(c0?.venue_id))}). Rekod (${esc(LABEL[a.status] || a.status)}) dipindah ke kelas di bawah pada tarikh yang sama, dan ditolak daripada pakej program kelas baharu.</p>
-      <label class="f full">Kelas baharu<select name="cls" required>${cls.map(c => `<option value="${c.id}">${esc(progName(c.programme_id))}${c.title ? ' · ' + esc(c.title) : ''} · ${DAYS[c.weekday].slice(0, 3)} ${String(c.start_time).slice(0, 5)} · ${esc(venueName(c.venue_id))}${c.active === false ? ' (tidak aktif)' : ''}</option>`).join('')}</select></label>
+      <label class="f full">Kelas baharu<select name="cls" required>${optsHtml(cls)}</select><span class="hint">${rel.length} kelas berkaitan — ${esc([...vens].map(venueName).join(', '))} · ${esc([...progs].map(progName).join(', ') || 'semua program')}</span></label>
+      <label class="check-row" style="margin-top:6px"><input type="checkbox" name="showall"><span>Tunjuk semua kelas (${all.length})</span></label>
       <label class="check-row" style="margin-top:10px"><input type="checkbox" name="keep" checked><span>Kekalkan masa ${t1}–${t2} (jika sesi baharu dicipta)</span></label>`,
     onSubmit: async d => {
       const had = T('class_sessions').some(x => x.class_id === d.cls && x.session_date === a.session_date);
@@ -154,4 +181,5 @@ ACTIONS['sq-att-move'] = attId => {
       toast(`Dipindah ke ${progName(byId('classes', d.cls)?.programme_id)}${pk ? ` · ${pk.name}: baki ${pkgRemaining(pk)}/${Number(pk.sessions_total)}` : CONS.includes(a.status) ? ' · tiada pakej aktif — pautkan atau jual pakej' : ''}`);
       app.render(); setTimeout(() => ACTIONS['sq-att'](a.student_id), 60);
     } });
+  f.elements.showall.addEventListener('change', () => { f.elements.cls.innerHTML = optsHtml(f.elements.showall.checked ? all : rel); });
 };
