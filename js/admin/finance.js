@@ -99,6 +99,8 @@ function bindFamily(f, mainId, { invId = null, locked = false } = {}) {
       f.elements.merge_ids.value = [...merged.keys()].join(','); recalcItems(f);
     });
   };
+  /* Invois sedia ada: tawarkan gabung invois lain (belum bayar) untuk pelajar yang SAMA — cth. 2 kelas personal = 2 invois */
+  if (invId && !locked && kids[0] && T('invoices').some(i => i.student_id === kids[0].id && i.id !== invId && i.status === 'issued' && paidOf(i) === 0 && creditOf(i) === 0)) offerMerge(kids[0]);
   f._famReset = id => { kids = id ? [byId('students', id)].filter(Boolean) : []; merged.clear(); f.elements.merge_ids.value = ''; f.querySelector('#famMerge').innerHTML = ''; f.querySelectorAll('.it-row[data-merge]').forEach(r => r.remove()); sync(); };
   sync();
 }
@@ -277,7 +279,8 @@ Object.assign(ACTIONS, {
           if (!patch.description) patch.description = its[0].description;
           await saveItems(id, its, patch); await applyMerges(d, id, patch.number);
           const pkgAmt = its.filter(x => x.kind === 'package').reduce((t, x) => t + x.amount, 0);
-          if (pkgAmt > 0 && invoiceStudentIds({ ...inv, id }).length < 2) for (const sp of T('student_packages').filter(x => x.invoice_id === id && x.status === 'pending')) await update('student_packages', sp.id, { price: pkgAmt });
+          const pend = T('student_packages').filter(x => x.invoice_id === id && x.status === 'pending');
+          if (pkgAmt > 0 && invoiceStudentIds({ ...inv, id }).length < 2 && pend.length === 1 && !d.merge_ids) await update('student_packages', pend[0].id, { price: pkgAmt });
         } else await update('invoices', id, patch);
         if (pkgs.length === 1 && d.sessions_total && Number(d.sessions_total) !== Number(pkgs[0].sessions_total)) {
           const tot = Number(d.sessions_total), sp = pkgs[0], used = Number(sp.sessions_used || 0), pp = { sessions_total: tot, name: nameForTotal(sp.name, tot) };
