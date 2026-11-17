@@ -577,11 +577,14 @@ Object.assign(ACTIONS, {
   /* Pautkan sesi yang sudah dihadiri (tiada pakej) ke pakej pilihan — untuk invois yang lambat dikeluarkan */
   'att-link': sid => {
     const un = unallocated().filter(a => a.student_id === sid).sort((a, b) => (a.session_date || '').localeCompare(b.session_date || ''));
-    const pk = T('student_packages').filter(p => p.student_id === sid && ['active', 'pending'].includes(p.status));
+    // termasuk pakej lama (tamat tempoh / habis) yang masih ada baki — untuk sesi lama yang tertinggal dipautkan
+    const pk = T('student_packages').filter(p => p.student_id === sid && (['active', 'pending'].includes(p.status) || (['expired', 'completed'].includes(p.status) && pkgRemaining(p) > 0)))
+      .sort((a, b) => (['active', 'pending'].includes(b.status) - ['active', 'pending'].includes(a.status)) || (a.created_at || '').localeCompare(b.created_at || ''));
+    if (!un.length) return toast('Tiada sesi yang belum dipadankan untuk pelajar ini.');
     if (!pk.length) return ACTIONS.sell(sid);
     const lbl = a => { const ses = byId('class_sessions', a.session_id), c = ses && byId('classes', ses.class_id); return `${fmtShort(a.session_date)} · ${c ? progName(c.programme_id) : ''} · ${LABEL[a.status]}`; };
     openModal({ title: `Pautkan sesi — ${esc(studentName(sid))}`, submit: 'Pautkan', body: `<p class="muted" style="font-size:13px;margin-bottom:10px">Sesi yang sudah dihadiri tanpa pakej. Tandakan sesi yang patut ditolak daripada pakej (contoh: invois dikeluarkan lambat). Tarikh sesi akan tertera dalam butiran invois pakej.</p>
-      <label class="f full">Pakej<select name="sp">${pk.map(p => `<option value="${p.id}">${esc(p.name)} · ${p.status === 'pending' ? 'menunggu bayaran' : 'baki ' + pkgRemaining(p)}</option>`).join('')}</select></label>
+      <label class="f full">Pakej<select name="sp">${pk.map(p => `<option value="${p.id}">${esc(p.name)} · ${p.status === 'pending' ? 'menunggu bayaran' : 'baki ' + pkgRemaining(p)}${['expired', 'completed'].includes(p.status) ? ' · ' + (p.status === 'expired' ? 'tamat tempoh' : 'habis') : ''}${p.expires_on ? ' · tamat ' + fmtShort(p.expires_on) : ''}</option>`).join('')}</select></label>
       <div class="langchk" style="flex-direction:column;gap:6px;margin-top:10px;max-height:300px;overflow:auto">${un.map(a => `<label><input type="checkbox" name="att" value="${a.id}" checked> ${esc(lbl(a))}</label>`).join('')}</div>`,
       onSubmit: async d => {
         const ids = [].concat(d.att || []).filter(Boolean); if (!ids.length) throw new Error('Tandakan sekurang-kurangnya satu sesi.');

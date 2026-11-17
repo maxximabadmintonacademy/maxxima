@@ -1,4 +1,4 @@
-export const APP_VERSION = 'v76';
+export const APP_VERSION = 'v77';
 // Pembantu UI dikongsi: ikon, format, lencana, modal, toast, borang.
 import { t, getLang } from './i18n.js';
 export const $ = (s, r = document) => r.querySelector(s);
@@ -208,6 +208,7 @@ export function openModal({ title, body, submit, onSubmit, wide = false, cancel 
   </form>`;
   m.classList.add('open'); _modalStack++;
   const f = $('#mform');
+  f.addEventListener('input', () => { f.dataset.dirty = '1'; }); f.addEventListener('change', () => { f.dataset.dirty = '1'; });
   f.addEventListener('submit', async e => {
     e.preventDefault();
     if (!onSubmit) return closeModal();
@@ -221,6 +222,18 @@ export function openModal({ title, body, submit, onSubmit, wide = false, cancel 
   });
   const first = f.querySelector('input:not([type=hidden]),select,textarea'); if (first) setTimeout(() => first.focus(), 40);
   return f;
+}
+/* Klik di luar borang: tutup hanya jika tekanan bermula DAN berakhir di latar (bukan seret pilih teks), dan borang belum diubah */
+export function bindModalBackdrop(m) {
+  let downOnBg = false;
+  m.addEventListener('mousedown', e => { downOnBg = e.target === m; });
+  m.addEventListener('touchstart', e => { downOnBg = e.target === m; }, { passive: true });
+  m.addEventListener('click', e => {
+    if (e.target !== m || !downOnBg) return;
+    const f = m.querySelector('form');
+    if (f?.dataset.dirty) { toast(t('Borang belum disimpan — tekan Batal untuk tutup.')); return; }
+    closeModal();
+  });
 }
 export function closeModal() { const m = $('#modal'); if (!m) return; m.classList.remove('open'); m.innerHTML = ''; }
 export function confirmModal({ title, message, ok, danger = false, onOk }) {
@@ -249,6 +262,11 @@ export async function run(fn) {
 
 /* Lukis semula selepas kemas kini langsung — ditangguhkan jika pengguna sedang menaip dalam borang halaman. */
 export function liveRender(fn) {
+  /* Borang (modal) sedang dibuka → tangguh sehingga ditutup, supaya kemas kini langsung tidak mengganggu pengisian borang */
+  const md = document.getElementById('modal');
+  if (md?.classList.contains('open')) { liveRender._fn = fn; if (!liveRender._wait) { liveRender._wait = true;
+    const ob = new MutationObserver(() => { if (!md.classList.contains('open')) { ob.disconnect(); liveRender._wait = false; const f2 = liveRender._fn; liveRender._fn = null; f2 && setTimeout(() => liveRender(f2), 50); } });
+    ob.observe(md, { attributes: true, attributeFilter: ['class'] }); } return; }
   const a = document.activeElement, view = document.getElementById('view');
   if (a && view && view.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox' && a.type !== 'radio') {
     a.addEventListener('blur', () => setTimeout(() => liveRender(fn), 50), { once: true }); return;

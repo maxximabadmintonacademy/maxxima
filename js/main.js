@@ -1,6 +1,6 @@
 // Titik masuk: log masuk, penghalaan peranan, shell Portal Admin, router.
 import { S, init, loadAll, signIn, signOut, resetPassword, setPassword, demoLogin, expirePackages, markRead, subscribeNotifications, subscribeTables, ensurePush, rpc } from './data.js';
-import { APP_VERSION, $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError, liveRender , loadErrorBox } from './ui.js';
+import { APP_VERSION, $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError, liveRender , loadErrorBox, bindModalBackdrop } from './ui.js';
 import { VIEWS, ACTIONS, INPUTS } from './registry.js';
 import { t, setLang, setI18nActive, langSwitch } from './i18n.js';
 import { setTheme } from './theme.js';
@@ -119,7 +119,7 @@ async function enter() {
   if (p.role !== 'official') try { await expirePackages(); } catch (e) { console.warn('expire_packages', e); }
   subscribeNotifications(n => { renderNav(parse().id); if (n?.title) toast('🔔 ' + n.title); });
   subscribeTables(p.role === 'official' ? ['tournament_matches', 'tournament_entries', 'tournaments'] : ['booking_requests', 'payments', 'invoices', 'students', 'leads', 'trials', 'feedback', 'package_requests', 'tournament_entries', 'waitlist', 'attendance', 'class_sessions', 'announcements', 'student_packages'],
-    () => liveRender(() => { renderNav(parse().id); route(); }));
+    () => liveRender(() => { renderNav(parse().id); render(); }));
   window.addEventListener('hashchange', route);
   route();
   setTimeout(() => import('./admin/v25.js').then(m => m.pwPrompt()), 500);
@@ -261,8 +261,8 @@ function bindGlobalEvents() {
   });
   document.addEventListener('input', e => { const el = e.target.closest('[data-on-input]'); if (el) INPUTS[el.dataset.onInput]?.(el.value, el); });
   document.addEventListener('change', e => { const el = e.target.closest('[data-on-change]'); if (el) run(() => INPUTS[el.dataset.onChange]?.(el.value, el)); });
-  $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); document.body.classList.remove('nav-open'); } });
+  bindModalBackdrop($('#modal'));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('#mform')?.dataset.dirty) closeModal(); document.body.classList.remove('nav-open'); } });
 }
 
 /* =====================================================================

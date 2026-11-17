@@ -10,6 +10,8 @@ import { T, byId, progName, venueName, pkgRemaining, studentPackages } from './h
 import { calItems, ensureSession, sTime, isPersonal } from './sessions.js';
 
 const ATT = ['present', 'late', 'absent', 'excused', 'late_cancel', 'trial'];
+const CONS = ['present', 'late', 'absent', 'late_cancel'];
+const orphans = id => T('attendance').filter(a => a.student_id === id && !a.student_package_id && CONS.includes(a.status)).length;
 const by = () => (S.mode === 'demo' ? null : S.profile?.id || null);
 const reopen = (act, id) => { closeModal(); ACTIONS[act](id); };
 
@@ -60,7 +62,7 @@ ACTIONS['sq-att'] = id => {
       const opts = fut ? ['excused'] : ATT;
       return `${head ? '<li class="list-item" style="padding:6px 20px;background:var(--soft,#f4f6fb)"><b style="font-size:12.5px">Akan datang — hanya boleh tanda cuti</b></li>' : ''}<li class="list-item" style="padding:8px 20px"><div class="li-main"><div class="li-title">${DAYS[new Date(x.date + 'T00:00').getDay()].slice(0, 3)} ${fmtShort(x.date)} · ${t} · ${esc(x.c.title || progName(x.c.programme_id))}${x.date === today ? ' <span class="badge b-info">hari ini</span>' : ''}</div><div class="li-sub">${esc(venueName(x.c.venue_id))}</div></div>
         <select class="att-select ${a ? 'a-' + a.status : ''}" data-on-change="sq-att-set" data-key="${x.c.id}|${x.date}|${x.s?.id || ''}|${id}"><option value="">${a?.status === 'booked' ? 'ditempah — belum direkod' : '— belum direkod —'}</option>${opts.map(o => `<option value="${o}" ${a?.status === o ? 'selected' : ''}>${LABEL[o]}</option>`).join('')}${a && !opts.includes(a.status) && a.status !== 'booked' ? `<option value="${a.status}" selected>${LABEL[a.status] || a.status}</option>` : ''}</select></li>`; }).join('') || '<li class="empty">Tiada sesi dalam tempoh ini. Pelajar belum ditempatkan dalam kelas?</li>'}</ul>
-    <div class="actions" style="margin-top:12px"><button type="button" class="btn primary" data-action="sq-att-old" data-id="${id}">+ Rekod kehadiran lama</button><button type="button" class="btn" data-action="sq-pkg" data-id="${id}">Pakej</button><button type="button" class="btn" data-action="student-view" data-id="${id}">Profil penuh</button></div>` });
+    <div class="actions" style="margin-top:12px">${orphans(id) ? `<button type="button" class="btn danger-o" data-action="att-link" data-id="${id}">Pautkan ${orphans(id)} sesi ke pakej</button>` : ''}<button type="button" class="btn primary" data-action="sq-att-old" data-id="${id}">+ Rekod kehadiran lama</button><button type="button" class="btn" data-action="sq-pkg" data-id="${id}">Pakej</button><button type="button" class="btn" data-action="student-view" data-id="${id}">Profil penuh</button></div>` });
 };
 
 INPUTS['sq-att-set'] = async (v, el) => {
@@ -72,7 +74,9 @@ INPUTS['sq-att-set'] = async (v, el) => {
     if (!v) { if (r && r.status !== 'booked') await update('attendance', r.id, { status: 'booked', marked_by: by() }); }
     else if (r) await update('attendance', r.id, { status: v, marked_by: by() });
     else await insert('attendance', { session_id: sid, student_id: stid, status: v, marked_by: by() });
-    toast(v ? `Ditanda: ${LABEL[v]}` : 'Dikosongkan');
+    if (S.mode === 'supabase') { try { await refresh(['attendance', 'student_packages']); } catch (_) {} }   // baki pakej dikira di pelayan
+    const r2 = T('attendance').find(a => a.session_id === sid && a.student_id === stid), pk = r2?.student_package_id && byId('student_packages', r2.student_package_id);
+    toast(v ? `Ditanda: ${LABEL[v]}${pk ? ` · ${pk.name}: baki ${pkgRemaining(pk)}/${Number(pk.sessions_total)}` : ['present', 'late', 'absent', 'late_cancel'].includes(v) ? ' · tiada pakej aktif untuk program ini — tekan "Pautkan ke pakej"' : ''}` : 'Dikosongkan', !!(v && !pk && ['present', 'late', 'absent', 'late_cancel'].includes(v)));
   } catch (e) { toast(e.message || String(e), true); }
   app.render(); reopen('sq-att', stid);
 };
@@ -91,7 +95,8 @@ ACTIONS['sq-att-old'] = async id => {
   const s = byId('students', id); if (!s) return;
   if (S.mode === 'supabase') { try { await refresh(['student_packages', 'attendance']); } catch (_) {} }
   const pk = studentPackages(id).filter(p => p.status !== 'cancelled').sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
-  const cls = T('classes').filter(c => c.active !== false && !isPersonal(c)).sort((a, b) => (a.venue_id === s.venue_id ? 0 : 1) - (b.venue_id === s.venue_id ? 0 : 1) || a.weekday - b.weekday);
+  const mineP = new Set([...T('class_enrolments').filter(e => e.student_id === id).map(e => e.class_id), ...T('attendance').filter(a => a.student_id === id).map(a => byId('class_sessions', a.session_id)?.class_id)]);
+  const cls = T('classes').filter(c => (c.active !== false && !isPersonal(c)) || (isPersonal(c) && mineP.has(c.id))).sort((a, b) => (a.venue_id === s.venue_id ? 0 : 1) - (b.venue_id === s.venue_id ? 0 : 1) || a.weekday - b.weekday);
   const defPk = pk.find(p => Number(p.used_offset || 0) > 0) || pk.find(p => p.status === 'active') || pk[0];
   const defC = cls.find(c => T('class_enrolments').some(e => e.class_id === c.id && e.student_id === id) && c.programme_id === defPk?.programme_id) || cls.find(c => c.programme_id === defPk?.programme_id && c.venue_id === s.venue_id) || cls.find(c => c.venue_id === s.venue_id) || cls[0];
   const f = openModal({ title: `Rekod kehadiran lama — ${esc(s.full_name)}`, wide: true, submit: 'Simpan kehadiran',
