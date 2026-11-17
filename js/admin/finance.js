@@ -336,23 +336,40 @@ Object.assign(ACTIONS, {
   },
   'sp-edit': id => {
     const sp = byId('student_packages', id);
-    openModal({ title: `Laras Pakej — ${esc(studentName(sp.student_id))}`, submit: 'Simpan', wide: true, body: `<div class="form-grid">
+    const vDays = Number(sp.valid_days || byId('packages', sp.package_id)?.valid_days || 30), xDays = Number(sp.extended_days || 0);
+    const autoEnd = st => st && vDays ? addDays(st, vDays + xDays) : '';
+    const f = openModal({ title: `Laras Pakej — ${esc(studentName(sp.student_id))}`, submit: 'Simpan', wide: true, body: `<div class="form-grid">
       ${F('Nama pakej', 'name', { value: sp.name, req: true, full: true })}
       ${F('Jumlah sesi', 'sessions_total', { type: 'number', min: 1, step: 1, value: sp.sessions_total, req: true })}
-      <label class="f">Sesi telah digunakan (dikira)<input value="${esc(sp.sessions_used)}" disabled></label>
+      ${F('Sesi telah digunakan', 'used_set', { type: 'number', min: 0, step: 'any', value: Number(sp.sessions_used || 0) })}
+      <p class="muted full" style="font-size:12px;margin-top:-6px">Sesi telah digunakan = kehadiran yang direkod + sesi sebelum sistem. Ubah terus jika baki sebenar berbeza.</p>
       ${F('Sesi digunakan sebelum sistem', 'used_offset', { type: 'number', min: 0, step: 1, value: Number(sp.used_offset || 0), ph: '0' })}
       ${F('Tarikh mula', 'starts_on', { type: 'date', value: sp.starts_on || '' })}
       ${F('Tarikh tamat', 'expires_on', { type: 'date', value: sp.expires_on || '' })}
+      <p class="muted full" id="spEndHint" style="font-size:12px;margin-top:-6px">${vDays ? `Tempoh sah pakej ${vDays}${xDays ? ' + ' + xDays : ''} hari — tarikh tamat diisi automatik bila tarikh mula diisi (boleh diubah).` : ''}</p>
       <p class="muted full" style="font-size:12px">${sp.auto_start !== false ? 'Tempoh sah dikira automatik dari sesi pertama yang dihadiri. Isi tarikh tamat untuk tetapkan secara manual.' : 'Tarikh ditetapkan manual.'}</p>
       ${F('Status', 'status', { value: sp.status, opts: [['pending', 'Menunggu bayaran'], ['active', 'Aktif'], ['completed', 'Sesi habis'], ['expired', 'Tamat tempoh'], ['cancelled', 'Dibatalkan']] })}
     </div><p class="muted" style="margin-top:10px;font-size:12.5px">Baki = jumlah sesi − sesi digunakan. "Sesi digunakan" dikira automatik daripada kehadiran; ubah <b>jumlah sesi</b> atau <b>tarikh tamat</b> untuk menambah baki atau melanjutkan tempoh.</p>`,
       onSubmit: async d => {
-        const total = Number(d.sessions_total), off = Math.max(Number(d.used_offset || 0), 0), used = Number(sp.sessions_used || 0) - Number(sp.used_offset || 0) + off; let st = d.status;
+        const counted = Number(sp.sessions_used || 0) - Number(sp.used_offset || 0), total = Number(d.sessions_total);
+        let off = Math.max(Number(d.used_offset || 0), 0);
+        if (Number(d.used_set) !== Number(sp.sessions_used || 0)) {   // admin ubah "sesi telah digunakan" terus → simpan bezanya sebagai sesi sebelum sistem
+          off = Number(d.used_set) - counted;
+          if (off < 0) throw new Error(`${counted} sesi sudah direkod dalam kehadiran pakej ini. Untuk kurangkan, buka Kehadiran pelajar dan tukar / lepaskan sesi tersebut.`);
+        }
+        const used = counted + off; let st = d.status;
         if (st === 'active' && used >= total) st = 'completed'; if (st === 'completed' && used < total) st = 'active';
-        const patch = { name: d.name === sp.name ? nameForTotal(d.name, total) : d.name, sessions_total: total, used_offset: off, sessions_used: used, starts_on: val(d.starts_on), expires_on: val(d.expires_on), status: st }; if (val(d.expires_on) && val(d.expires_on) !== sp.expires_on) patch.auto_start = false;   // tarikh ditetapkan admin — tidak dikira semula
+        if (val(d.starts_on) && !val(d.expires_on)) d.expires_on = autoEnd(d.starts_on);   // mula diisi, tamat kosong → kira automatik
+        const patch = { name: d.name === sp.name ? nameForTotal(d.name, total) : d.name, sessions_total: total, used_offset: off, sessions_used: used, starts_on: val(d.starts_on), expires_on: val(d.expires_on), status: st };
+        if (val(d.starts_on) && val(d.starts_on) !== sp.starts_on) patch.auto_start = false; if (val(d.expires_on) && val(d.expires_on) !== sp.expires_on) patch.auto_start = false;   // tarikh ditetapkan admin — tidak dikira semula
         if (total - used > 1) patch.renewal_sent = false;
         await update('student_packages', id, patch); toast('Pakej dikemas kini'); app.render();
       } });
+    /* Isi tarikh tamat automatik bila tarikh mula diubah — kecuali admin sudah ubah tarikh tamat sendiri */
+    const E = f.elements; let last = E.expires_on.value && E.expires_on.value === autoEnd(E.starts_on.value) ? E.expires_on.value : '';
+    E.starts_on.addEventListener('change', () => { const ne = autoEnd(E.starts_on.value); if (!ne) return;
+      if (!E.expires_on.value || E.expires_on.value === last) { E.expires_on.value = ne; last = ne; f.querySelector('#spEndHint').innerHTML = `Tarikh tamat diisi automatik: ${fmtShort(ne)} (${vDays}${xDays ? ' + ' + xDays : ''} hari). Boleh diubah.`; } });
+    E.expires_on.addEventListener('change', () => { if (E.expires_on.value !== last) last = ''; });
   },
   'cn-print': id => openCreditNote(id),
   'cn-del': id => { const c = byId('credit_notes', id), iv = byId('invoices', c?.invoice_id);
