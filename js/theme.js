@@ -1,7 +1,7 @@
 // Tema paparan: 'light' | 'dark' | 'auto' (ikut peranti). Disimpan pada peranti ini.
 import { t } from './i18n.js';
 const KEY = 'mx_theme';
-let theme = 'light';
+let theme = 'auto';   // lalai: ikut tetapan telefon
 try { const v = localStorage.getItem(KEY); if (['light', 'dark', 'auto'].includes(v)) theme = v; } catch { /* storan tidak tersedia */ }
 const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
 const apply = () => { const d = theme === 'dark' || (theme === 'auto' && mq?.matches); document.documentElement.dataset.theme = d ? 'dark' : 'light'; document.querySelector('meta[name=theme-color]')?.setAttribute('content', d ? '#0B1220' : '#0B2545'); };

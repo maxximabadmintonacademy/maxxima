@@ -53,7 +53,7 @@ VIEWS.kalendar = () => {
   }
   return `
   ${pageHead('Kalendar Sesi', `${items.length} sesi dalam julat ini${alerts ? ` · <b style="color:var(--bad)">${alerts} sesi belum lengkap (coach/court)</b>` : ''}`,
-    `<button class="btn" data-action="cal-personal">${ic('plus', 'sm')} Sesi Personal</button><button class="btn" data-action="sess-add">${ic('plus', 'sm')} Sesi Kumpulan</button><button class="btn primary" data-action="sess-generate">${ic('calendar', 'sm')} Jana Sesi Bulanan</button>`)}
+    `<button class="btn" data-action="wa-day" data-id="${C().mode === 'hari' ? C().date : todayISO()}">${ic('msg', 'sm')} Jadual WhatsApp</button><button class="btn" data-action="cal-personal">${ic('plus', 'sm')} Sesi Personal</button><button class="btn" data-action="sess-add">${ic('plus', 'sm')} Sesi Kumpulan</button><button class="btn primary" data-action="sess-generate">${ic('calendar', 'sm')} Jana Sesi Bulanan</button>`)}
   <div class="card card-pad mb"><div class="filters">
     <div class="seg">${[['hari', 'Hari'], ['minggu', 'Minggu'], ['bulan', 'Bulan']].map(([k, l]) => `<button class="${c.mode === k ? 'on' : ''}" data-action="cal-mode" data-id="${k}">${l}</button>`).join('')}</div>
     <button class="btn sm" data-action="cal-move" data-id="-1">${ic('back', 'sm')}</button>

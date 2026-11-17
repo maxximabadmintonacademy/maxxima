@@ -1,3 +1,4 @@
+import { installCard, installBanner } from '../install.js';
 // Portal Coach: sesi hari ini & minggu ini (termasuk kategori umur yang diberi), tanda kehadiran, pelajar, akaun.
 import { ACTIONS, INPUTS } from '../registry.js';
 import { S, setting, loadCoach, markRead, subscribeNotifications, subscribeTables, setPassword, insert, rpc } from '../data.js';
@@ -19,7 +20,7 @@ import { CV26, sopCard, sopGate, assignBanner, checkStrip, sopHtml, ackSopSilent
 const CV = {};
 Object.assign(CV, CV26);
 const SKILLS = [['footwork', 'Footwork'], ['strokes', 'Pukulan'], ['tactics', 'Taktik'], ['fitness', 'Kecergasan'], ['attitude', 'Sikap']];
-const NAV = [['hari', 'Hari Ini', 'home'], ['minggu', 'Minggu Ini', 'calendar'], ['pelajar', 'Pelajar', 'users'], ['pelan', 'Pelan Latihan', 'check'], ['akaun', 'Akaun', 'user']];
+const NAV = [['hari', 'Hari Ini', 'home'], ['minggu', 'Jadual', 'calendar'], ['pelajar', 'Pelajar', 'users'], ['pelan', 'Pelan Latihan', 'check'], ['akaun', 'Akaun', 'user']];
 const meStaff = () => T('staff').find(s => s.profile_id === S.profile.id) || (S.mode === 'demo' ? (T('staff').find(s => /alvi/i.test(s.full_name)) || T('staff')[0]) : null);
 const mine = (from, to) => { const st = meStaff(); return st ? calItems(from, to, { mine: st.id }) : []; };
 /** Jadual coach bermula dari tarikh yang ditetapkan admin (Tetapan → coach_portal.from); sesi sebelum itu disembunyikan. */
@@ -99,14 +100,49 @@ const card = ({ s, c, date }, showDate) => {
   </button>${strip ? strip + '</div>' : ''}`;
 };
 
+/* ---------- Bantuan paparan v69 ---------- */
+const kindOf = c => isPersonal(c) ? 'personal' : /trial|percubaan/i.test(progName(c.programme_id) + ' ' + (c.title || '')) ? 'trial' : 'group';
+const startAt = x => new Date(`${x.date}T${sTime(x.s, x.c)[0]}:00`), endAt = x => new Date(`${x.date}T${sTime(x.s, x.c)[1]}:00`);
+const isDone = x => { if (!x.s) return false; if (x.s.status === 'held') return true; const n = rosterOf(x.s, x.c).length; return n > 0 && T('attendance').filter(a => a.session_id === x.s.id && a.status !== 'booked').length >= n; };
+const rel = ms => { const m = Math.round(ms / 60000); if (m < 60) return `${m} minit`; const h = Math.floor(m / 60), r = m % 60; return r ? `${h} jam ${r} minit` : `${h} jam`; };
+function countdown(x) {
+  const now = Date.now(), a = startAt(x).getTime(), b = endAt(x).getTime();
+  if (x.s?.status === 'cancelled') return 'Dibatalkan';
+  if (now >= a && now < b) return `<b style="color:var(--ok)">● Sedang berlangsung</b> · tamat dalam ${rel(b - now)}`;
+  if (x.date === todayISO()) return `Mula dalam <b>${rel(a - now)}</b>`;
+  if (x.date === addDays(todayISO(), 1)) return `Esok, ${sTime(x.s, x.c)[0]}`;
+  return `${DAYS[parseISO(x.date).getDay()]}, ${fmtDate(x.date)} · ${sTime(x.s, x.c)[0]}`;
+}
+const mapsLink = c => { const v = byId('venues', c.venue_id); if (!v) return ''; const q = v.lat != null && v.lng != null ? `${v.lat},${v.lng}` : encodeURIComponent(`${v.name} ${v.area || ''}`); return `https://www.google.com/maps/search/?api=1&query=${q}`; };
+function heroCard(x) {
+  const [a, b] = sTime(x.s, x.c), n = x.s ? rosterOf(x.s, x.c).length : T('class_enrolments').filter(e => e.class_id === x.c.id).length, court = sCourt(x.s, x.c);
+  const strip = checkStrip(x), who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ')) : `${n} pelajar`;
+  return `<div class="hero-next k-${kindOf(x.c)}"><div class="hn-top"><span class="hn-lbl">Sesi seterusnya</span><span class="hn-cd" data-cd="${x.date}|${a}|${b}">${countdown(x)}</span></div>
+    <div class="hn-time">${a}<span>–${b}</span></div>
+    <div class="hn-title">${esc(x.c.title || progName(x.c.programme_id))}</div>
+    <div class="hn-meta">📍 ${esc(venueName(x.c.venue_id))}${court ? ' · ' + courtLbl(court) : ''}<br>👥 ${who}</div>
+    <div class="hn-btns"><button class="btn primary lg" data-action="c-open" data-id="${x.s ? x.s.id : x.c.id + '|' + x.date}">${ic('users', 'sm')} Buka sesi & kehadiran</button>${mapsLink(x.c) ? `<a class="btn lg" href="${mapsLink(x.c)}" target="_blank" rel="noopener">🧭 Navigasi</a>` : ''}</div>
+    ${strip ? `<div class="hn-ck">${strip}</div>` : ''}</div>`;
+}
+function todoCard(past) {
+  const today = todayISO(), items = [];
+  const openOut = mineS(today, today).filter(x => x.s && endAt(x) < new Date() && T('coach_checkins').some(k => k.session_id === x.s.id && k.staff_id === st()?.id && k.kind === 'in') && !T('coach_checkins').some(k => k.session_id === x.s.id && k.staff_id === st()?.id && k.kind === 'out'));
+  if (past.length) items.push(`<a class="todo" href="#minggu" data-action="cw-go" data-id="${past[0].date}"><span class="td-n bad">${past.length}</span><span><b>Kehadiran belum ditanda</b><small>Sesi 7 hari lepas — tekan untuk tanda</small></span><span class="td-go">›</span></a>`);
+  openOut.forEach(x => items.push(`<button class="todo" data-action="c-checkin" data-id="${x.s.id}|out"><span class="td-n warn">⏱</span><span><b>Belum check out</b><small>${sTime(x.s, x.c)[0]} · ${esc(x.c.title || progName(x.c.programme_id))}</small></span><span class="td-go">›</span></button>`));
+  if ('Notification' in window && Notification.permission === 'default') items.push(`<button class="todo" data-action="notif-perm"><span class="td-n info">🔔</span><span><b>Hidupkan notifikasi</b><small>Terima tugasan & peringatan sesi di telefon</small></span><span class="td-go">›</span></button>`);
+  return items.length ? `<div class="card mb todo-card"><div class="card-head"><h3>Perlu tindakan</h3></div>${items.join('')}</div>` : '';
+}
 CV.hari = () => {
   const me = st(); if (!me) return head('Portal Coach', '') + `<div class="card card-pad">Akaun anda belum dipautkan dengan profil staf. Hubungi admin.</div>`;
-  const today = todayISO(), list = mineS(today, today), past = mineS(addDays(today, -7), addDays(today, -1)).filter(x => x.s && x.s.status === 'scheduled');
-  return `${head(`Hai, ${esc(me.full_name.split(' ')[0])}`, `${DAYS[parseISO(today).getDay()]}, ${fmtDate(today)} · ${list.length} sesi hari ini`)}
+  const today = todayISO(), now = new Date(), list = mineS(today, today).filter(x => x.s?.status !== 'cancelled'), past = mineS(addDays(today, -7), addDays(today, -1)).filter(x => x.s && x.s.status === 'scheduled' && !isDone(x));
+  const next = list.find(x => endAt(x) > now) || mineS(addDays(today, 1), addDays(today, 30)).find(x => x.s?.status !== 'cancelled');
+  const rest = list.filter(x => x !== next);
+  return `${head(`Hai, ${esc(me.full_name.split(' ')[0])} 👋`, `${DAYS[parseISO(today).getDay()]}, ${fmtDate(today)} · ${list.length ? list.length + ' sesi hari ini' : 'tiada sesi hari ini'}`)}
   ${assignBanner()}
-  ${list.map(x => card(x)).join('') || (() => { const nx = mineS(addDays(today, 1), addDays(today, 30)); return nx.length
-    ? `<div class="card empty mb">Tiada sesi hari ini. Sesi seterusnya: <b>${DAYS[parseISO(nx[0].date).getDay()]}, ${fmtDate(nx[0].date)}</b> — lihat tab Minggu.</div>`
-    : `<div class="card card-pad mb"><b>Belum ada sesi ditugaskan kepada anda</b><p class="muted" style="font-size:13px;margin-top:6px">Portal coach memaparkan kelas & sesi personal di mana anda ialah coach. Admin boleh tetapkan anda sebagai coach kelas di <b>Jadual Latihan</b>, coach sesi dalam panel sesi Kalendar, atau coach kategori (U8/U12…). Selepas itu jadual, senarai pelajar, kehadiran & pelan latihan akan muncul di sini.</p></div>`; })()}
+  ${next ? heroCard(next) : `<div class="card card-pad mb"><b>Belum ada sesi ditugaskan kepada anda</b><p class="muted" style="font-size:13px;margin-top:6px">Sesi akan muncul di sini sebaik admin menetapkan anda sebagai coach kelas atau sesi.</p></div>`}
+  ${todoCard(past)}
+  ${rest.length ? `<h3 class="sec-h">${next && next.date === today ? 'Sesi lain hari ini' : 'Jadual hari ini'}</h3>${rest.map(x => tlItem(x)).join('')}` : ''}
+  ${installBanner()}
   ${sopCard()}
   ${past.length ? `<h3 style="font-size:14px;margin:18px 0 8px">Belum ditanda (7 hari lepas)</h3>${past.map(x => card(x, true)).join('')}` : ''}
   ${T('events').filter(e => e.start_date >= today && e.status !== 'cancelled').length ? `<h3 style="font-size:14px;margin:20px 0 8px">Acara akan datang</h3>${T('events').filter(e => e.start_date >= today && e.status !== 'cancelled').sort((a, b) => a.start_date.localeCompare(b.start_date)).slice(0, 3).map(e => `<div class="card card-pad mb"><b>${esc(e.name)}</b><div class="muted" style="font-size:12.5px">${fmtDate(e.start_date)}${e.start_time ? ' · ' + hm(e.start_time) : ''}${e.venue_note ? ' · ' + esc(e.venue_note) : e.venue_id ? ' · ' + esc(venueName(e.venue_id)) : ''}${(e.staff_ids || []).includes(me.id) ? ' · <b>Anda bertugas</b>' : ''}</div></div>`).join('')}` : ''}
@@ -119,10 +155,62 @@ CV.pelan = () => { const me = st(), mine = T('lesson_plans').filter(p => p.coach
   ${tpl.length ? `<h3 style="font-size:14px;margin:6px 0 8px">Templat</h3>${tpl.map(p => planCard(p, { canEdit: p.coach_id === me?.id })).join('')}` : ''}
   <h3 style="font-size:14px;margin:12px 0 8px">Pelan saya</h3>${mine.map(p => planCard(p)).join('') || '<div class="card empty">Belum ada pelan. Tekan "Pelan baharu" atau salin templat.</div>'}`; };
 CV.kursus = () => { const cs = T('courses').filter(c => c.status === 'published'); return `${head('Kursus', 'Bahan pembelajaran akademi')}${cs.map(c => `<div class="card card-pad mb"><b>${esc(c.title)}</b>${c.summary ? `<p class="muted" style="font-size:13px">${esc(c.summary)}</p>` : ''}<ol style="margin:8px 0 0 18px;font-size:13.5px">${T('course_lessons').filter(l => l.course_id === c.id).sort((a, b) => a.sort - b.sort).map(l => `<li style="margin-bottom:6px"><b>${esc(l.title)}</b>${l.video_url ? ` · <a target="_blank" rel="noopener" href="${esc(l.video_url)}">video</a>` : ''}${l.body ? `<div style="white-space:pre-line">${esc(l.body)}</div>` : ''}</li>`).join('')}</ol></div>`).join('') || '<div class="card empty">Belum ada kursus.</div>'}`; };
+/* ---------- Minggu Ini: kalendar mesra telefon ---------- */
+const monOf = d => addDays(d, -((parseISO(d).getDay() + 6) % 7));
+const DS = ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'];
+function tlItem(x) {
+  const [a, b] = sTime(x.s, x.c), cats = myCat(x.s), n = x.s ? rosterOf(x.s, x.c).length : T('class_enrolments').filter(e => e.class_id === x.c.id).length;
+  const court = cats.length ? groupsOf(x.s.id).filter(g => cats.includes(g.category)).map(g => g.court).filter(Boolean).join(', ') : sCourt(x.s, x.c);
+  const done = isDone(x), cancel = x.s?.status === 'cancelled', strip = checkStrip(x);
+  const who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ') || '—') : `${n} pelajar`;
+  return `<div class="tl k-${kindOf(x.c)} ${cancel ? 'cancel' : ''}"><div class="tl-t"><b>${a}</b><span>${b}</span></div>
+    <div class="tl-body"><button class="tl-card" data-action="c-open" data-id="${x.s ? x.s.id : x.c.id + '|' + x.date}">
+      <div class="tl-title">${esc(x.c.title || progName(x.c.programme_id))}${done ? ' <span class="tl-ok">✓</span>' : ''}${cancel ? ' <span class="badge b-muted">Dibatalkan</span>' : ''}</div>
+      <div class="tl-meta">📍 ${esc(venueName(x.c.venue_id))}${court ? ' · ' + courtLbl(court) : ''}</div>
+      <div class="tl-meta">👥 ${who}${cats.length ? ' · Kategori: <b>' + cats.map(esc).join(', ') + '</b>' : ''}</div></button>${strip}</div></div>`;
+}
 CV.minggu = () => {
-  const today = todayISO(), list = mineS(today, addDays(today, 7)), days = [...new Set(list.map(x => x.date))];
-  return `${head('Minggu Ini', '7 hari akan datang')}${days.map(d => `<div class="daylist"><div class="dh">${DAYS[parseISO(d).getDay()]}, ${fmtDate(d)}</div>${list.filter(x => x.date === d).map(x => card(x)).join('')}</div>`).join('') || '<div class="card empty">Tiada sesi.</div>'}`;
+  const today = todayISO(); UI.cday = UI.cday || today; UI.cview = UI.cview || 'week';
+  const sel = UI.cday, view = UI.cview;
+  const seg = `<div class="cw-top"><div class="langsw" role="group"><button type="button" class="${view === 'week' ? 'on' : ''}" data-action="cw-view" data-id="week">Minggu</button><button type="button" class="${view === 'month' ? 'on' : ''}" data-action="cw-view" data-id="month">Bulan</button></div>
+    <div class="cw-nav"><button class="icon-btn" data-action="cw-nav" data-id="-1" aria-label="Sebelum">‹</button><button class="btn sm" data-action="cw-nav" data-id="0">Hari ini</button><button class="icon-btn" data-action="cw-nav" data-id="1" aria-label="Seterusnya">›</button></div></div>`;
+  if (view === 'month') {
+    const m0 = sel.slice(0, 8) + '01', [yy, mm] = m0.split('-').map(Number), ld = new Date(yy, mm, 0).getDate(), mEnd = `${m0.slice(0, 8)}${String(ld).padStart(2, '0')}`;
+    const g0 = monOf(m0), items = mineS(g0, addDays(g0, 41)), cells = [];
+    const nCell = Math.ceil((Math.round((parseISO(mEnd) - parseISO(g0)) / 864e5) + 1) / 7) * 7;
+    for (let i = 0; i < nCell; i++) { const d = addDays(g0, i); const xs = items.filter(x => x.date === d && x.s?.status !== 'cancelled');
+      cells.push(`<button class="mc ${d.slice(0, 7) !== m0.slice(0, 7) ? 'out' : ''} ${d === today ? 'today' : ''} ${d === sel ? 'sel' : ''}" data-action="cw-day" data-id="${d}"><span>${Number(d.slice(8))}</span><i class="dots">${xs.slice(0, 4).map(x => `<em class="k-${kindOf(x.c)}"></em>`).join('')}</i></button>`); }
+    const mname = new Date(m0 + 'T00:00').toLocaleDateString('ms-MY', { month: 'long', year: 'numeric' });
+    return `${head('Jadual', mname)}${seg}<div class="card card-pad mb"><div class="mcal">${['Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab', 'Ahd'].map(h => `<b>${h}</b>`).join('')}${cells.join('')}</div>${legend()}</div>
+      <p class="muted" style="font-size:12.5px;text-align:center">Tekan tarikh untuk lihat sesi hari itu.</p>`;
+  }
+  const w0 = monOf(sel), wk = mineS(w0, addDays(w0, 6)), days = [...Array(7)].map((_, i) => addDays(w0, i));
+  const strip = `<div class="wk-strip" data-swipe="1">${days.map(d => { const xs = wk.filter(x => x.date === d && x.s?.status !== 'cancelled');
+    return `<button class="wk-d ${d === sel ? 'sel' : ''} ${d === today ? 'today' : ''}" data-action="cw-day" data-id="${d}"><small>${DS[parseISO(d).getDay()]}</small><b>${Number(d.slice(8))}</b><i class="dots">${xs.slice(0, 3).map(x => `<em class="k-${kindOf(x.c)}"></em>`).join('')}${xs.length > 3 ? '<em class="more"></em>' : ''}</i></button>`; }).join('')}</div>`;
+  const dayItems = wk.filter(x => x.date === sel).sort((a, b) => sTime(a.s, a.c)[0].localeCompare(sTime(b.s, b.c)[0]));
+  const label = `${DAYS[parseISO(sel).getDay()]}, ${fmtDate(sel)}`;
+  return `${head('Jadual', `${fmtShort(w0)} – ${fmtShort(addDays(w0, 6))} · ${wk.filter(x => x.s?.status !== 'cancelled').length} sesi minggu ini`)}${seg}${strip}
+    <div class="day-h"><b>${sel === today ? 'Hari ini · ' : ''}${label}</b><span class="muted">${dayItems.length} sesi</span></div>
+    ${dayItems.map(tlItem).join('') || `<div class="card empty">Tiada sesi pada hari ini. Leret jalur tarikh atau tekan ‹ › untuk minggu lain.</div>`}${legend()}`;
 };
+const legend = () => `<div class="cw-legend"><span><em class="k-group"></em>Kumpulan</span><span><em class="k-personal"></em>Personal</span><span><em class="k-trial"></em>Trial</span><span>✓ kehadiran lengkap</span></div>`;
+Object.assign(ACTIONS, {
+  'cw-day': d => { UI.cday = d; if (UI.cview === 'month') UI.cview = 'week'; render(); },
+  'cw-view': v => { UI.cview = v; render(); },
+  'cw-nav': n => { const k = Number(n), sel = UI.cday || todayISO();
+    if (!k) UI.cday = todayISO();
+    else if (UI.cview === 'month') { const [y, m] = sel.split('-').map(Number), d = new Date(y, m - 1 + k, 1); UI.cday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; }
+    else UI.cday = addDays(sel, 7 * k);
+    render(); },
+  'cw-go': d => { UI.cday = d; UI.cview = 'week'; location.hash = '#minggu'; },
+});
+/* leret jalur minggu (kiri/kanan) */
+let swX = null;
+document.addEventListener('touchstart', e => { if (e.target.closest?.('[data-swipe]')) swX = e.touches[0].clientX; }, { passive: true });
+document.addEventListener('touchend', e => { if (swX == null) return; const dx = e.changedTouches[0].clientX - swX; swX = null; if (Math.abs(dx) > 50) ACTIONS['cw-nav'](dx < 0 ? 1 : -1); }, { passive: true });
+/* kiraan detik kad "Sesi seterusnya" — kemas kini setiap 30 saat tanpa render semula */
+setInterval(() => { document.querySelectorAll('[data-cd]').forEach(el => { const [d, a, b] = el.dataset.cd.split('|'), now = Date.now(), A = new Date(`${d}T${a}:00`).getTime(), B = new Date(`${d}T${b}:00`).getTime();
+  if (d !== todayISO()) return; el.innerHTML = now >= A && now < B ? `<b style="color:var(--ok)">● Sedang berlangsung</b> · tamat dalam ${rel(B - now)}` : now < A ? `Mula dalam <b>${rel(A - now)}</b>` : 'Selesai'; }); }, 30000);
 CV.pelajar = () => {
   const today = todayISO(), ids = new Set(); mine(addDays(today, -60), addDays(today, 14)).forEach(({ s, c }) => rosterOf(s, c).forEach(x => ids.add(x.id)));
   T('class_enrolments').filter(e => T('classes').some(c => c.id === e.class_id && c.coach_id === st()?.id)).forEach(e => ids.add(e.student_id));
@@ -130,7 +218,7 @@ CV.pelajar = () => {
   return `${head('Pelajar', `${list.length} pelajar dalam sesi anda`)}<div class="card"><ul class="list">${list.map(x => { const r = attRate(x.id); return `<li class="list-item" style="cursor:pointer" data-action="c-student" data-id="${x.id}">${photoAvatar(x.full_name, x.photo_path, { priv: true })}<div class="li-main"><div class="li-title">${esc(x.full_name)}${x.medical_notes ? ' <span style="color:var(--bad)">⚕</span>' : ''}</div>
     <div class="li-sub">${x.birth_date ? ageOn(x.birth_date) + ' thn · ' + esc(ageCat(x) || '') + ' · ' : ''}${esc(progName(x.programme_id))}</div></div>${r != null ? `<b class="num" style="color:${r < 75 ? 'var(--bad)' : 'var(--ok)'}">${r}%</b>` : ''}</li>`; }).join('') || '<li class="empty">Belum ada pelajar.</li>'}</ul></div>`;
 };
-CV.akaun = () => { const me = st(); return `${head('Akaun', '')}<div class="card card-pad mb"><div class="cell-person">${photoAvatar(S.profile.full_name || S.profile.email, me?.photo_path, { size: 56 })}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
+CV.akaun = () => { const me = st(); return `${head('Akaun', '')}${installCard()}<div class="card card-pad mb"><div class="cell-person">${photoAvatar(S.profile.full_name || S.profile.email, me?.photo_path, { size: 56 })}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
   ${me ? `<p class="muted" style="margin-top:10px;font-size:13px">Bahasa: ${(me.languages || []).map(langName).join(', ') || '—'}${me.qualifications ? '<br>Kelayakan: ' + esc(me.qualifications) : ''}</p>` : ''}
   <div class="actions" style="margin-top:14px">${me ? `<label class="btn" style="cursor:pointer">📷 ${me.photo_path ? 'Tukar gambar profil' : 'Tambah gambar profil'}<input type="file" accept="image/*" style="display:none" data-on-change="c-photo"></label>` : ''}${'Notification' in window && Notification.permission === 'default' ? '<button class="btn" data-action="notif-perm">🔔 Hidupkan notifikasi</button>' : ''}<button class="btn" data-action="tour-open" data-id="coach">📖 Panduan app</button><a class="btn" href="#sop">📋 SOP sesi</a><button class="btn" data-action="c-pw">Tukar kata laluan</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} Log keluar</button></div></div>
   ${coachExtraCards(me)}

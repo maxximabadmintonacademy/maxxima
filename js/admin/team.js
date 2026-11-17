@@ -2,7 +2,7 @@ import { uploadMedia, photoAvatar } from '../media.js';
 // Coach dan HR & Staf.
 import { VIEWS, ACTIONS } from '../registry.js';
 import { S, insert, update, remove, rpc, setting, saveSetting } from '../data.js';
-import { LANGS_ALL, langName, calItems, sHours, rosterOf } from './sessions.js';
+import { LANGS_ALL, langName, calItems, sHours, rosterOf, sTime, sCoach, sCourt, groupsOf, isPersonal } from './sessions.js';
 import { ic, esc, F, RM, sum, num, val, badge, avatar, app, toast, openModal, confirmModal, pageHead, fmtShort, fmtDate, todayISO, addDays, LABEL, DAYS, hm } from '../ui.js';
 import { T, byId, venueName, progName, staffName, classHours, enrolledIn } from './helpers.js';
 
@@ -39,7 +39,7 @@ VIEWS.coach = () => {
   const coaches = T('staff').filter(s => s.active && (/jurulatih|coach/i.test(s.position) || T('classes').some(c => c.coach_id === s.id)));
   const td = todayISO(), wkFrom = addDays(td, -((new Date(td + 'T00:00').getDay() + 6) % 7));   // Isnin minggu ini
   return `
-  ${pageHead('Coach', `${coaches.length} jurulatih aktif`, `<button class="btn" data-action="coach-from" title="Sesi sebelum tarikh ini tidak dipaparkan di portal coach">${ic('calendar', 'sm')} Jadual coach mula: ${setting('coach_portal', {})?.from ? fmtDate(setting('coach_portal', {}).from) : 'semua'}</button><a class="btn" href="#hr">${ic('briefcase', 'sm')} HR & Gaji</a><button class="btn primary" data-action="staff-add">${ic('plus', 'sm')} Tambah Staf</button>`)}
+  ${pageHead('Coach', `${coaches.length} jurulatih aktif`, `<button class="btn primary" data-action="wa-day">${ic('msg', 'sm')} Jadual hari ini (WhatsApp)</button><button class="btn" data-action="coach-from" title="Sesi sebelum tarikh ini tidak dipaparkan di portal coach">${ic('calendar', 'sm')} Jadual coach mula: ${setting('coach_portal', {})?.from ? fmtDate(setting('coach_portal', {}).from) : 'semua'}</button><a class="btn" href="#hr">${ic('briefcase', 'sm')} HR & Gaji</a><button class="btn primary" data-action="staff-add">${ic('plus', 'sm')} Tambah Staf</button>`)}
   ${readiness(coaches, wkFrom)}
   <div class="grid g-3">${coaches.map(c => {
     // Kira daripada sesi sebenar minggu ini (termasuk personal, coach ganti sesi & coach kumpulan), bukan hanya coach utama kelas.
@@ -149,3 +149,39 @@ Object.assign(ACTIONS, {
 
 ACTIONS['coach-from'] = () => openModal({ title: 'Tarikh mula jadual coach', body: `<p style="font-size:13.5px;margin-top:0">Portal coach hanya memaparkan sesi <b>pada atau selepas</b> tarikh ini (tab Hari Ini, Minggu & "Belum ditanda"). Sesi lama tidak dipadam — hanya disembunyikan dari coach semasa data lama dikemas kini. Kosongkan untuk paparkan semua.</p>
   ${F('Mula dari', 'from', { type: 'date', value: setting('coach_portal', {})?.from || '' })}`, onSubmit: async d => { await saveSetting('coach_portal', { ...setting('coach_portal', {}), from: d.from || null }); toast(d.from ? 'Jadual coach bermula ' + fmtDate(d.from) : 'Semua sesi dipaparkan'); app.render(); } });
+
+
+/* ---------- Jadual coach harian dalam format WhatsApp (sandaran semasa app dalam percubaan) ---------- */
+function waDayText(date) {
+  const items = calItems(date, date).filter(x => x.c && x.s?.status !== 'cancelled').sort((a, b) => sTime(a.s, a.c)[0].localeCompare(sTime(b.s, b.c)[0]));
+  const by = new Map(), add = (cid, line) => { if (!by.has(cid)) by.set(cid, []); by.get(cid).push(line); };
+  const noCoach = [];
+  items.forEach(x => {
+    const [a, b] = sTime(x.s, x.c), title = x.c.title || progName(x.c.programme_id), v = venueName(x.c.venue_id);
+    const ros = rosterOf(x.s, x.c), who = isPersonal(x.c) ? ros.map(r => r.full_name).join(', ') : `${ros.length} pelajar`;
+    const main = sCoach(x.s, x.c), gs = x.s ? groupsOf(x.s.id).filter(g => g.coach_id) : [];
+    const coaches = [...new Set([main, ...gs.map(g => g.coach_id)].filter(Boolean))];
+    if (!coaches.length) noCoach.push(`• ${a}–${b} · ${title} · ${v}`);
+    coaches.forEach(cid => {
+      const myG = gs.filter(g => g.coach_id === cid && g.category && !/^coach \d/i.test(g.category));
+      const court = (myG.map(g => g.court).filter(Boolean).join(', ')) || sCourt(x.s, x.c);
+      const others = coaches.filter(o => o !== cid).map(o => staffName(o).split(' ')[0]);
+      add(cid, `• *${a}–${b}* ${title}\n   📍 ${v}${court ? ` (${/^\d/.test(court) ? 'Court ' + court : court})` : ''}\n   👥 ${who}${myG.length ? ` · Kumpulan: ${myG.map(g => g.category).join(', ')}` : ''}${others.length ? `\n   🤝 Bersama: ${others.join(', ')}` : ''}`);
+    });
+  });
+  const d = new Date(date + 'T00:00'), hdr = `🏸 *JADUAL COACH — ${DAYS[d.getDay()].toUpperCase()}, ${fmtDate(date).toUpperCase()}*`;
+  const blocks = [...by.entries()].sort((a, b) => staffName(a[0]).localeCompare(staffName(b[0]))).map(([cid, ls]) => `👤 *${staffName(cid)}* (${ls.length} sesi)\n${ls.join('\n')}`);
+  return [hdr, '', blocks.join('\n\n') || 'Tiada sesi dijadualkan.', noCoach.length ? `\n⚠️ *Belum ada coach:*\n${noCoach.join('\n')}` : '',
+    '', '📌 Peringatan:', '1. Check in di app 10 minit sebelum sesi (swafoto + lokasi).', '2. Tanda kehadiran pelajar & check out selepas sesi.', '3. Jika tidak dapat hadir, maklumkan admin SEGERA.',
+    '', '_App masih dalam percubaan — jika ada sesi tidak muncul / salah di app, ikut jadual ini & maklumkan admin._'].join('\n').replace(/\n{3,}/g, '\n\n');
+}
+ACTIONS['wa-day'] = (d0) => {
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(d0 || '') ? d0 : todayISO();
+  const f = openModal({ title: 'Jadual coach (WhatsApp)', wide: true, cancel: 'Tutup',
+    body: `<div class="form-grid" style="margin-bottom:10px"><label class="f">Tarikh<input type="date" id="waDate" value="${d}"></label></div>
+      <pre class="copybox" id="remindText" style="max-height:52vh;overflow:auto">${esc(waDayText(d))}</pre>
+      <div class="actions" style="margin-top:12px"><a class="btn primary" id="waGo" href="https://wa.me/?text=${encodeURIComponent(waDayText(d))}" target="_blank" rel="noopener">${ic('msg', 'sm')} Buka WhatsApp</a><button type="button" class="btn" data-action="copy-remind">Salin mesej</button></div>
+      <p class="muted" style="font-size:12.5px;margin-top:8px">"Buka WhatsApp" → pilih group coach → Hantar. Mesej disusun ikut coach, termasuk sesi personal & coach kumpulan.</p>` });
+  const box = (f?.closest?.('.modal') || document).querySelector('#waDate');
+  box?.addEventListener('change', () => { const t = waDayText(box.value); document.getElementById('remindText').textContent = t; document.getElementById('waGo').href = 'https://wa.me/?text=' + encodeURIComponent(t); });
+};

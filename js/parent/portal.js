@@ -1,6 +1,7 @@
 // Portal Ibu Bapa & Pelajar: ringkasan anak, jadual & tempahan, yuran (bayar + bukti + resit), progres.
 // Semua teks melalui t() supaya boleh dipaparkan dalam BM / English / 中文.
 import { ACTIONS, INPUTS } from '../registry.js';
+import { installCard, installBanner } from '../install.js';
 import { annCard, visibleAnns, showAnnPopup } from '../admin/announce.js';
 import { showTour } from '../tour.js';
 import { remindCard } from './v26.js';
@@ -130,6 +131,7 @@ PV.utama = () => {
   const ks = kids(); if (!ks.length) return head(t('Selamat datang'), '') + noKids();
   const due = dueNow(), toConfirm = T('attendance').filter(a => kidSet().has(a.student_id) && ['present', 'late'].includes(a.status) && !a.parent_confirmed);
   return `${head(t('Salam, {name} 👋', { name: esc((S.profile.full_name || '').split(' ').slice(0, 2).join(' ')) }), t('Ringkasan anak anda di Maxxima Badminton Academy'))}
+  ${installBanner()}
   ${T('courses').some(c => c.status === 'published') ? `<a class="card card-pad mb" href="#kursus" style="display:flex;gap:10px;align-items:center;text-decoration:none;color:inherit">${ic('award')}<b>${t('Kursus online')}</b><span class="muted" style="font-size:12.5px;margin-left:auto">${t('Belajar peraturan, peralatan, senaman dan lain-lain')} →</span></a>` : ''}
   ${T('tournaments').filter(x => x.public_page && x.slug && x.status === 'open').map(x => { const img = x.poster_path || visibleAnns().find(a => a.image_path && (a.link || '').includes('t=' + x.slug))?.image_path; return img ? `<a class="card mb tn-promo" target="_blank" rel="noopener" href="tournament.html?t=${encodeURIComponent(x.slug)}"><img src="${publicUrl(img)}" alt="${esc(x.name)}" loading="lazy"><div class="card-pad" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:170px"><b>${esc(x.name)}</b><div class="muted" style="font-size:12.5px">${x.start_date ? fmtShort(x.start_date) : ''}${x.registration_deadline ? ' · ' + t('tutup pendaftaran') + ' ' + fmtShort(x.registration_deadline) : ''}</div></div><span class="btn sm primary">${t('Daftar sekarang')}</span></div></a>` : ''; }).join('')}
   ${T('tournaments').filter(x => x.public_page && x.slug && x.status === 'open' && !(x.poster_path || visibleAnns().find(a => a.image_path && (a.link || '').includes('t=' + x.slug)))).map(x => `<div class="card card-pad mb" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">${ic('trophy')}<div style="flex:1;min-width:180px"><b>${esc(x.name)}</b><div class="muted" style="font-size:12.5px">${x.start_date ? fmtShort(x.start_date) : ''}${x.registration_deadline ? ' · ' + t('tutup pendaftaran') + ' ' + fmtShort(x.registration_deadline) : ''}</div></div><a class="btn sm primary" target="_blank" rel="noopener" href="tournament.html?t=${encodeURIComponent(x.slug)}">${t('Daftar sekarang')}</a></div>`).join('')}
@@ -585,7 +587,8 @@ const taxCard = () => {
   ${x ? `<div style="margin-top:12px;font-size:13.5px;line-height:1.7"><div>${esc(x.legal_name || '—')}</div><div class="muted">${esc(idLbl(x.id_type))}: ${esc(x.id_no || '—')}</div><div class="muted">TIN: ${esc(x.tin || '—')}</div>${x.address ? `<div class="muted">${esc(x.address)}</div>` : ''}</div>` : `<div class="muted" style="margin-top:10px;font-size:13px">${t('Belum diisi. Anda boleh isi sekarang supaya invois terus memaparkan maklumat anda.')}</div>`}</div>`;
 };
 PV.akaun = () => `${head(t('Akaun'), '')}<div class="card card-pad mb"><div class="cell-person">${avatar(S.profile.full_name || S.profile.email)}<div><b>${esc(S.profile.full_name || '')}</b><span>${esc(S.profile.email || '')}</span></div></div>
-  <div class="actions" style="margin-top:14px">${window.__installPrompt ? `<button class="btn primary" data-action="pwa-install">📱 ${t('Pasang app')}</button>` : ''}<button class="btn" data-action="tour-open" data-id="parent">📖 ${t('Panduan app')}</button>${'Notification' in window && Notification.permission === 'default' ? `<button class="btn" data-action="notif-perm">🔔 ${t('Hidupkan notifikasi')}</button>` : ''}<button class="btn" data-action="p-pw">${t('Tukar kata laluan')}</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} ${t('Log keluar')}</button></div></div>
+  <div class="actions" style="margin-top:14px"><button class="btn" data-action="tour-open" data-id="parent">📖 ${t('Panduan app')}</button>${'Notification' in window && Notification.permission === 'default' ? `<button class="btn" data-action="notif-perm">🔔 ${t('Hidupkan notifikasi')}</button>` : ''}<button class="btn" data-action="p-pw">${t('Tukar kata laluan')}</button><button class="btn danger-o" data-action="logout">${ic('logout', 'sm')} ${t('Log keluar')}</button></div></div>
+  ${installCard()}
   ${remindCard()}
   <div class="card card-pad mb"><b>${t('Tetapan paparan')}</b>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px"><span>${t('Bahasa')}</span>${langSwitch()}</div>
