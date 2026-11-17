@@ -501,6 +501,18 @@ PV.yuran = () => {
   ${cns.length ? `<div class="card"><div class="card-head"><div><h3>${t('Nota Kredit')}</h3></div></div><ul class="list">${cns.map(c => `<li class="list-item"><div class="li-main"><div class="li-title">${esc(c.number)} · <span class="num">-${RM(c.amount)}</span></div><div class="li-sub">${esc(byId('invoices', c.invoice_id)?.number || '')} · ${fmtDate(c.issued_on)}${c.reason ? ' · ' + esc(c.reason) : ''}</div></div><button class="btn sm" data-action="p-cn" data-id="${c.id}">${ic('file', 'sm')} ${t('Cetak')}</button></li>`).join('')}</ul></div>` : ''}`;
 };
 
+/** Kecilkan gambar sebelum muat naik (iPhone HEIC & foto kamera besar). PDF / gagal → fail asal. */
+async function shrinkImage(f) {
+  if (!/^image\//.test(f.type || '') && !/\.(heic|heif|jpe?g|png|webp)$/i.test(f.name || '')) return f;
+  if (f.size < 900 * 1024 && /jpe?g|png|webp/i.test(f.type)) return f;
+  try {
+    const url = URL.createObjectURL(f), img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = url; });
+    const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight)), cv = document.createElement('canvas');
+    cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+    const blob = await new Promise(ok => cv.toBlob(ok, 'image/jpeg', 0.82)); if (!blob) return f;
+    return new File([blob], (f.name || 'bukti').replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch (_) { return f; }   // pelayar tidak dapat baca (cth. HEIC di Android) → hantar asal
+}
 /** Mesej terima kasih selepas bayaran (kekal di skrin sehingga ditutup). */
 function thanks(title, sub, body) {
   openModal({ title: '🏸 ' + title, cancel: t('Tutup'), body: `<div style="text-align:center;padding:6px 4px 2px"><div style="font-size:44px;line-height:1">✅</div>${sub ? `<div style="font-weight:800;font-size:18px;margin-top:10px">${sub}</div>` : ''}<p class="muted" style="margin-top:10px;line-height:1.55">${body}</p><p style="margin-top:12px;font-weight:600">${t('Terima kasih atas sokongan anda kepada Maxxima Badminton Academy!')}</p></div>` });
@@ -529,6 +541,7 @@ Object.assign(ACTIONS, {
   'p-receipt': id => { try { openReceipt(id); } catch (e) { toast(friendlyError(e), true); } },
   'p-pay': id => {
     const inv = byId('invoices', id), due = Math.max(balanceOf(inv) - pendingOf(inv), 0), b = BANK();
+    if (due <= 0.001) return toast(pendingOf(inv) > 0 ? t('Bukti bayaran untuk invois ini sudah dihantar dan sedang menunggu pengesahan admin.') : t('Invois ini sudah dijelaskan.'));
     openModal({
       title: `${t('Bayar')} — ${esc(kidName(inv.student_id))}`, submit: t('Hantar Bukti Bayaran'), wide: true,
       body: `<div class="card card-pad" style="background:var(--bg,#f6f7fb);margin-bottom:14px"><div style="font-size:12px;color:var(--muted)">${esc(inv.number)} · ${kindLabel(inv)}</div><div style="font-size:26px;font-weight:800">${RM(due)}</div></div>
@@ -541,19 +554,22 @@ Object.assign(ACTIONS, {
         ${F(t('Kaedah'), 'method', { opts: [['duitnow', 'DuitNow / Maybank QR'], ['other', "Touch 'n Go eWallet"], ['transfer', t('Pindahan Bank')]] })}
         ${F(t('Tarikh bayaran'), 'paid_on', { type: 'date', value: todayISO(), req: true })}
         ${F(t('No. rujukan (jika ada)'), 'reference')}
-        <label class="f full">${t('Bukti bayaran (tangkapan skrin / PDF)')}<input name="proof" type="file" accept="image/*,application/pdf" ${S.mode === 'demo' ? '' : 'required'}></label>
+        <label class="f full">${t('Bukti bayaran (tangkapan skrin / PDF)')}<input name="proof" type="file" accept="image/*,.heic,.heif,application/pdf" ${S.mode === 'demo' ? '' : 'required'}></label>
       </div><p class="muted" style="margin-top:10px;font-size:12.5px">${t('Admin akan menyemak bukti anda. Resit tersedia di sini selepas bayaran disahkan.')}</p>`,
       onSubmit: async d => {
         const amt = Number(d.amount); if (!(amt > 0) || amt > due + 0.001) throw new Error(t('Amaun mesti antara RM0.01 dan {max}.', { max: RM(due) }));
-        let proof_path = null; const f = d.proof;
+        let proof_path = null; let f = d.proof;
         if (f && f.size) {
-          if (f.size > 5 * 1024 * 1024) throw new Error(t('Fail terlalu besar (maksimum 5MB).'));
+          f = await shrinkImage(f);   // gambar telefon besar / HEIC → JPEG ≤1600px (biasanya <500KB)
+          if (f.size > 10 * 1024 * 1024) throw new Error(t('Fail terlalu besar (maksimum 10MB). Sila hantar tangkapan skrin resit.'));
           if (S.mode === 'supabase') {
             proof_path = `${me()}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g, '_')}`;
-            const { error } = await S.client.storage.from('payment-proofs').upload(proof_path, f, { contentType: f.type, upsert: false }); if (error) throw error;
+            const { error } = await S.client.storage.from('payment-proofs').upload(proof_path, f, { contentType: f.type || 'image/jpeg', upsert: false });
+            if (error) throw new Error(t('Gagal memuat naik bukti') + ': ' + (error.message || error) + '. ' + t('Cuba tangkapan skrin (screenshot) resit, atau hantar bukti kepada admin melalui WhatsApp.'));
           }
         }
-        await insert('payments', { invoice_id: id, amount: amt, method: d.method, paid_on: d.paid_on, reference: d.reference || null, status: 'pending', proof_path, submitted_by: S.mode === 'demo' ? null : me(), submitted_at: new Date().toISOString() });
+        try { await insert('payments', { invoice_id: id, amount: amt, method: d.method, paid_on: d.paid_on, reference: d.reference || null, status: 'pending', proof_path, submitted_by: S.mode === 'demo' ? null : me(), submitted_at: new Date().toISOString() }); }
+        catch (e) { throw new Error(t('Bukti tidak dapat disimpan') + ': ' + (e.message || e) + '. ' + t('Sila tangkap skrin mesej ini dan hantar kepada admin.')); }
         app.render(); setTimeout(() => thanks(t('Terima kasih! Bukti bayaran diterima'), `${RM(amt)} · ${esc(inv?.number || '')}`, t('Admin akan menyemak dan mengesahkan bayaran anda, biasanya dalam 1 hari bekerja. Anda akan menerima notifikasi dan resit di portal sebaik sahaja disahkan.')), 80);
       },
     });
