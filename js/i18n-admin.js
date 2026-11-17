@@ -1292,6 +1292,14 @@ Object.assign(AD, {
   'Tajaan — coach percuma, bil court sahaja': ['Sponsored — free coach, court bill only', '赞助 — 教练免费，仅付场地费'],
   'Kembali': ['Back', '返回'],
   'Pelajar dalam invois ini': ['Students in this invoice', '本发票的学员'],
+  'belum direkod': ['not recorded yet', '尚未记录'],
+  '— belum direkod —': ['— not recorded yet —', '— 尚未记录 —'],
+  'ditempah': ['booked', '已预约'],
+  'Tukar kelas': ['Change class', '更换班级'],
+  'Pindah': ['Move', '移动'],
+  'Kelas baharu': ['New class', '新班级'],
+  'Pindah ke kelas / program lain (tarikh sama)': ['Move to another class / programme (same date)', '移到其他班级 / 课程（同一日期）'],
+  'tiada pakej aktif — pautkan atau jual pakej': ['no active package — link or sell a package', '无有效配套 — 请关联或出售配套'],
   'Sesi telah digunakan = kehadiran yang direkod + sesi sebelum sistem. Ubah terus jika baki sebenar berbeza.': ['Sessions used = recorded attendance + sessions before the system. Change it directly if the real balance is different.', '已用课数 = 已记录出勤 + 系统前课数。若实际余额不同可直接修改。'],
 });
 PATTERNS.unshift(
@@ -1321,5 +1329,9 @@ PATTERNS.unshift(
   [/^(.+) belum ada pakej (.+)\. Tanpa pakej, kehadiran tidak dapat ditolak dan tiada invois dikeluarkan\.$/, (m, l) => (en(l) ? `${m[1]} has no ${m[2]} package yet. Without a package, attendance cannot be deducted and no invoice is issued.` : `${m[1]} 尚无 ${m[2]} 配套。没有配套，出勤无法扣除，也不会开具发票。`)],
   [/^Ditanda: (.+)$/, (m, l, tr) => (en(l) ? 'Marked: ' : '已标记：') + (tr(m[1]) ?? m[1])],
   [/^(\d+) sesi sudah direkod dalam kehadiran pakej ini\. Untuk kurangkan, buka Kehadiran pelajar dan tukar \/ lepaskan sesi tersebut\.$/, (m, l) => (en(l) ? `${m[1]} sessions are already recorded in this package's attendance. To reduce, open the student's Attendance and change / release those sessions.` : `此配套已记录 ${m[1]} 节出勤。要减少，请打开学员出勤并更改 / 释放这些课程。`)],
+  [/^Tukar kelas — (.+)$/, (m, l) => (en(l) ? `Change class — ${m[1]}` : `更换班级 — ${m[1]}`)],
+  [/^Dipindah ke (.+)$/, (m, l) => (en(l) ? `Moved to ${m[1]}` : `已移到 ${m[1]}`)],
+  [/^Kekalkan masa (.+) \(jika sesi baharu dicipta\)$/, (m, l) => (en(l) ? `Keep the time ${m[1]} (if a new session is created)` : `保留时间 ${m[1]}（若新建课程）`)],
+  [/^(.+) · sekarang dalam (.+) \((.+)\)\. Rekod \((.+)\) dipindah ke kelas di bawah pada tarikh yang sama, dan ditolak daripada pakej program kelas baharu\.$/, (m, l, tr) => (en(l) ? `${m[1]} · currently in ${m[2]} (${m[3]}). The record (${tr(m[4]) ?? m[4]}) moves to the class below on the same date, and is deducted from the new class's programme package.` : `${m[1]} · 目前在 ${m[2]}（${m[3]}）。记录（${tr(m[4]) ?? m[4]}）将移到下方同日期的班级，并从新班级课程的配套扣除。`)],
   [/^(\d+) sesi dipautkan ke (.+)$/, (m, l) => (en(l) ? `${m[1]} sessions linked to ${m[2]}` : `${m[1]} 节课已关联到 ${m[2]}`)],
 );

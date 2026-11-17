@@ -4,7 +4,7 @@
    • klik sel Kehadiran → tanda kehadiran sesi lepas & akan datang
    ===================================================================== */
 import { ACTIONS, INPUTS } from '../registry.js';
-import { S, insert, update, refresh } from '../data.js';
+import { S, insert, update, remove, refresh } from '../data.js';
 import { esc, RM, LABEL, badge, openModal, closeModal, toast, todayISO, addDays, fmtShort, DAYS, app } from '../ui.js';
 import { T, byId, progName, venueName, pkgRemaining, studentPackages } from './helpers.js';
 import { calItems, ensureSession, sTime, isPersonal } from './sessions.js';
@@ -60,7 +60,7 @@ ACTIONS['sq-att'] = id => {
     body: `<p class="muted" style="margin-bottom:10px">5 minggu lepas & 2 minggu akan datang · hadir ${done}/${past} sesi lepas. Tukar status terus di sini — baki pakej dikira semula automatik.</p>
     <ul class="list" style="margin:0 -20px">${[...items.filter(x => x.date <= today), ...items.filter(x => x.date > today).reverse()].map((x, i, arr) => { const a = rec(x), [t] = sTime(x.s, x.c), fut = x.date > today, head = fut && !(arr[i - 1]?.date > today);
       const opts = fut ? ['excused'] : ATT;
-      return `${head ? '<li class="list-item" style="padding:6px 20px;background:var(--soft,#f4f6fb)"><b style="font-size:12.5px">Akan datang — hanya boleh tanda cuti</b></li>' : ''}<li class="list-item" style="padding:8px 20px"><div class="li-main"><div class="li-title">${DAYS[new Date(x.date + 'T00:00').getDay()].slice(0, 3)} ${fmtShort(x.date)} · ${t} · ${esc(x.c.title || progName(x.c.programme_id))}${x.date === today ? ' <span class="badge b-info">hari ini</span>' : ''}</div><div class="li-sub">${esc(venueName(x.c.venue_id))}</div></div>
+      return `${head ? '<li class="list-item" style="padding:6px 20px;background:var(--soft,#f4f6fb)"><b style="font-size:12.5px">Akan datang — hanya boleh tanda cuti</b></li>' : ''}<li class="list-item" style="padding:8px 20px"><div class="li-main"><div class="li-title">${DAYS[new Date(x.date + 'T00:00').getDay()].slice(0, 3)} ${fmtShort(x.date)} · ${t} · ${esc(x.c.title || progName(x.c.programme_id))}${x.date === today ? ' <span class="badge b-info">hari ini</span>' : ''}</div><div class="li-sub">${esc(venueName(x.c.venue_id))}${a && CONS.includes(a.status) ? (a.student_package_id ? ` · ${esc(byId('student_packages', a.student_package_id)?.name || 'pakej')}` : ' · <span style="color:var(--bad)">tiada pakej</span>') : ''}${a ? ` · <button type="button" class="linkbtn" data-action="sq-att-move" data-id="${a.id}" title="Pindah ke kelas / program lain (tarikh sama)" style="border:0;background:none;color:var(--brand);cursor:pointer;padding:0;font-size:12px;text-decoration:underline">Tukar kelas</button>` : ''}</div></div>
         <select class="att-select ${a ? 'a-' + a.status : ''}" data-on-change="sq-att-set" data-key="${x.c.id}|${x.date}|${x.s?.id || ''}|${id}"><option value="">${a?.status === 'booked' ? 'ditempah — belum direkod' : '— belum direkod —'}</option>${opts.map(o => `<option value="${o}" ${a?.status === o ? 'selected' : ''}>${LABEL[o]}</option>`).join('')}${a && !opts.includes(a.status) && a.status !== 'booked' ? `<option value="${a.status}" selected>${LABEL[a.status] || a.status}</option>` : ''}</select></li>`; }).join('') || '<li class="empty">Tiada sesi dalam tempoh ini. Pelajar belum ditempatkan dalam kelas?</li>'}</ul>
     <div class="actions" style="margin-top:12px">${orphans(id) ? `<button type="button" class="btn danger-o" data-action="att-link" data-id="${id}">Pautkan ${orphans(id)} sesi ke pakej</button>` : ''}<button type="button" class="btn primary" data-action="sq-att-old" data-id="${id}">+ Rekod kehadiran lama</button><button type="button" class="btn" data-action="sq-pkg" data-id="${id}">Pakej</button><button type="button" class="btn" data-action="student-view" data-id="${id}">Profil penuh</button></div>` });
 };
@@ -127,4 +127,31 @@ ACTIONS['sq-att-old'] = async id => {
     } });
   const redraw = () => { f.querySelector('#sqOldDates').innerHTML = oldDatesHtml(id, f.elements.class_id.value, f.elements.pkg.value); };
   f.elements.class_id.addEventListener('change', redraw); f.elements.pkg.addEventListener('change', redraw);
+};
+
+/* ---------- Pindah satu rekod kehadiran ke kelas / program lain (tarikh sama) — cth. sesi direkod dalam kelas Personal tetapi sepatutnya Performance ---------- */
+ACTIONS['sq-att-move'] = attId => {
+  const a = byId('attendance', attId); if (!a) return;
+  const s0 = byId('class_sessions', a.session_id), c0 = s0 && byId('classes', s0.class_id), stu = byId('students', a.student_id);
+  const [t1, t2] = sTime(s0, c0);
+  const cls = T('classes').filter(c => c.id !== c0?.id && (c.active !== false || c.programme_id !== c0?.programme_id))
+    .sort((x, y) => (x.venue_id === c0?.venue_id ? 0 : 1) - (y.venue_id === c0?.venue_id ? 0 : 1) || (x.weekday === new Date(a.session_date + 'T00:00').getDay() ? 0 : 1) - (y.weekday === new Date(a.session_date + 'T00:00').getDay() ? 0 : 1) || progName(x.programme_id).localeCompare(progName(y.programme_id)));
+  openModal({ title: `Tukar kelas — ${esc(stu?.full_name || '')}`, submit: 'Pindah',
+    body: `<p class="muted" style="margin-bottom:10px">${fmtShort(a.session_date)} · ${t1}–${t2} · sekarang dalam ${esc(c0?.title || progName(c0?.programme_id))} (${esc(venueName(c0?.venue_id))}). Rekod (${esc(LABEL[a.status] || a.status)}) dipindah ke kelas di bawah pada tarikh yang sama, dan ditolak daripada pakej program kelas baharu.</p>
+      <label class="f full">Kelas baharu<select name="cls" required>${cls.map(c => `<option value="${c.id}">${esc(progName(c.programme_id))}${c.title ? ' · ' + esc(c.title) : ''} · ${DAYS[c.weekday].slice(0, 3)} ${String(c.start_time).slice(0, 5)} · ${esc(venueName(c.venue_id))}${c.active === false ? ' (tidak aktif)' : ''}</option>`).join('')}</select></label>
+      <label class="check-row" style="margin-top:10px"><input type="checkbox" name="keep" checked><span>Kekalkan masa ${t1}–${t2} (jika sesi baharu dicipta)</span></label>`,
+    onSubmit: async d => {
+      const had = T('class_sessions').some(x => x.class_id === d.cls && x.session_date === a.session_date);
+      const ns = await ensureSession(d.cls, a.session_date); if (!ns?.id) throw new Error('Sesi tidak dapat dicipta.');
+      if (!had && d.keep) await update('class_sessions', ns.id, { start_time: t1, end_time: t2 });
+      const ex = T('attendance').find(x => x.session_id === ns.id && x.student_id === a.student_id), row = { status: a.status, note: a.note || null, hours: a.hours ?? null, marked_by: by() }, pk0 = a.student_package_id && byId('student_packages', a.student_package_id);
+      if (pk0 && pk0.programme_id === byId('classes', d.cls)?.programme_id) row.student_package_id = pk0.id;   // pakej sama program kekal
+      await remove('attendance', a.id);
+      if (ex) await update('attendance', ex.id, { student_package_id: null, ...row }); else await insert('attendance', { session_id: ns.id, student_id: a.student_id, ...row });
+      if (c0 && isPersonal(c0) && !T('attendance').some(x => x.session_id === s0.id)) { try { await remove('class_sessions', s0.id); } catch (_) {} }   // sesi personal kosong dibuang
+      if (S.mode === 'supabase') { try { await refresh(['attendance', 'student_packages', 'class_sessions']); } catch (_) {} }
+      const r = T('attendance').find(x => x.session_id === ns.id && x.student_id === a.student_id), pk = r?.student_package_id && byId('student_packages', r.student_package_id);
+      toast(`Dipindah ke ${progName(byId('classes', d.cls)?.programme_id)}${pk ? ` · ${pk.name}: baki ${pkgRemaining(pk)}/${Number(pk.sessions_total)}` : CONS.includes(a.status) ? ' · tiada pakej aktif — pautkan atau jual pakej' : ''}`);
+      app.render(); setTimeout(() => ACTIONS['sq-att'](a.student_id), 60);
+    } });
 };
