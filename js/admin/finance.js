@@ -433,7 +433,7 @@ Object.assign(ACTIONS, {
   },
 
   /* ---- Jual pakej: Lokasi -> Program -> Pelajar -> Pakej ---- */
-  'sell': (id) => {
+  'sell': (id, progId) => {
     const preStudent = id && byId('students', id) ? id : '';
     const studs = T('students').filter(s => ['active', 'awaiting_payment', 'paused'].includes(s.status)).sort((a, b) => a.full_name.localeCompare(b.full_name));
     if (!T('packages').some(p => p.active)) return toast('Belum ada pakej. Tetapkan katalog pakej dahulu.', true);
@@ -478,6 +478,11 @@ Object.assign(ACTIONS, {
     f.elements.package_id.addEventListener('change', () => { syncPkg(); note(); });
     f.elements.mode.addEventListener('change', note);
     watchAdj(f); bindPicker(f, studs, preStudent, pkgFilter);
+    /* Dari kelas group: tapis pakej ikut program kelas (kekalkan pelajar yang dipilih) */
+    if (progId && typeof progId === 'string' && [...f.elements.f_prog.options].some(o => o.value === progId)) {
+      const E = f.elements; E.f_prog.value = progId; E.f_prog.dispatchEvent(new Event('change'));
+      if (preStudent && E.student_id.value !== preStudent) { E.f_prog.value = ''; E.f_prog.dispatchEvent(new Event('change')); }
+    }
   },
 });
 

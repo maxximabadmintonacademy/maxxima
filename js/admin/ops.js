@@ -115,7 +115,7 @@ Object.assign(ACTIONS, {
     await update('waitlist', id, { status: 'offered', offered_at: new Date().toISOString() }); toast('Tawaran dihantar kepada ibu bapa'); app.render(); },
   'wl-enrol': async id => { const w = byId('waitlist', id);
     if (!T('class_enrolments').some(e => e.class_id === w.class_id && e.student_id === w.student_id)) await insert('class_enrolments', { class_id: w.class_id, student_id: w.student_id });
-    await update('waitlist', id, { status: 'enrolled' }); toast('Pelajar didaftarkan ke kelas'); app.render(); },
+    await update('waitlist', id, { status: 'enrolled' }); toast('Pelajar didaftarkan ke kelas'); app.render(); ACTIONS['class-pkg-check']?.(`${w.student_id}|${w.class_id}`); },
   'wl-x': async id => { await update('waitlist', id, { status: 'cancelled' }); toast('Dibuang dari senarai menunggu'); app.render(); },
   /* Admin masukkan tempahan sendiri (cth. dari WhatsApp) — ramai pelajar & beberapa tarikh sekali gus */
   'bk-manual': () => {

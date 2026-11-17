@@ -75,7 +75,13 @@ const classPatch = (d, isEdit) => {
 
 const bindLang = f => { const chk = () => { f.querySelector('#clsWarn').innerHTML = f.coach_id.value && f.venue_id.value ? langWarn(f.coach_id.value, f.venue_id.value) : ''; }; f.coach_id.addEventListener('change', chk); f.venue_id.addEventListener('change', chk); return f; };
 Object.assign(ACTIONS, {
-  'class-add': () => bindLang(openModal({ title: 'Tambah Kelas', submit: 'Tambah ke Jadual', wide: true, body: classForm(), onSubmit: async d => { await insert('classes', classPatch(d)); toast('Kelas ditambah'); app.render(); } })),
+  'class-add': () => { const f = bindLang(openModal({ title: 'Tambah Kelas', submit: 'Tambah ke Jadual', wide: true, body: `<div id="persHint"></div>` + classForm(), onSubmit: async d => { await insert('classes', classPatch(d)); toast('Kelas ditambah · tambah pelajar dari senarai kelas'); app.render(); } }));
+    /* Program personal → cadangkan wizard (jadual mingguan / tarikh pilihan + pakej + invois sekali gus) */
+    const fm = document.getElementById('mform'), hint = () => { const p = byId('programmes', fm.elements.programme_id.value);
+      fm.querySelector('#persHint').innerHTML = p?.kind === 'personal' ? `<div class="hint warn" style="margin-bottom:12px">Untuk kelas personal, guna <b>Sesi Personal</b> — boleh pilih setiap minggu atau tarikh sendiri, pilih pelajar & pakej, dan invois dikeluarkan sekali gus. <button type="button" class="btn sm primary" data-action="class-to-pw" style="margin-left:6px">Buka Sesi Personal</button></div>` : ''; };
+    fm?.elements.programme_id.addEventListener('change', hint); return f; },
+  'class-to-pw': () => { const fm = document.getElementById('mform'), E = fm?.elements; const pre = E ? { programme_id: E.programme_id.value, venue_id: E.venue_id.value, coach_id: E.coach_id.value, start: E.start_time.value, end: E.end_time.value } : {};
+    closeModal(); setTimeout(() => ACTIONS['cal-personal'](pre), 60); },
   'class-edit': id => { const c0 = byId('classes', id);
     bindLang(openModal({ title: 'Edit Kelas', wide: true, body: classForm(c0) + `<p class="muted" style="font-size:12.5px;margin-top:10px">Perubahan masa, lokasi, coach & court terpakai pada semua sesi akan datang. Jika hari ditukar, sesi akan datang yang belum berlangsung dipindahkan ke hari baharu dalam minggu yang sama (rekod kehadiran ikut dipindah). Sesi yang masanya diubah secara khusus kekal dengan masa khusus itu.</p>`,
       onSubmit: async d => { const patch = classPatch(d, true), oldWd = c0.weekday, prev = { ...c0, extra_coach_ids: [...(c0.extra_coach_ids || [])] }; await update('classes', id, patch);
@@ -109,7 +115,7 @@ Object.assign(ACTIONS, {
       title: esc(progName(c.programme_id)), cancel: 'Tutup', wide: true,
       body: `<div class="muted" style="margin-bottom:14px">${esc(classLabel(c))}<br>${esc(staffName(c.coach_id))}${c.court ? ' · ' + esc(c.court) : ''}</div>
       <h4 style="font-size:13.5px;margin-bottom:6px">Pelajar (${roster.length}/${c.capacity})</h4>
-      <ul class="list" style="margin:0 -20px">${roster.map(e => { const s = byId('students', e.student_id); return s ? `<li class="list-item" style="padding:9px 20px">${avatar(s.full_name)}<div class="li-main"><div class="li-title">${esc(s.full_name)}</div><div class="li-sub">${esc(s.guardian_name || '')}</div></div><button type="button" class="btn sm" data-action="class-unenrol" data-id="${e.id}|${id}" title="Keluarkan daripada kelas">${ic('x', 'sm')}</button></li>` : ''; }).join('') || '<li class="empty">Belum ada pelajar.</li>'}</ul>
+      <ul class="list" style="margin:0 -20px">${roster.map(e => { const s = byId('students', e.student_id); return s ? `<li class="list-item" style="padding:9px 20px">${avatar(s.full_name)}<div class="li-main"><div class="li-title">${esc(s.full_name)}</div><div class="li-sub">${esc(s.guardian_name || '')}${hasPkgFor(s.id, c) ? '' : ' <span class="badge b-warn">tiada pakej</span>'}</div></div>${hasPkgFor(s.id, c) ? '' : `<button type="button" class="btn sm" data-action="class-sell" data-id="${s.id}|${id}" title="Jual pakej & keluarkan invois">Jual pakej</button>`}<button type="button" class="btn sm" data-action="class-unenrol" data-id="${e.id}|${id}" title="Keluarkan daripada kelas">${ic('x', 'sm')}</button></li>` : ''; }).join('') || '<li class="empty">Belum ada pelajar.</li>'}</ul>
       ${roster.length < c.capacity ? `<div style="display:flex;gap:8px;margin-top:12px"><label class="field grow"><select id="enrolSel"><option value="">+ Tambah pelajar ke kelas…</option>${addable.map(s => `<option value="${s.id}">${esc(s.full_name)}</option>`).join('')}</select></label><button type="button" class="btn primary" data-action="class-enrol" data-id="${id}">Tambah</button></div>` : '<div class="badge b-warn" style="margin-top:12px">Kelas penuh</div>'}
       <div class="actions" style="margin-top:18px"><button type="button" class="btn" data-action="class-edit" data-id="${id}">${ic('edit', 'sm')} Edit kelas</button><button type="button" class="btn danger-o" data-action="class-del" data-id="${id}">${ic('trash', 'sm')} Padam</button></div>`,
     });
@@ -118,7 +124,10 @@ Object.assign(ACTIONS, {
     const sid = $('#enrolSel')?.value; if (!sid) return toast('Pilih pelajar dahulu', true);
     const c = byId('classes', id); if (enrolledIn(id).length >= c.capacity) return toast('Kelas sudah penuh', true);
     await insert('class_enrolments', { class_id: id, student_id: sid }); toast('Pelajar ditambah'); ACTIONS['class-view'](id); app.render();
+    if (!hasPkgFor(sid, c)) setTimeout(() => askPkg(sid, c), 60);
   },
+  /* Jual pakej terus dari senarai pelajar kelas — program kelas dipilih automatik */
+  'class-sell': key => { const [sid, cid] = key.split('|'); sellFor(sid, byId('classes', cid)); },
   'class-unenrol': async key => { const [eid, cid] = key.split('|'); await remove('class_enrolments', eid); toast('Pelajar dikeluarkan'); ACTIONS['class-view'](cid); app.render(); },
 });
 
@@ -252,3 +261,26 @@ Object.assign(ACTIONS, {
     },
   }),
 });
+
+/* ---------- Pakej semasa tambah pelajar ke kelas group ---------- */
+const isPersonalCls = c => byId('programmes', c?.programme_id)?.kind === 'personal';
+/** Ada pakej aktif / menunggu bayaran untuk program kelas ini? (kelas personal diurus oleh wizard) */
+const hasPkgFor = (sid, c) => !c || isPersonalCls(c) || livePackages(sid).some(p => !p.programme_id || p.programme_id === c.programme_id) || byId('students', sid)?.fee_exempt;
+function sellFor(sid, c) { ACTIONS.sell(sid, c?.programme_id); }
+function askPkg(sid, c) {
+  const s = byId('students', sid), other = livePackages(sid);
+  openModal({
+    title: 'Pakej untuk ' + (s?.full_name || 'pelajar'), cancel: 'Nanti',
+    body: `<p style="margin-top:0">${esc(s?.full_name || '')} belum ada pakej <b>${esc(progName(c.programme_id))}</b>. Tanpa pakej, kehadiran tidak dapat ditolak dan tiada invois dikeluarkan.</p>
+      ${other.length ? `<div class="hint">Pakej lain yang masih aktif: ${other.map(p => `${esc(p.name)} (baki ${pkgRemaining(p)})`).join(', ')}</div>` : ''}
+      <div style="display:grid;gap:8px;margin-top:14px">
+        <button type="button" class="btn primary" data-action="class-ask-sell" data-id="${sid}|${c.id}">${ic('tag', 'sm')} Jual pakej & keluarkan invois</button>
+        <button type="button" class="btn" data-action="class-ask-trial">Sesi percubaan dahulu (percuma)</button>
+      </div>
+      <p class="muted" style="font-size:12.5px;margin-bottom:0">Trial: tanda kehadiran sebagai <b>Trial</b> — tidak tolak pakej dan tidak dibilkan. Pilih <b>Nanti</b> jika ibu bapa belum buat keputusan; pelajar ditanda "tiada pakej" dalam senarai kelas.</p>`,
+  });
+}
+ACTIONS['class-ask-sell'] = key => { const [sid, cid] = key.split('|'); closeModal(); setTimeout(() => sellFor(sid, byId('classes', cid)), 60); };
+ACTIONS['class-ask-trial'] = () => { closeModal(); toast('Baik — tanda kehadiran sebagai "Trial" pada hari sesi. Jual pakej selepas trial dari senarai kelas.'); };
+/** Panggil selepas pelajar dimasukkan ke kelas dari tempat lain (cth. senarai menunggu). */
+ACTIONS['class-pkg-check'] = key => { const [sid, cid] = String(key).split('|'), c = byId('classes', cid); if (c && !hasPkgFor(sid, c)) setTimeout(() => askPkg(sid, c), 60); };
