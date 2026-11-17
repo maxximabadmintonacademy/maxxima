@@ -31,7 +31,7 @@ function readiness(coaches, wkFrom) {
     noGps.length && `<li><b>${noGps.length} lokasi tiada koordinat GPS</b> — jarak check in tidak dapat disahkan: ${noGps.map(v => esc(v.name)).join(', ')}. Isi di Persediaan → Lokasi → Edit → "Latitud, longitud".</li>`,
     noCoach.length && `<li><b>${noCoach.length} sesi 7 hari ini tiada coach</b> — buka Kalendar (tapis "Ada amaran") dan tetapkan coach.</li>`,
   ].filter(Boolean);
-  return `<div class="card card-pad mb" style="border-left:4px solid ${rows.length ? 'var(--warn)' : 'var(--ok)'}"><h3 style="font-size:14.5px;margin-bottom:6px">Sedia untuk check in${from ? ` · mula ${fmtDate(from)}` : ''}</h3>
+  return `<div class="card card-pad mb" style="border-left:4px solid ${rows.length ? 'var(--warn)' : 'var(--ok)'}"><h3 style="font-size:14.5px;margin-bottom:6px">Sedia untuk check in${from ? ` · mula ${fmtDate(from)}` : ''} <a href="#pengguna" data-action="user-r" data-id="coach" style="font-size:12.5px;font-weight:600;margin-left:8px">Lihat log masuk, app & notifikasi coach →</a></h3>
     ${rows.length ? `<ul style="margin:0 0 0 18px;font-size:13px;line-height:1.6">${rows.join('')}</ul>` : '<div class="muted" style="font-size:13px">✓ Semua coach yang bersesi minggu ini ada akaun, semua lokasi ada GPS, semua sesi ada coach.</div>'}</div>`;
 }
 

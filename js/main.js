@@ -1,5 +1,5 @@
 // Titik masuk: log masuk, penghalaan peranan, shell Portal Admin, router.
-import { S, init, loadAll, signIn, signOut, resetPassword, setPassword, demoLogin, expirePackages, markRead, subscribeNotifications, subscribeTables, ensurePush } from './data.js';
+import { S, init, loadAll, signIn, signOut, resetPassword, setPassword, demoLogin, expirePackages, markRead, subscribeNotifications, subscribeTables, ensurePush, rpc } from './data.js';
 import { APP_VERSION, $, $$, esc, ic, ICONS, toast, app, UI, openModal, closeModal, run, friendlyError, liveRender , loadErrorBox } from './ui.js';
 import { VIEWS, ACTIONS, INPUTS } from './registry.js';
 import { t, setLang, setI18nActive, langSwitch } from './i18n.js';
@@ -91,8 +91,17 @@ function showPortalSoon(role) {
 /* =====================================================================
    MASUK KE PORTAL
    ===================================================================== */
+/** Laporkan "terakhir dilihat" + app dipasang kepada admin (Pengguna & Akses). Maks sekali / 5 minit. */
+function startHeartbeat() {
+  if (S.mode !== 'supabase' || startHeartbeat.on) return; startHeartbeat.on = true;
+  const ua = navigator.userAgent, plat = /iphone|ipad|ipod/i.test(ua) ? 'iPhone/iPad' : /android/i.test(ua) ? 'Android' : /mac/i.test(ua) ? 'Mac' : /windows/i.test(ua) ? 'Windows' : 'Lain-lain';
+  const beat = () => { const inst = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true; rpc('touch_me', { p_installed: !!inst, p_platform: plat }).catch(() => {}); };
+  setTimeout(beat, 3000); setInterval(beat, 5 * 60_000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') beat(); });
+}
 async function enter() {
   setTimeout(() => ensurePush(), 4000);   // langgan push jika notifikasi sudah dibenarkan
+  startHeartbeat();
   const p = S.profile;
   if (!p) return showMessage('Profil tidak dijumpai', 'Akaun anda sudah wujud tetapi belum mempunyai profil. Hubungi admin akademi.');
   if (!p.active) return showMessage('Akaun dinyahaktifkan', 'Sila hubungi admin akademi.');

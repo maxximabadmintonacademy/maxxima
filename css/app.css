@@ -740,3 +740,4 @@ td.qcell:hover { background: rgba(60, 90, 200, .08); box-shadow: inset 0 0 0 1px
 .hn-ck .ck-strip.quiet .btn{min-height:36px;font-size:13px}
 [data-theme=dark] .hn-btns .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
 [data-theme=dark] .hn-btns .btn:not(.primary){background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22);color:#fff}
+.grid.g-4{grid-template-columns:repeat(4,minmax(0,1fr))}@media (max-width:900px){.grid.g-4{grid-template-columns:repeat(2,minmax(0,1fr))}}

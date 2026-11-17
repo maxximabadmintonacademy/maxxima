@@ -4,15 +4,33 @@ import { themeSwitch } from '../theme.js';
 import { langSwitch } from '../i18n.js';
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove, saveSetting, inviteUser, rpc, setting } from '../data.js';
-import { ic, esc, F, num, val, badge, avatar, app, toast, openModal, confirmModal, pageHead, fmtDate, LABEL, $ } from '../ui.js';
+import { ic, esc, F, num, val, badge, avatar, app, UI, toast, openModal, confirmModal, pageHead, fmtDate, LABEL, $ } from '../ui.js';
 import { T, byId, venueName, progName, academy, billing } from './helpers.js';
 import { LANGS_ALL, ageGroups } from './sessions.js';
 
 /* =====================================================================
    PENGGUNA & AKSES
    ===================================================================== */
+/* Aktiviti pengguna (SQL 56): log masuk terakhir, app dipasang, notifikasi */
+let ACT = null, actAt = 0;
+async function loadActivity() {
+  if (S.mode !== 'supabase') { ACT = Object.fromEntries(T('profiles').map((p, i) => [p.id, { last_seen_at: i % 3 ? new Date(Date.now() - i * 36e5).toISOString() : null, app_installed: i % 2 === 0 && i % 3 !== 0, app_platform: i % 2 ? 'Android' : 'iPhone/iPad', push_devices: i % 4 === 1 ? 1 : 0 }])); return; }
+  try { const rows = await rpc('admin_user_activity'); ACT = Object.fromEntries((rows || []).map(r => [r.id, r])); } catch (e) { ACT = { _err: e.message || String(e) }; }
+}
+const ago = t => { if (!t) return ''; const m = Math.round((Date.now() - new Date(t)) / 6e4); return m < 2 ? 'baru tadi' : m < 60 ? `${m} minit lalu` : m < 1440 ? `${Math.round(m / 60)} jam lalu` : `${Math.round(m / 1440)} hari lalu`; };
+function actCells(p) {
+  const a = ACT?.[p.id]; if (!ACT) return '<td colspan="3" class="muted" style="font-size:12px">memuat…</td>';
+  if (ACT._err) return '<td colspan="3" class="muted" style="font-size:12px">jalankan SQL 56</td>';
+  const seen = a?.last_seen_at || a?.last_sign_in_at;
+  return `<td style="white-space:nowrap">${seen ? `<span title="${esc(new Date(seen).toLocaleString('ms-MY'))}">${ago(seen)}</span>` : '<span class="badge b-bad">Belum log masuk</span>'}</td>
+    <td>${a?.app_installed ? `<span class="badge b-ok">✓ Dipasang</span>` : seen ? '<span class="badge b-warn">Pelayar sahaja</span>' : '<span class="muted">—</span>'}${a?.app_platform ? `<div class="muted" style="font-size:11.5px">${esc(a.app_platform)}</div>` : ''}</td>
+    <td>${a?.push_devices ? `<span class="badge b-ok">🔔 Hidup${a.push_devices > 1 ? ' · ' + a.push_devices + ' peranti' : ''}</span>` : seen ? '<span class="badge b-muted">🔕 Tiada</span>' : '<span class="muted">—</span>'}</td>`;
+}
+const actState = p => { const a = ACT?.[p.id], seen = a?.last_seen_at || a?.last_sign_in_at; return { seen: !!seen, app: !!a?.app_installed, push: !!a?.push_devices }; };
 VIEWS.pengguna = () => {
-  const ps = T('profiles').slice().sort((a, b) => ['admin', 'coach', 'parent'].indexOf(a.role) - ['admin', 'coach', 'parent'].indexOf(b.role) || (a.full_name || a.email || '').localeCompare(b.full_name || b.email || ''));
+  if (!ACT || Date.now() - actAt > 60_000) { actAt = Date.now(); loadActivity().then(() => { if (location.hash === '#pengguna') app.render(); }); }
+  const F0 = UI.userF || '', R0 = UI.userR || '';
+  const ps = T('profiles').filter(p => (!R0 || p.role === R0) && (!F0 || !ACT || ACT._err || (F0 === 'never' ? !actState(p).seen : F0 === 'noapp' ? actState(p).seen && !actState(p).app : F0 === 'nopush' ? actState(p).seen && !actState(p).push : true))).slice().sort((a, b) => ['admin', 'coach', 'parent'].indexOf(a.role) - ['admin', 'coach', 'parent'].indexOf(b.role) || (a.full_name || a.email || '').localeCompare(b.full_name || b.email || ''));
   return `
   ${pageHead('Pengguna & Akses', 'Setiap peranan hanya melihat data yang dibenarkan — dikuatkuasakan oleh pangkalan data, bukan hanya paparan.', `<button class="btn primary" data-action="user-invite">${ic('plus', 'sm')} Tambah Pengguna</button>`)}
   <div class="grid g-3 mb">
@@ -20,16 +38,22 @@ VIEWS.pengguna = () => {
     <div class="card card-pad"><div class="badge b-info">Coach</div><p style="margin-top:8px;font-size:13px">Hanya kelas dan pelajar sendiri: kehadiran, prestasi, pelan kelas. Tiada akses yuran atau gaji.</p></div>
     <div class="card card-pad"><div class="badge b-lime">Ibu Bapa</div><p style="margin-top:8px;font-size:13px">Hanya anak yang dipautkan: jadual, yuran, progres dan pengesahan kehadiran.</p></div>
   </div>
+  ${(() => { const all = T('profiles').filter(p => p.role !== 'admin' && p.active); if (!ACT || ACT._err) return '';
+    const n = f => all.filter(f).length, st = p => actState(p);
+    const card = (k, lbl, v, tone) => `<button class="card card-pad" style="text-align:left;cursor:pointer;${F0 === k ? 'box-shadow:inset 0 0 0 2px var(--brand)' : ''}" data-action="user-f" data-id="${F0 === k ? '' : k}"><div class="muted" style="font-size:12.5px">${lbl}</div><div style="font-size:24px;font-weight:800;color:var(--${tone})">${v}</div></button>`;
+    return `<div class="grid g-4 mb">${card('', 'Ibu bapa & coach', all.length, 'ink')}${card('never', 'Belum pernah log masuk', n(p => !st(p).seen), 'bad')}${card('noapp', 'Log masuk, app belum dipasang', n(p => st(p).seen && !st(p).app), 'warn')}${card('nopush', 'Notifikasi belum dihidupkan', n(p => st(p).seen && !st(p).push), 'warn')}</div>`; })()}
+  <div class="filters mb">${[['', 'Semua'], ['parent', 'Ibu bapa'], ['coach', 'Coach'], ['admin', 'Admin']].map(([v, l]) => `<button class="chip ${R0 === v ? 'on' : ''}" style="cursor:pointer" data-action="user-r" data-id="${v}">${l}</button>`).join('')}${F0 ? `<span class="muted" style="font-size:12.5px">· ditapis: ${{ never: 'belum log masuk', noapp: 'app belum dipasang', nopush: 'notifikasi belum hidup' }[F0]} <a href="javascript:void 0" data-action="user-f" data-id="">kosongkan</a></span>` : ''}</div>
   <div class="card"><div class="table-wrap"><table>
-    <thead><tr><th>Pengguna</th><th>Peranan</th><th>Dipautkan</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Pengguna</th><th>Peranan</th><th>Dipautkan</th><th>Terakhir aktif</th><th>App</th><th>Notifikasi</th><th>Status</th><th></th></tr></thead>
     <tbody>${ps.map(p => {
       const kids = T('students').filter(s => s.guardian_id === p.id), sf = T('staff').find(s => s.profile_id === p.id);
       return `<tr><td><div class="cell-person">${avatar(p.full_name || p.email)}<div><b>${esc(p.full_name || '(tanpa nama)')}${p.id === S.profile.id ? ' <span class="badge b-muted">anda</span>' : ''}</b><span>${esc(p.email || '')}</span></div></div></td>
         <td>${badge(p.role)}</td>
         <td>${p.role === 'parent' ? (kids.length ? kids.map(k => esc(k.full_name)).join(', ') : '<span class="muted">tiada anak dipautkan</span>') : p.role === 'coach' ? (sf ? esc(sf.full_name) : '<span class="muted">tiada rekod staf dipautkan</span>') : '<span class="muted">—</span>'}</td>
+        ${actCells(p)}
         <td>${p.active ? badge('active') : badge('paused', 'Dinyahaktifkan')}</td>
         <td><button class="btn sm" data-action="user-edit" data-id="${p.id}">${ic('edit', 'sm')}</button></td></tr>`;
-    }).join('') || `<tr><td colspan="5" class="empty">Belum ada pengguna.</td></tr>`}</tbody>
+    }).join('') || `<tr><td colspan="8" class="empty">Tiada pengguna untuk tapisan ini.</td></tr>`}</tbody>
   </table></div></div>`;
 };
 
@@ -37,6 +61,8 @@ const studentChecklist = (selected = [], pid = null) => {
   const studs = T('students').filter(s => s.status !== 'left' && (!s.guardian_id || s.guardian_id === pid)).sort((a, b) => a.full_name.localeCompare(b.full_name));
   return `<div class="checklist">${studs.map(s => `<label class="check-row"><input type="checkbox" name="student_ids" value="${s.id}" ${selected.includes(s.id) ? 'checked' : ''}><span>${esc(s.full_name)}</span><em>${esc(s.guardian_name || '')}</em></label>`).join('') || '<div class="muted" style="padding:10px">Tiada pelajar belum dipautkan.</div>'}</div>`;
 };
+ACTIONS['user-f'] = v => { UI.userF = v || ''; app.render(); };
+ACTIONS['user-r'] = v => { UI.userR = v || ''; app.render(); };
 const staffOpts = (pid = null) => [['', '— Tiada —'], ...T('staff').filter(s => s.active && (!s.profile_id || s.profile_id === pid)).map(s => [s.id, s.full_name])];
 
 const credModal = (r, name, phone) => {
