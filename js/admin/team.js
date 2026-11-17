@@ -2,7 +2,7 @@ import { uploadMedia, photoAvatar } from '../media.js';
 // Coach dan HR & Staf.
 import { VIEWS, ACTIONS } from '../registry.js';
 import { S, insert, update, remove, rpc, setting, saveSetting } from '../data.js';
-import { LANGS_ALL, langName, calItems, sHours, rosterOf, sTime, sCoach, sCourt, groupsOf, isPersonal } from './sessions.js';
+import { LANGS_ALL, langName, calItems, sHours, rosterOf, sTime, sCoach, sCourt, groupsOf, isPersonal, coachIds } from './sessions.js';
 import { ic, esc, F, RM, sum, num, val, badge, avatar, app, toast, openModal, confirmModal, pageHead, fmtShort, fmtDate, todayISO, addDays, LABEL, DAYS, hm } from '../ui.js';
 import { T, byId, venueName, progName, staffName, classHours, enrolledIn } from './helpers.js';
 
@@ -159,8 +159,8 @@ function waDayText(date) {
   items.forEach(x => {
     const [a, b] = sTime(x.s, x.c), title = x.c.title || progName(x.c.programme_id), v = venueName(x.c.venue_id);
     const ros = rosterOf(x.s, x.c), who = isPersonal(x.c) ? ros.map(r => r.full_name).join(', ') : `${ros.length} pelajar`;
-    const main = sCoach(x.s, x.c), gs = x.s ? groupsOf(x.s.id).filter(g => g.coach_id) : [];
-    const coaches = [...new Set([main, ...gs.map(g => g.coach_id)].filter(Boolean))];
+    const gs = x.s ? groupsOf(x.s.id).filter(g => g.coach_id) : [];
+    const coaches = coachIds(x.s, x.c);
     if (!coaches.length) noCoach.push(`• ${a}–${b} · ${title} · ${v}`);
     coaches.forEach(cid => {
       const myG = gs.filter(g => g.coach_id === cid && g.category && !/^coach \d/i.test(g.category));

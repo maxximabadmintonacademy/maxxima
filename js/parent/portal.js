@@ -32,7 +32,10 @@ const activePkgs = id => T('student_packages').filter(p => p.student_id === id &
 const flexPkg = id => activePkgs(id).find(p => p.schedule_mode === 'flexible' && pkgRemaining(p) > 0);
 const curKid = () => { const ks = kids(); return ks.find(k => k.id === UI.pKid) || ks[0]; };
 const classOf = sid => { const s = byId('class_sessions', sid); return { s, c: s && byId('classes', s.class_id) }; };
-const when = (date, c) => `${DAYS[new Date(date + 'T00:00:00').getDay()]}, ${fmtShort(date)}${c ? ' · ' + hm(c.start_time) + '–' + hm(c.end_time) : ''}`;
+const when = (date, c) => {   // masa ikut SESI (jika dipinda), bukan templat kelas — sama seperti kalendar admin & coach
+  const ss = c?.id ? (S.t.class_sessions || []).find(x => x.class_id === c.id && x.session_date === date) : null, a = hm(ss?.start_time || c?.start_time), b = hm(ss?.end_time || c?.end_time);
+  return `${DAYS[new Date(date + 'T00:00:00').getDay()]}, ${fmtShort(date)}${c && a ? ' · ' + a + '–' + b : ''}`;
+};
 const where = c => c ? `${progName(c.programme_id)} · ${venueName(c.venue_id)}` : '';
 const unread = () => T('notifications').filter(n => !n.read_at);
 

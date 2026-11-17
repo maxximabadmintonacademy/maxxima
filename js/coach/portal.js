@@ -87,7 +87,7 @@ function onboard() {
 
 const head = (title, sub) => `<div class="page-head"><div><h1>${title}</h1><p>${sub || ''}</p></div></div>`;
 const st = () => meStaff();
-const myCat = s => { const me = st(); return s ? groupsOf(s.id).filter(g => g.coach_id === me?.id).map(g => g.category) : []; };
+const myCat = s => { const me = st(); return s ? groupsOf(s.id).filter(g => g.coach_id === me?.id && !/^coach \d+$/i.test(g.category || '')).map(g => g.category) : []; };
 const card = ({ s, c, date }, showDate) => {
   const [a, b] = sTime(s, c), cats = myCat(s), n = s ? rosterOf(s, c).length : T('class_enrolments').filter(e => e.class_id === c.id).length;
   const done = s ? T('attendance').filter(x => x.session_id === s.id && x.status !== 'booked').length : 0;

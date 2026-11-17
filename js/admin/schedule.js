@@ -1,9 +1,9 @@
 // Jadual Kelas (templat mingguan) dan Kehadiran (sesi bertarikh).
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove } from '../data.js';
-import { ic, esc, F, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, hm, todayISO, addDays, parseISO, iso, monthKey, monthLabel, DAYS, LABEL, barColor, $ } from '../ui.js';
+import { ic, esc, F, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, hm, todayISO, addDays, parseISO, iso, fmtShort, monthKey, monthLabel, DAYS, LABEL, barColor, $ } from '../ui.js';
 import { T, byId, venueName, progName, staffName, studentName, progColor, enrolledIn, classLabel, attRate, activeStudents, livePackages, pkgRemaining } from './helpers.js';
-import { ageGroups, langWarn, langGap, langName, calItems, sTime, sCoach, sCourt, groupsOf, rosterOf } from './sessions.js';
+import { ageGroups, langWarn, langGap, langName, calItems, sTime, sCoach, sCourt, groupsOf, rosterOf, syncCoCoaches, coachIds } from './sessions.js';
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0];
 
@@ -15,7 +15,7 @@ VIEWS.jadual = () => {
   const t0 = todayISO(), t14 = addDays(t0, 14);
   const persNames = c => { const ids = new Set(enrolledIn(c.id).map(e => e.student_id)); T('class_sessions').filter(s => s.class_id === c.id && s.session_date >= t0 && s.session_date <= t14).forEach(s => T('attendance').filter(a => a.session_id === s.id).forEach(a => ids.add(a.student_id))); return [...ids].map(studentName); };
   const persActive = c => !c.active && byId('programmes', c.programme_id)?.kind === 'personal' && T('class_sessions').some(s => s.class_id === c.id && s.status !== 'cancelled' && s.session_date >= t0 && s.session_date <= t14);
-  const classes = T('classes').filter(c => (c.active || (UI.showPers !== false && persActive(c))) && (!vf || c.venue_id === vf));
+  const classes = T('classes').filter(c => c.active && (!vf || c.venue_id === vf));
   const seats = classes.reduce((t, c) => t + enrolledIn(c.id).length, 0), cap = classes.reduce((t, c) => t + c.capacity, 0);
   return `
   ${pageHead('Jadual Kelas', `${classes.length} kelas seminggu · penggunaan kapasiti ${cap ? Math.round(seats / cap * 100) : 0}%`, `<a class="btn" href="#kalendar">${ic('calendar', 'sm')} Kalendar Sesi</a><button class="btn primary" data-action="class-add">${ic('plus', 'sm')} Tambah Kelas</button>`)}
@@ -25,20 +25,23 @@ VIEWS.jadual = () => {
     ${T('programmes').filter(p => p.active).map(p => `<span class="chip"><span style="width:10px;height:10px;border-radius:3px;background:${progColor(p.id)}"></span>${esc(p.name)}</span>`).join('')}
   </div>
   <div class="week">${WEEK.map(d => {
-    const cs = classes.filter(c => c.weekday === d).sort((a, b) => a.start_time.localeCompare(b.start_time));
+    // Kelas tetap ikut templat; slot personal ikut SESI SEBENAR 14 hari (hari/masa/coach selepas dipinda) — sama seperti Kalendar
+    const pers = UI.showPers === false ? [] : calItems(t0, t14, { type: 'personal', ...(vf ? { venue: vf } : {}) }).filter(x => x.s && x.s.status !== 'cancelled' && !x.c.active && parseISO(x.date).getDay() === d);
+    const pSeen = new Set(), pSlots = pers.filter(x => { const k = x.c.id + '|' + sTime(x.s, x.c).join('-'); if (pSeen.has(k)) return false; pSeen.add(k); return true; });
+    const cs = classes.filter(c => c.active && c.weekday === d).sort((a, b) => a.start_time.localeCompare(b.start_time));
     return `<div class="day-col ${d === today ? 'today' : ''}">
       <div class="day-head"><b>${DAYS[d]}</b>${d === today ? '<span class="tag">Hari ini</span>' : `<span class="muted" style="font-size:11.5px">${cs.length} kelas</span>`}</div>
-      <div class="day-body">${cs.map(c => { const n = enrolledIn(c.id).length; if (!c.active) return `
-        <button class="slot" data-action="class-view" data-id="${c.id}" style="border-left-color:${progColor(c.programme_id)};border-left-style:dashed">
-          <b>${hm(c.start_time)}–${hm(c.end_time)}</b>
-          <div style="font-weight:600">${esc(persNames(c).join(', ') || progName(c.programme_id))}</div>
-          <div class="meta">${esc(progName(c.programme_id))} · ${esc(staffName(c.coach_id))}</div>
-          <div class="meta">${vf ? '' : esc(venueName(c.venue_id))}</div>
-        </button>`; return `
+      <div class="day-body">${[...cs.map(c => ({ c, t: hm(c.start_time) })), ...pSlots.map(x => ({ c: x.c, x, t: sTime(x.s, x.c)[0] }))].sort((a, b) => a.t.localeCompare(b.t)).map(({ c, x }) => { const n = enrolledIn(c.id).length; if (x) { const [a, b] = sTime(x.s, x.c), dates = pers.filter(y => y.c.id === c.id && sTime(y.s, y.c).join('-') === [a, b].join('-')).map(y => fmtShort(y.date)); return `
+        <button class="slot" data-action="sess-open" data-id="${x.s.id}" style="border-left-color:${progColor(c.programme_id)};border-left-style:dashed">
+          <b>${a}–${b}</b>
+          <div style="font-weight:600">${esc(c.title || persNames(c).join(', ') || progName(c.programme_id))}</div>
+          <div class="meta">${esc(progName(c.programme_id))} · ${esc([sCoach(x.s, c), ...groupsOf(x.s.id).map(g => g.coach_id)].filter((v, i, A) => v && A.indexOf(v) === i).map(staffName).join(', ') || 'tiada coach')}</div>
+          <div class="meta">${vf ? '' : esc(venueName(c.venue_id)) + ' · '}${dates.join(', ')}</div>
+        </button>`; } return `
         <button class="slot" data-action="class-view" data-id="${c.id}" style="border-left-color:${progColor(c.programme_id)}">
           <b>${hm(c.start_time)}–${hm(c.end_time)}</b>
-          <div style="font-weight:600">${esc(progName(c.programme_id))}</div>
-          <div class="meta">${esc(staffName(c.coach_id))}</div>
+          <div style="font-weight:600">${esc(c.title || progName(c.programme_id))}</div>
+          <div class="meta">${c.title ? esc(progName(c.programme_id)) + ' · ' : ''}${esc([c.coach_id, ...(c.extra_coach_ids || [])].filter(Boolean).map(staffName).join(', ') || 'tiada coach')}</div>
           ${(c.categories || []).length ? `<div class="meta">${c.categories.map(esc).join(' · ')}</div>` : ''}
           ${!c.coach_id || !c.court ? `<div class="warnline">${ic('alert', 'sm')} ${[!c.coach_id && 'tiada coach', !c.court && 'tiada court'].filter(Boolean).join(' · ')}</div>` : langGap(c.coach_id, c.venue_id).length ? `<div class="warnline">${ic('alert', 'sm')} bahasa coach</div>` : ''}
           <div class="meta">${vf ? '' : esc(venueName(c.venue_id)) + '<br>'}${esc(c.court || '')} · <span style="color:${n >= c.capacity ? 'var(--warn)' : 'inherit'};font-weight:600">${n}/${c.capacity}</span></div>
@@ -56,6 +59,7 @@ const classForm = c => `<div class="form-grid">
   ${F('Mula', 'start_time', { type: 'time', value: hm(c?.start_time) || '16:30', req: true })}
   ${F('Tamat', 'end_time', { type: 'time', value: hm(c?.end_time) || '18:30', req: true })}
   ${F('Coach', 'coach_id', { value: c?.coach_id, opts: [['', '— Tentukan kemudian —'], ...T('staff').filter(s => s.active).map(s => [s.id, s.full_name])] })}
+  <div class="f full">Coach tambahan setiap minggu <span class="muted" style="font-weight:500">(pilihan — cth. School Group 2 court, 2 coach; setiap coach dikira gaji & check in)</span><div class="langchk">${T('staff').filter(x => x.active).map(x => `<label><input type="checkbox" name="extra_coach_ids" value="${x.id}" ${(c?.extra_coach_ids || []).includes(x.id) ? 'checked' : ''}> ${esc(x.full_name)}</label>`).join('')}</div></div>
   ${F('Kapasiti', 'capacity', { type: 'number', value: c?.capacity ?? 12, min: 1, req: true })}
   <div class="f full">Kategori umur dalam sesi ini (kosong = satu kumpulan)<div class="langchk">${ageGroups().map(g => `<label><input type="checkbox" name="categories" value="${esc(g.code)}" ${(c?.categories || []).includes(g.code) ? 'checked' : ''}> ${esc(g.code)} <span class="muted">(${g.min}–${g.max})</span></label>`).join('')}</div><span class="hint">Pelajar diletakkan automatik ikut umur. Coach & court setiap kategori ditetapkan pada sesi (Kalendar Sesi).</span></div>
   ${F('Cara bil pelajar tanpa pakej', 'billing', { value: c?.billing || 'package', opts: [['package', 'Pakej (lalai)'], ['walkin', 'Walk-in setiap sesi'], ['monthly', 'Bil bulanan ikut sesi']] })}
@@ -66,7 +70,7 @@ const classForm = c => `<div class="form-grid">
 </div>`;
 const classPatch = (d, isEdit) => {
   if (d.end_time <= d.start_time) throw new Error('Masa tamat mesti selepas masa mula.');
-  return { venue_id: d.venue_id, programme_id: d.programme_id, weekday: Number(d.weekday), start_time: d.start_time, end_time: d.end_time, court: val(d.court), coach_id: val(d.coach_id), capacity: Number(d.capacity), categories: [].concat(d.categories || []).filter(Boolean), billing: d.billing || 'package', rate_coach: num(d.rate_coach), rate_court: num(d.rate_court), ...(isEdit ? { active: d.active === '1' } : { active: true }) };
+  return { venue_id: d.venue_id, programme_id: d.programme_id, weekday: Number(d.weekday), start_time: d.start_time, end_time: d.end_time, court: val(d.court), coach_id: val(d.coach_id), extra_coach_ids: [].concat(d.extra_coach_ids || []).filter(x => x && x !== d.coach_id), capacity: Number(d.capacity), categories: [].concat(d.categories || []).filter(Boolean), billing: d.billing || 'package', rate_coach: num(d.rate_coach), rate_court: num(d.rate_court), ...(isEdit ? { active: d.active === '1' } : { active: true }) };
 };
 
 const bindLang = f => { const chk = () => { f.querySelector('#clsWarn').innerHTML = f.coach_id.value && f.venue_id.value ? langWarn(f.coach_id.value, f.venue_id.value) : ''; }; f.coach_id.addEventListener('change', chk); f.venue_id.addEventListener('change', chk); return f; };
@@ -74,8 +78,16 @@ Object.assign(ACTIONS, {
   'class-add': () => bindLang(openModal({ title: 'Tambah Kelas', submit: 'Tambah ke Jadual', wide: true, body: classForm(), onSubmit: async d => { await insert('classes', classPatch(d)); toast('Kelas ditambah'); app.render(); } })),
   'class-edit': id => { const c0 = byId('classes', id);
     bindLang(openModal({ title: 'Edit Kelas', wide: true, body: classForm(c0) + `<p class="muted" style="font-size:12.5px;margin-top:10px">Perubahan masa, lokasi, coach & court terpakai pada semua sesi akan datang. Jika hari ditukar, sesi akan datang yang belum berlangsung dipindahkan ke hari baharu dalam minggu yang sama (rekod kehadiran ikut dipindah). Sesi yang masanya diubah secara khusus kekal dengan masa khusus itu.</p>`,
-      onSubmit: async d => { const patch = classPatch(d, true), oldWd = c0.weekday; await update('classes', id, patch);
-        let moved = 0;
+      onSubmit: async d => { const patch = classPatch(d, true), oldWd = c0.weekday, prev = { ...c0, extra_coach_ids: [...(c0.extra_coach_ids || [])] }; await update('classes', id, patch);
+        let moved = 0, synced = 0;
+        // Sesi akan datang yang menyalin nilai LAMA kelas (coach/masa/court) → kosongkan supaya ikut kelas (tally dengan Jadual Mingguan)
+        for (const s of T('class_sessions').filter(x => x.class_id === id && x.status === 'scheduled' && x.session_date >= todayISO())) {
+          const sp = {};
+          if (s.coach_id && s.coach_id === prev.coach_id && patch.coach_id !== prev.coach_id) sp.coach_id = null;
+          if (s.court && s.court === prev.court && patch.court !== prev.court) sp.court = null;
+          if (s.start_time && hm(s.start_time) === hm(prev.start_time) && hm(s.end_time) === hm(prev.end_time) && (hm(patch.start_time) !== hm(prev.start_time) || hm(patch.end_time) !== hm(prev.end_time))) { sp.start_time = null; sp.end_time = null; }
+          if (Object.keys(sp).length) { await update('class_sessions', s.id, sp); synced++; }
+        }
         if (patch.weekday !== oldWd) {
           const mon = w => (w + 6) % 7, delta = mon(patch.weekday) - mon(oldWd), t0 = todayISO();
           for (const s of T('class_sessions').filter(x => x.class_id === id && x.status === 'scheduled' && x.session_date >= t0 && parseISO(x.session_date).getDay() === oldWd)) {
@@ -85,7 +97,9 @@ Object.assign(ACTIONS, {
             moved++;
           }
         }
-        toast('Kelas dikemas kini' + (moved ? ` · ${moved} sesi akan datang dipindah ke ${DAYS[patch.weekday]}` : '')); app.render(); } })); },
+        if (JSON.stringify(prev.extra_coach_ids || []) !== JSON.stringify(patch.extra_coach_ids) || prev.coach_id !== patch.coach_id)
+          await syncCoCoaches(T('class_sessions').filter(x => x.class_id === id && x.status === 'scheduled' && x.session_date >= todayISO()).map(x => x.id));
+        toast('Kelas dikemas kini' + (moved ? ` · ${moved} sesi akan datang dipindah ke ${DAYS[patch.weekday]}` : '') + (synced ? ` · ${synced} sesi diselaraskan` : '')); app.render(); } })); },
   'class-del': id => confirmModal({ title: 'Padam kelas?', message: 'Semua sesi dan rekod kehadiran kelas ini akan turut dipadam. Pertimbangkan menyahaktifkan kelas (Edit) untuk menyimpan sejarah.', ok: 'Padam Kelas', danger: true, onOk: async () => { await remove('classes', id); toast('Kelas dipadam'); app.render(); } }),
 
   'class-view': id => {
@@ -151,7 +165,7 @@ VIEWS.kehadiran = () => {
 
   ${sessions.length ? sessions.map(({ s, c }) => {
     const [t1, t2] = sTime(s, c), court = sCourt(s, c);
-    const coaches = [...new Set([sCoach(s, c), ...(s ? groupsOf(s.id).map(g => g.coach_id) : [])].filter(Boolean))].map(staffName).join(', ') || 'tiada coach';
+    const coaches = coachIds(s, c).map(staffName).join(', ') || 'tiada coach';
     const head = `<div><h3>${t1}–${t2} · ${esc(c.title || progName(c.programme_id))}</h3><div class="sub">${c.title ? esc(progName(c.programme_id)) + ' · ' : ''}${esc(venueName(c.venue_id))}${court ? ' · ' + esc(court) : ''} · ${esc(coaches)}</div></div>`;
     if (!s) return `<div class="card mb" style="border-style:dashed"><div class="card-head" style="flex-wrap:wrap">${head}
         <div class="actions"><span class="badge b-muted">belum dijana</span><button class="btn sm primary" data-action="sess-open-v" data-id="${c.id}|${date}">${ic('users', 'sm')} Buka & rekod kehadiran</button></div></div>
@@ -220,7 +234,7 @@ Object.assign(ACTIONS, {
       ${F('Kelas', 'class_id', { req: true, full: true, opts: [['', '— Pilih kelas —'], ...cls.map(c => [c.id, `${DAYS[c.weekday]} ${hm(c.start_time)} · ${progName(c.programme_id)} · ${venueName(c.venue_id)}`])] })}
       ${F('Tarikh', 'session_date', { type: 'date', value: todayISO(), req: true, full: true })}
     </div><p class="muted" style="margin-top:10px;font-size:12.5px">Untuk sesi tambahan atau ganti di luar jadual biasa. Tarikh boleh pada mana-mana hari.</p>`,
-      onSubmit: async d => { if (T('class_sessions').some(s => s.class_id === d.class_id && s.session_date === d.session_date)) throw new Error('Sesi untuk kelas dan tarikh ini sudah wujud.'); await insert('class_sessions', { class_id: d.class_id, session_date: d.session_date, status: 'scheduled' }); toast('Sesi ditambah'); app.render(); } });
+      onSubmit: async d => { if (T('class_sessions').some(s => s.class_id === d.class_id && s.session_date === d.session_date)) throw new Error('Sesi untuk kelas dan tarikh ini sudah wujud.'); { const ns = await insert('class_sessions', { class_id: d.class_id, session_date: d.session_date, status: 'scheduled' }); await syncCoCoaches(ns?.id); } toast('Sesi ditambah'); app.render(); } });
   },
   'sess-generate': () => openModal({
     title: 'Jana Sesi Bulanan', submit: 'Jana Sesi',
@@ -233,7 +247,7 @@ Object.assign(ACTIONS, {
         const dt = new Date(y, m, day), date = iso(dt);
         for (const c of T('classes').filter(c => c.active && c.weekday === dt.getDay())) if (!have.has(c.id + '|' + date)) rows.push({ class_id: c.id, session_date: date, status: 'scheduled' });
       }
-      if (rows.length) await insert('class_sessions', rows);
+      if (rows.length) { const made = await insert('class_sessions', rows); await syncCoCoaches([].concat(made || []).filter(x => (byId('classes', x.class_id)?.extra_coach_ids || []).length).map(x => x.id)); }
       toast(rows.length ? `${rows.length} sesi dijana untuk ${monthLabel(d.month + '-01')}` : 'Semua sesi bulan ini sudah wujud'); app.render();
     },
   }),

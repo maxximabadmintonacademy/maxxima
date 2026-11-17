@@ -4,7 +4,7 @@ import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, loadRange } from '../data.js';
 import { ic, esc, F, val, UI, app, toast, openModal, pageHead, hm, todayISO, addDays, parseISO, iso, fmtDate, fmtShort, DAYS, MONTHS } from '../ui.js';
 import { T, byId, venueName, progName, staffName, studentName, progColor, livePackages } from './helpers.js';
-import { courtLbl, calItems, sessionAlerts, sTime, sCoach, sCourt, isPersonal, groupsOf, rosterOf, langWarn, ensureSession } from './sessions.js';
+import { courtLbl, calItems, sessionAlerts, sTime, sCoach, sCourt, isPersonal, groupsOf, rosterOf, langWarn, ensureSession, coachIds, syncCoCoaches } from './sessions.js';
 
 const mondayOf = d => { const x = parseISO(d), w = (x.getDay() + 6) % 7; x.setDate(x.getDate() - w); return iso(x); };
 const C = () => (UI.cal ||= { mode: 'minggu', date: todayISO(), venue: '', coach: '', prog: '', type: '', alert: false });
@@ -18,7 +18,7 @@ export function calRange(c = C()) {
 
 const slot = ({ s, c, date }, showDate) => {
   const [a, b] = sTime(s, c), al = sessionAlerts(s, c), n = s ? rosterOf(s, c).length : T('class_enrolments').filter(e => e.class_id === c.id).length;
-  const gs = s ? groupsOf(s.id) : [], coaches = [...new Set([sCoach(s, c), ...gs.map(g => g.coach_id)].filter(Boolean))].map(staffName).join(', ');
+  const coaches = coachIds(s, c).map(staffName).join(', ');
   const personal = isPersonal(c), who = personal ? rosterOf(s, c).map(x => x.full_name.split(' ').slice(0, 2).join(' ')).join(', ') : '';
   return `<button class="slot ${al.length ? 'alert' : ''} ${s ? '' : 'virtual'} ${s?.status === 'cancelled' ? 'cancel' : ''}" data-action="${s ? 'sess-open' : 'sess-open-v'}" data-id="${s ? s.id : c.id + '|' + date}" style="border-left-color:${progColor(c.programme_id)}">
     <b>${showDate ? fmtShort(date) + ' · ' : ''}${a}–${b} · ${esc(c.title || progName(c.programme_id))}</b>

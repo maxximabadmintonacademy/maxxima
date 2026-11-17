@@ -1,4 +1,4 @@
-export const APP_VERSION = 'v70';
+export const APP_VERSION = 'v72';
 // Pembantu UI dikongsi: ikon, format, lencana, modal, toast, borang.
 import { t, getLang } from './i18n.js';
 export const $ = (s, r = document) => r.querySelector(s);

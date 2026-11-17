@@ -2,7 +2,7 @@ import { photoAvatar } from '../media.js';
 // Sesi bertarikh: kategori umur, coach & court setiap kategori, amaran, panel kehadiran.
 // Dikongsi oleh Kalendar (admin) dan Portal Coach.
 import { ACTIONS, INPUTS } from '../registry.js';
-import { S, insert, update, remove, setting, rpc } from '../data.js';
+import { S, insert, update, remove, setting, rpc, refresh } from '../data.js';
 import { planView, openPlanEditor } from '../planner.js';
 import { ic, esc, F, val, badge, avatar, app, toast, openModal, hm, todayISO, addDays, parseISO, fmtDate, DAYS, LABEL } from '../ui.js';
 import { T, byId, venueName, progName, staffName, enrolledIn, livePackages, pkgRemaining, EXTRA_TASKS } from './helpers.js';
@@ -88,17 +88,35 @@ export function calItems(from, to, f = {}) {
     if (f.prog && c.programme_id !== f.prog) return false;
     if (f.type === 'group' && isPersonal(c)) return false;
     if (f.type === 'personal' && !isPersonal(c)) return false;
-    if (f.coach) { const ids = [sCoach(s, c), ...(s ? groupsOf(s.id).map(g => g.coach_id) : [])]; if (!ids.includes(f.coach)) return false; }
-    if (f.mine) { const ids = [sCoach(s, c), ...(s ? groupsOf(s.id).map(g => g.coach_id) : [])]; if (!ids.includes(f.mine)) return false; }
+    if (f.coach && !coachIds(s, c).includes(f.coach)) return false;
+    if (f.mine && !coachIds(s, c).includes(f.mine)) return false;
     if (f.alert && !sessionAlerts(s, c).length) return false;
     return true;
   }).sort((a, b) => a.date.localeCompare(b.date) || sTime(a.s, a.c)[0].localeCompare(sTime(b.s, b.c)[0]));
 }
 
+/** Baris "Coach 1/2/…" = coach bersama (bukan kategori umur). */
+export const isCoGroup = g => /^coach \d+$/i.test(g?.category || '');
+/** Semua coach sesi: sesi sebenar → coach sesi + kumpulan; sesi belum dijana → coach kelas + coach tambahan kelas. */
+export const coachIds = (s, c) => [...new Set((s ? [sCoach(s, c), ...groupsOf(s.id).map(g => g.coach_id)] : [c?.coach_id, ...(c?.extra_coach_ids || [])]).filter(Boolean))];
+/** Selepas sesi baharu dicipta: coach tambahan kelas → baris "Coach n" (pelayan buat sendiri melalui SQL 54; demo buat di sini). */
+export async function syncCoCoaches(sessionIds) {
+  const ids = [].concat(sessionIds || []).filter(Boolean); if (!ids.length) return;
+  if (S.mode === 'supabase') { try { await refresh(['session_groups']); } catch (_) {} return; }
+  for (const id of ids) {
+    const ss = byId('class_sessions', id), c = ss && byId('classes', ss.class_id); if (!ss || !c || ss.status !== 'scheduled') continue;
+    const gs = groupsOf(id); if (gs.some(g => !isCoGroup(g))) continue;
+    for (const g of gs) await remove('session_groups', g.id);
+    const main = ss.coach_id || c.coach_id, extra = (c.extra_coach_ids || []).filter(x => x && x !== main), all = [...new Set([main, ...extra].filter(Boolean))];
+    if (extra.length) for (const [n, x] of all.entries()) await insert('session_groups', { session_id: id, category: `Coach ${n + 1}`, coach_id: x, court: ss.court || c.court });
+  }
+}
 export async function ensureSession(classId, date) {
   const ex = T('class_sessions').find(s => s.class_id === classId && s.session_date === date);
   if (ex) return ex;
-  return insert('class_sessions', { class_id: classId, session_date: date, status: 'scheduled' });
+  const ns = await insert('class_sessions', { class_id: classId, session_date: date, status: 'scheduled' });
+  if ((byId('classes', classId)?.extra_coach_ids || []).length) await syncCoCoaches(ns?.id);
+  return ns;
 }
 
 /* ---------------------------------------------------------------- PANEL SESI */
@@ -118,7 +136,7 @@ export function openSession(sid) {
   const s = byId('class_sessions', sid), c = s && byId('classes', s.class_id);
   if (!c) return toast('Sesi tidak dijumpai', true);
   const [t1, t2] = sTime(s, c), personal = isPersonal(c), cats = byCategory(s, c), gs = groupsOf(s.id), alerts = sessionAlerts(s, c);
-  const multi = !personal && ((c.categories || []).length > 0 || gs.length > 0);
+  const multi = !personal && ((c.categories || []).length > 0 || gs.some(g => !isCoGroup(g)));
   const stRow = st => {
     const a = T('attendance').find(x => x.session_id === s.id && x.student_id === st.id);
     return `<li class="list-item" style="padding:8px 4px;flex-wrap:wrap">${photoAvatar(st.full_name, st.photo_path, { priv: true })}<div class="li-main"><div class="li-title">${esc(st.full_name)} ${a?.status === 'booked' ? '<span class="badge b-info">ditempah</span>' : ''}${st.birth_date ? ` <span class="muted" style="font-size:11.5px">${ageOn(st.birth_date, s.session_date)} thn</span>` : ''}</div>${st.medical_notes ? `<div class="li-sub" style="color:var(--bad)">⚕ ${esc(st.medical_notes)}</div>` : ''}${pkgLine(st.id, a)}</div>
@@ -141,8 +159,8 @@ export function openSession(sid) {
     ${isCoach() ? '' : `<div class="form-grid" style="margin-bottom:8px">
       <label class="f">Coach sesi<select data-on-change="sp-coach" data-key="${s.id}">${coachOpts().map(([v, l]) => `<option value="${v}" ${sCoach(s, c) === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
       <label class="f">Court no.<input value="${esc(sCourt(s, c) || '')}" placeholder="cth. 3" data-on-change="sp-court" data-key="${s.id}"></label>
-    </div>${personal ? (() => { const extra = gs.map(g => g.coach_id).filter(x => x && x !== sCoach(s, c));
-      return `<div class="f" style="margin-bottom:8px">Coach tambahan <span class="muted" style="font-weight:500">(cth. 2 coach untuk 3:1 — setiap coach dikira dalam gaji)</span><div class="pw-chips">${T('staff').filter(x => x.active !== false && x.id !== sCoach(s, c)).map(x => `<button type="button" class="pw-chip sm ${extra.includes(x.id) ? 'on' : ''}" data-action="sp-xcoach" data-id="${s.id}|${x.id}">${esc(x.full_name)}</button>`).join('')}</div></div>`; })() : ''}${langWarn(sCoach(s, c), c.venue_id)}`}
+    </div>${!multi ? (() => { const extra = gs.filter(isCoGroup).map(g => g.coach_id).filter(x => x && x !== sCoach(s, c));
+      return `<div class="f" style="margin-bottom:8px">Coach tambahan <span class="muted" style="font-weight:500">(${personal ? 'cth. 2 coach untuk 3:1' : 'untuk sesi ini sahaja — untuk setiap minggu, guna Edit kelas mingguan'} · setiap coach dikira dalam gaji)</span><div class="pw-chips">${T('staff').filter(x => x.active !== false && x.id !== sCoach(s, c)).map(x => `<button type="button" class="pw-chip sm ${extra.includes(x.id) ? 'on' : ''}" data-action="sp-xcoach" data-id="${s.id}|${x.id}">${esc(x.full_name)}</button>`).join('')}</div></div>`; })() : ''}${langWarn(sCoach(s, c), c.venue_id)}`}
     ${multi ? [...cats].map(([k, list]) => `<div class="card card-pad" style="margin:10px 0;padding:10px 12px">
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><b>${esc(k)} <span class="muted">(${list.length})</span></b>${assign(k, gs.find(g => g.category === k))}</div>
         <ul class="list">${list.map(stRow).join('') || '<li class="empty" style="padding:8px">Belum ada pelajar</li>'}</ul></div>`).join('')
@@ -272,7 +290,7 @@ Object.assign(ACTIONS, {
   'sp-class-edit': id => { ACTIONS['class-edit'](id); },
   /** Sesi personal: coach tambahan disimpan sebagai session_groups (satu rekod setiap coach, termasuk coach utama) supaya gaji & portal coach mengira semua. */
   'sp-xcoach': async key => {
-    const [sid, cid] = key.split('|'), s = byId('class_sessions', sid), c = byId('classes', s.class_id), main = sCoach(s, c), gs = groupsOf(sid);
+    const [sid, cid] = key.split('|'), s = byId('class_sessions', sid), c = byId('classes', s.class_id), main = sCoach(s, c), gs = groupsOf(sid).filter(isCoGroup);
     const cur = [...new Set([main, ...gs.map(g => g.coach_id)].filter(Boolean))], next = cur.includes(cid) ? cur.filter(x => x !== cid) : [...cur, cid];
     for (const g of gs) await remove('session_groups', g.id);
     if (next.length > 1) for (const [n, x] of next.entries()) await insert('session_groups', { session_id: sid, category: `Coach ${n + 1}`, coach_id: x, court: sCourt(s, c) });
