@@ -4,7 +4,8 @@ import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove, refresh, loadStudentHistory } from '../data.js';
 import { adjHint } from './ops2.js';
 const watchAdj = f => { let last = null; const up = () => { const v = f.elements.student_id?.value || ''; if (v !== last) { last = v; const b = f.querySelector('#adjBox'); if (b) b.innerHTML = v ? adjHint(v) : ''; } }; ['change', 'click', 'input'].forEach(ev => f.addEventListener(ev, () => setTimeout(up, 30))); };
-import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, todayISO, addDays, monthKey, monthLabel, LABEL, waLink, $ } from '../ui.js';
+import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, todayISO, addDays, monthKey, monthLabel, LABEL, waLink, $ , DAYS } from '../ui.js';
+import { classPicker, enrolInto } from './student-quick.js';
 import { T, byId, venueName, progName, studentName, invStatus, paidOf, creditOf, dueOf, refundOf, billing, academy, pkgRemaining, studentPackages, catalogFor, pendingPayments, unallocated, daysLeft, lowPackages, expiringPackages, enrolledIn } from './helpers.js';
 import { openReceipt } from '../receipt.js';
 import { openInvoice, openCreditNote } from '../invoice.js';
@@ -453,7 +454,7 @@ Object.assign(ACTIONS, {
   },
 
   /* ---- Jual pakej: Lokasi -> Program -> Pelajar -> Pakej ---- */
-  'sell': (id, progId) => {
+  'sell': (id, progId, ctxCls) => {
     const preStudent = id && byId('students', id) ? id : '';
     const studs = T('students').filter(s => ['active', 'awaiting_payment', 'paused'].includes(s.status)).sort((a, b) => a.full_name.localeCompare(b.full_name));
     if (!T('packages').some(p => p.active)) return toast('Belum ada pakej. Tetapkan katalog pakej dahulu.', true);
@@ -470,17 +471,28 @@ Object.assign(ACTIONS, {
         ${F('Jersi (RM)', 'jersey', { type: 'number', step: '0.01', min: 0, ph: 'Kosongkan jika tiada' })}
         ${F('Diskaun (RM)', 'discount', { type: 'number', step: '0.01', min: 0, ph: 'Kosongkan jika tiada' })}
         ${F('Tarikh akhir bayaran', 'due', { type: 'date', value: dueDefault(), req: true })}
-      </div><div id="sellNote" class="muted" style="margin-top:10px;font-size:12.5px"></div>`,
+      </div><div id="sellCls" style="margin-top:12px"></div><div id="sellNote" class="muted" style="margin-top:10px;font-size:12.5px"></div>`,
       onSubmit: async d => {
         const pkg = byId('packages', d.package_id), s = byId('students', d.student_id);
         await sellPackage({ studentId: d.student_id, pkg, price: Number(d.price), mode: d.mode, due: d.due, reg: d.reg, jersey: d.jersey, discount: d.discount });
+        /* terus masukkan ke kelas (jadual tetap) supaya nama pelajar ada dalam jadual sesi */
+        const nCls = d.cls ? await enrolInto(d.student_id, d.cls) : 0; if (nCls) toast(`Didaftar ke ${nCls} kelas`);
+        if (byId('programmes', pkg.programme_id)?.kind === 'personal') setTimeout(() => confirmModal({ title: 'Jadualkan sesi personal sekarang?', message: 'Pakej personal sudah dijual. Tetapkan tarikh & coach sekarang supaya pelajar tidak tercicir dari jadual.', ok: 'Jadualkan sekarang',
+          onOk: () => setTimeout(() => ACTIONS['cal-personal']?.({ students: [d.student_id], programme_id: pkg.programme_id, venue_id: byId('students', d.student_id)?.venue_id || '' }), 60) }), 120);
         toast(`Invois dikeluarkan untuk ${s.full_name}`); app.render();
       },
     });
     const note = () => {
       const fd = new FormData(f), pkg = byId('packages', fd.get('package_id')), sid = fd.get('student_id');
       const enrolled = sid ? T('class_enrolments').some(e => e.student_id === sid) : true, prev = sid && pkg ? studentPackages(sid).find(p => p.programme_id === pkg.programme_id && p.status === 'active') : null;
-      f.querySelector('#sellNote').innerHTML = `${prev ? `<div class="hint warn">Pelajar masih ada pakej aktif ${esc(prev.name)} (baki ${pkgRemaining(prev)}). Pakej baharu akan aktif selepas bayaran dan dipakai selepas yang lama habis.</div>` : ''}${fd.get('mode') === 'fixed' && sid && !enrolled ? `<div class="hint warn">Pelajar belum ditempatkan dalam kelas tetap. Tetapkan di <a href="#jadual" data-action="close-modal">Jadual Kelas</a>.</div>` : ''}Pakej aktif secara automatik apabila bayaran disahkan; tempoh sah bermula dari tarikh bayaran. Kadar boleh diubah untuk pelajar lama yang kekal harga lama.`;
+      /* Jadual tetap (kumpulan): pilih kelas terus — pelajar didaftar sebaik pakej dijual */
+      const box = f.querySelector('#sellCls'), personal = pkg && byId('programmes', pkg.programme_id)?.kind === 'personal';
+      if (box) { const keep = new Set([...box.querySelectorAll('input[name=cls]:checked')].map(x => x.value)), want = sid && pkg && !personal && fd.get('mode') !== 'flexible';
+        const k2 = want ? sid + '|' + pkg.programme_id + '|' + fd.get('mode') : ''; if (box.dataset.k !== k2) { box.dataset.k = k2;
+          box.innerHTML = want ? `<div class="f full"><span>${fd.get('mode') === 'parent' ? 'Masukkan ke kelas (jika ibu bapa pilih jadual tetap)' : 'Masukkan ke kelas'}</span>${classPicker(sid, pkg.programme_id)}<span class="hint">Pilih satu atau lebih (cth. Sabtu & Ahad) supaya nama pelajar terus ada dalam jadual sesi.</span></div>`
+            : personal && sid ? `<div class="hint">Pakej personal: selepas simpan, anda akan diminta menjadualkan tarikh & coach.</div>` : '';
+          box.querySelectorAll('input[name=cls]').forEach(x => { if ((keep.has(x.value) || x.value === f.dataset.ctxCls) && !x.disabled) x.checked = true; }); } }
+      f.querySelector('#sellNote').innerHTML = `${prev ? `<div class="hint warn">Pelajar masih ada pakej aktif ${esc(prev.name)} (baki ${pkgRemaining(prev)}). Pakej baharu akan aktif selepas bayaran dan dipakai selepas yang lama habis.</div>` : ''}Pakej aktif secara automatik apabila bayaran disahkan; tempoh sah bermula dari tarikh bayaran. Kadar boleh diubah untuk pelajar lama yang kekal harga lama.`;
     };
     const syncPkg = () => { const pkg = byId('packages', f.elements.package_id.value); if (pkg) { f.elements.price.value = pkg.price; const pol = pkg.mode_policy || 'choose';
       [...f.elements.mode.options].forEach(o => { o.disabled = pol !== 'choose' && o.value !== pol; }); f.elements.mode.value = pol === 'choose' ? 'parent' : pol; } };
@@ -498,6 +510,17 @@ Object.assign(ACTIONS, {
     f.elements.package_id.addEventListener('change', () => { syncPkg(); note(); });
     f.elements.mode.addEventListener('change', note);
     watchAdj(f); bindPicker(f, studs, preStudent, pkgFilter);
+    /* Pelajar sudah dipilih (dari senarai pelajar / kelas): sembunyikan penapis lokasi & program — tunjuk ringkasan sahaja */
+    if (preStudent && typeof preStudent === 'string') {
+      const st = byId('students', preStudent), hideEls = ['f_venue', 'f_prog', 'f_q'].map(n => f.elements[n]?.closest('label, .f')).filter(Boolean);
+      const cx = typeof ctxCls === 'string' && byId('classes', ctxCls);
+      hideEls.forEach(x => { x.style.display = 'none'; }); f.elements.student_id.closest('label').style.display = 'none';
+      const sum = document.createElement('div'); sum.className = 'full hint'; sum.id = 'sellWho';
+      sum.innerHTML = `<b>${esc(st?.full_name || '')}</b> · ${esc([progName(st?.programme_id), venueName(st?.venue_id)].filter(x => x && x !== '—').join(' · '))}${cx ? `<br>Untuk kelas: <b>${esc(progName(cx.programme_id))} · ${DAYS[cx.weekday].slice(0, 3)} ${String(cx.start_time).slice(0, 5)} · ${esc(venueName(cx.venue_id))}</b>` : ''} <button type="button" class="btn sm" id="sellWhoChg" style="margin-left:8px">Tukar pelajar</button>`;
+      hideEls[0]?.parentNode.insertBefore(sum, hideEls[0]);
+      sum.querySelector('#sellWhoChg').addEventListener('click', () => { hideEls.forEach(x => { x.style.display = ''; }); f.elements.student_id.closest('label').style.display = ''; sum.remove(); });
+      if (cx) f.dataset.ctxCls = cx.id;
+    }
     /* Dari kelas group: tapis pakej ikut program kelas (kekalkan pelajar yang dipilih) */
     if (progId && typeof progId === 'string' && [...f.elements.f_prog.options].some(o => o.value === progId)) {
       const E = f.elements; E.f_prog.value = progId; E.f_prog.dispatchEvent(new Event('change'));

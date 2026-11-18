@@ -1,4 +1,5 @@
 import { VIEWS, ACTIONS } from '../registry.js';
+import { unschedCard } from './student-quick.js';
 import { S } from '../data.js';
 import { ic, esc, RM, sum, badge, avatar, DAYS, MONTHS, hm, todayISO, addDays, monthKey, monthLabel, fmtShort, pageHead } from '../ui.js';
 import { creditOf, dueOf, T, byId, venueName, progName, staffName, invStatus, tasks, studentName, progColor, enrolledIn, lowPackages, pkgRemaining, expiringPackages, pendingPayments } from './helpers.js';
@@ -42,6 +43,7 @@ VIEWS.dashboard = () => {
   return `${missBox}
   ${pageHead(`${greet}, Admin 👋`, `${DAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()} · Ringkasan operasi akademi`,
     `<button class="btn" data-action="lead-add">${ic('plus', 'sm')} Lead Baharu</button><a class="btn primary" href="#kemasukan">${ic('userplus', 'sm')} Pendaftaran</a>`)}
+  ${unschedCard()}
 
   <div class="grid kpis">
     <a href="#pelajar" class="card kpi hero">

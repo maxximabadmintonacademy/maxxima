@@ -111,12 +111,20 @@ Object.assign(ACTIONS, {
   'class-view': id => {
     const c = byId('classes', id), roster = enrolledIn(id), ids = new Set(roster.map(e => e.student_id));
     const addable = activeStudents().filter(s => !ids.has(s.id)).sort((a, b) => a.full_name.localeCompare(b.full_name));
+    /* Pelajar berkaitan kelas: lokasi kelas + program kelas (profil, program tambahan atau pakej) */
+    const sv = s => new Set([s.venue_id, ...T('student_programmes').filter(x => x.student_id === s.id).map(x => x.venue_id)].filter(Boolean));
+    const sp = s => new Set([s.programme_id, ...T('student_programmes').filter(x => x.student_id === s.id).map(x => x.programme_id), ...T('student_packages').filter(x => x.student_id === s.id && x.status !== 'cancelled').map(x => x.programme_id)].filter(Boolean));
+    const rel = addable.filter(s => sv(s).has(c.venue_id) && sp(s).has(c.programme_id));
+    setTimeout(() => { const q = document.getElementById('enrolQ'), all = document.getElementById('enrolAll'), sel = document.getElementById('enrolSel'); if (!q || !sel) return;
+      const fill = () => { const t = q.value.trim().toLowerCase(), L = (all.checked ? addable : rel).filter(s => !t || s.full_name.toLowerCase().includes(t));
+        sel.innerHTML = `<option value="">+ Pilih pelajar (${L.length})…</option>` + L.map(s => `<option value="${s.id}">${esc(s.full_name)}${all.checked && !rel.includes(s) ? ' · ' + esc(venueName(s.venue_id)) : ''}</option>`).join(''); if (L.length === 1 && t) sel.value = L[0].id; };
+      if (!rel.length) all.checked = true; q.addEventListener('input', fill); q.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); }); all.addEventListener('change', fill); fill(); }, 30);
     openModal({
       title: esc(progName(c.programme_id)), cancel: 'Tutup', wide: true,
       body: `<div class="muted" style="margin-bottom:14px">${esc(classLabel(c))}<br>${esc(staffName(c.coach_id))}${c.court ? ' · ' + esc(c.court) : ''}</div>
       <h4 style="font-size:13.5px;margin-bottom:6px">Pelajar (${roster.length}/${c.capacity})</h4>
       <ul class="list" style="margin:0 -20px">${roster.map(e => { const s = byId('students', e.student_id); return s ? `<li class="list-item" style="padding:9px 20px">${avatar(s.full_name)}<div class="li-main"><div class="li-title">${esc(s.full_name)}</div><div class="li-sub">${esc(s.guardian_name || '')}${hasPkgFor(s.id, c) ? '' : ' <span class="badge b-warn">tiada pakej</span>'}</div></div>${hasPkgFor(s.id, c) ? '' : `<button type="button" class="btn sm" data-action="class-sell" data-id="${s.id}|${id}" title="Jual pakej & keluarkan invois">Jual pakej</button>`}<button type="button" class="btn sm" data-action="class-unenrol" data-id="${e.id}|${id}" title="Keluarkan daripada kelas">${ic('x', 'sm')}</button></li>` : ''; }).join('') || '<li class="empty">Belum ada pelajar.</li>'}</ul>
-      ${roster.length < c.capacity ? `<div style="display:flex;gap:8px;margin-top:12px"><label class="field grow"><select id="enrolSel"><option value="">+ Tambah pelajar ke kelas…</option>${addable.map(s => `<option value="${s.id}">${esc(s.full_name)}</option>`).join('')}</select></label><button type="button" class="btn primary" data-action="class-enrol" data-id="${id}">Tambah</button></div>` : '<div class="badge b-warn" style="margin-top:12px">Kelas penuh</div>'}
+      ${roster.length < c.capacity ? `<div style="margin-top:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">Tambah pelajar · ${rel.length} pelajar ${esc(progName(c.programme_id))} di ${esc(venueName(c.venue_id))}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="enrolQ" type="search" placeholder="Taip nama…" autocomplete="off" style="flex:1;min-width:140px"><label class="field grow" style="flex:2;min-width:200px"><select id="enrolSel"></select></label><button type="button" class="btn primary" data-action="class-enrol" data-id="${id}">Tambah</button></div><label class="check-row" style="margin-top:6px"><input type="checkbox" id="enrolAll"><span>Tunjuk semua pelajar aktif (${addable.length})</span></label></div>` : '<div class="badge b-warn" style="margin-top:12px">Kelas penuh</div>'}
       <div class="actions" style="margin-top:18px"><button type="button" class="btn" data-action="class-edit" data-id="${id}">${ic('edit', 'sm')} Edit kelas</button><button type="button" class="btn danger-o" data-action="class-del" data-id="${id}">${ic('trash', 'sm')} Padam</button></div>`,
     });
   },
@@ -266,7 +274,7 @@ Object.assign(ACTIONS, {
 const isPersonalCls = c => byId('programmes', c?.programme_id)?.kind === 'personal';
 /** Ada pakej aktif / menunggu bayaran untuk program kelas ini? (kelas personal diurus oleh wizard) */
 const hasPkgFor = (sid, c) => !c || isPersonalCls(c) || livePackages(sid).some(p => !p.programme_id || p.programme_id === c.programme_id) || byId('students', sid)?.fee_exempt;
-function sellFor(sid, c) { ACTIONS.sell(sid, c?.programme_id); }
+function sellFor(sid, c) { ACTIONS.sell(sid, c?.programme_id, c?.id); }
 function askPkg(sid, c) {
   const s = byId('students', sid), other = livePackages(sid);
   openModal({

@@ -4,7 +4,7 @@
    • klik sel Kehadiran → tanda kehadiran sesi lepas & akan datang
    ===================================================================== */
 import { ACTIONS, INPUTS } from '../registry.js';
-import { S, insert, update, remove, refresh, loadStudentHistory, loadRange } from '../data.js';
+import { S, insert, update, remove, refresh, rpc, loadStudentHistory, loadRange } from '../data.js';
 import '../pkg-usage.js';
 import { esc, RM, LABEL, badge, openModal, closeModal, toast, todayISO, addDays, fmtShort, DAYS, app } from '../ui.js';
 import { T, byId, progName, venueName, pkgRemaining, studentPackages } from './helpers.js';
@@ -26,7 +26,7 @@ ACTIONS['sq-pkg'] = async id => {
       <div style="flex:1;cursor:pointer" data-action="pkg-usage" data-id="${p.id}" title="Lihat sesi yang ditolak daripada pakej ini"><b>${esc(p.name)}</b> ${st}
         <div class="muted" style="font-size:12.5px;margin-top:3px">${esc(progName(p.programme_id))} · <span style="font-weight:700;color:${left <= 1 && p.status === 'active' ? 'var(--bad)' : 'var(--ink)'}">${left}</span> / ${tot} sesi baki (${used} digunakan)${p.expires_on ? ' · tamat ' + fmtShort(p.expires_on) : ''} · ${RM(p.price)}</div>
         ${p.status === 'active' && tot ? `<div class="bar" style="margin-top:6px"><span style="width:${Math.min(used / tot * 100, 100)}%;background:var(--brand)"></span></div>` : ''}</div>
-      <div style="display:flex;flex-direction:column;gap:6px"><button type="button" class="btn sm primary" data-action="pkg-usage" data-id="${p.id}">Lihat sesi (${T('attendance').filter(a => a.student_package_id === p.id && ['present', 'late', 'absent', 'late_cancel'].includes(a.status)).length})</button>${p.status === 'active' && left > 0 ? `<button type="button" class="btn sm" data-action="sq-pk-done" data-id="${p.id}" title="Baki sebenar sudah habis (cth. sesi lama sebelum sistem)">Tandakan habis</button>` : ''}<button type="button" class="btn sm" data-action="sp-edit" data-id="${p.id}">Laras</button></div></div>`; };
+      <div style="display:flex;flex-direction:column;gap:6px"><button type="button" class="btn sm primary" data-action="pkg-usage" data-id="${p.id}">Lihat sesi (${T('attendance').filter(a => a.student_package_id === p.id && ['present', 'late', 'absent', 'late_cancel'].includes(a.status)).length})</button>${p.status === 'active' && left > 0 ? `<button type="button" class="btn sm" data-action="sq-pk-done" data-id="${p.id}" title="Baki sebenar sudah habis (cth. sesi lama sebelum sistem)">Tandakan habis</button>` : ''}<button type="button" class="btn sm" data-action="sp-edit" data-id="${p.id}">Laras</button><button type="button" class="btn sm danger-o" data-action="pkg-del" data-id="${p.id}">Padam</button></div></div>`; };
   openModal({ title: `Pakej — ${esc(s.full_name)}`, wide: true, cancel: 'Tutup',
     body: `${L.length ? L.map(row).join('') : '<p class="muted">Tiada pakej lagi.</p>'}
       <p class="muted" style="font-size:12.5px;margin:6px 0 12px">"Laras" untuk tambah sesi, lanjut tarikh tamat atau tukar status. Baki dikira automatik daripada kehadiran.</p>
@@ -214,3 +214,78 @@ ACTIONS['sq-att-move'] = attId => {
     } });
   f.elements.showall.addEventListener('change', () => { f.elements.cls.innerHTML = optsHtml(f.elements.showall.checked ? all : rel); });
 };
+
+/* =====================================================================
+   BELUM DIJADUALKAN — jaring keselamatan supaya pelajar yang sudah beli / bayar pakej tidak tercicir dari jadual
+   • Kumpulan (jadual tetap): pakej aktif / menunggu bayaran tetapi pelajar belum didaftar ke mana-mana kelas program itu
+   • Personal: pakej masih ada baki tetapi tiada sesi akan datang ditempah
+   ===================================================================== */
+const progKind = id => byId('programmes', id)?.kind;
+export function unscheduled() {
+  const today = todayISO(), out = [];
+  const pk = T('student_packages').filter(p => ['active', 'pending'].includes(p.status) && pkgRemaining(p) > 0 && ['active', 'pending', 'awaiting_payment'].includes(byId('students', p.student_id)?.status));
+  const seen = new Set();
+  for (const p of pk) {
+    const key = p.student_id + '|' + p.programme_id; if (seen.has(key)) continue;
+    if (progKind(p.programme_id) === 'personal') {
+      const fut = T('attendance').some(a => a.student_id === p.student_id && a.session_date >= today && a.status === 'booked' && progKind(byId('classes', byId('class_sessions', a.session_id)?.class_id)?.programme_id) === 'personal');
+      if (!fut) { seen.add(key); out.push({ p, kind: 'personal' }); }
+    } else {
+      if (p.schedule_mode === 'flexible') {   // fleksibel: ibu bapa tempah sendiri — senarai jika tiada tempahan 14 hari akan datang
+        if (p.status !== 'active') continue;
+        const to = addDays(today, 14), booked = T('attendance').some(a => a.student_id === p.student_id && a.session_date >= today && a.session_date <= to && ['booked', 'present', 'late'].includes(a.status));
+        if (!booked) { seen.add(key); out.push({ p, kind: 'flex' }); }
+        continue;
+      }
+      const inCls = T('class_enrolments').some(e => e.student_id === p.student_id && byId('classes', e.class_id)?.programme_id === p.programme_id && byId('classes', e.class_id)?.active !== false);
+      if (!inCls) { seen.add(key); out.push({ p, kind: 'group' }); }
+    }
+  }
+  return out.sort((a, b) => (a.p.status === 'active' ? 0 : 1) - (b.p.status === 'active' ? 0 : 1));
+}
+const usRow = ({ p, kind }) => { const s = byId('students', p.student_id);
+  return `<li class="list-item"><div class="li-main"><div class="li-title">${esc(s?.full_name || '—')} <span class="badge ${p.status === 'active' ? 'b-ok' : 'b-warn'}">${p.status === 'active' ? 'Dibayar' : 'Menunggu bayaran'}</span></div>
+    <div class="li-sub">${esc(p.name)} · ${esc(progName(p.programme_id))} · baki ${pkgRemaining(p)}${s?.venue_id ? ' · ' + esc(venueName(s.venue_id)) : ''} · ${kind === 'personal' ? 'tiada sesi personal akan datang' : kind === 'flex' ? 'fleksibel · belum tempah 14 hari akan datang' + (p.book_reminded_at ? ' · diingatkan ' + fmtShort(String(p.book_reminded_at).slice(0, 10)) : '') : 'belum dalam kelas'}</div></div>
+    ${kind === 'personal' ? `<button type="button" class="btn sm primary" data-action="us-personal" data-id="${p.id}">Jadualkan sesi</button>` : kind === 'flex' ? `<button type="button" class="btn sm" data-action="us-remind" data-id="${p.id}">Ingatkan ibu bapa</button>` : `<button type="button" class="btn sm primary" data-action="us-enrol" data-id="${p.id}">Masukkan kelas</button>`}</li>`; };
+export function unschedCard() {
+  const all = unscheduled(); if (!all.length) return '';
+  const L = all.filter(x => x.kind !== 'flex'), F2 = all.filter(x => x.kind === 'flex');
+  return `<div class="card mb" style="border-color:var(--warn)"><div class="card-head"><div><h3>${L.length ? `${L.length} pelajar belum dijadualkan${F2.length ? ` · ${F2.length} fleksibel belum tempah` : ''}` : `${F2.length} pelajar fleksibel belum tempah`}</h3><p>Sudah beli / bayar pakej tetapi belum ada dalam kelas atau jadual sesi</p></div><button type="button" class="btn sm" data-action="us-view">Lihat semua</button></div>
+    <ul class="list">${[...L.slice(0, 4), ...F2.slice(0, L.length >= 4 ? 1 : 5 - L.length)].map(usRow).join('')}</ul></div>`;
+}
+ACTIONS['us-view'] = () => { const all = unscheduled(), L = all.filter(x => x.kind !== 'flex'), F2 = all.filter(x => x.kind === 'flex');
+  openModal({ title: 'Pelajar belum dijadualkan', wide: true, cancel: 'Tutup',
+  body: `<h4 style="font-size:13.5px;margin:0 0 6px">Belum dalam kelas / tiada sesi (${L.length})</h4><p class="muted" style="margin-top:0;font-size:12.5px">Pakej kumpulan (jadual tetap) tanpa kelas, dan pakej personal tanpa sesi akan datang.</p>
+    <ul class="list" style="margin:0 -20px 16px">${L.map(usRow).join('') || '<li class="empty">Semua pelajar sudah dijadualkan 🎉</li>'}</ul>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h4 style="font-size:13.5px;margin:0">Fleksibel: belum tempah 14 hari akan datang (${F2.length})</h4>${F2.length ? '<button type="button" class="btn sm primary" data-action="us-remind-all">Ingatkan semua ibu bapa</button>' : ''}</div>
+    <p class="muted" style="font-size:12.5px">Ibu bapa tempah sendiri di portal. Peringatan automatik dihantar setiap Isnin 9 pagi (maks. sekali seminggu bagi setiap pakej).</p>
+    <ul class="list" style="margin:0 -20px">${F2.map(usRow).join('') || '<li class="empty">Semua pakej fleksibel sudah ada tempahan.</li>'}</ul>` }); };
+async function remindOne(id) {
+  if (S.mode === 'supabase') await rpc('remind_flex_booking', { p_sp: id });
+  const p = byId('student_packages', id); if (p) p.book_reminded_at = new Date().toISOString();
+}
+ACTIONS['us-remind'] = async id => { try { await remindOne(id); toast('Peringatan dihantar kepada ibu bapa'); app.render(); if (document.querySelector('#modal.open')) setTimeout(() => ACTIONS['us-view'](), 60); } catch (e) { toast(e.message || String(e), true); } };
+ACTIONS['us-remind-all'] = async () => { const L = unscheduled().filter(x => x.kind === 'flex'); let n = 0, bad = 0;
+  for (const { p } of L) { try { await remindOne(p.id); n++; } catch (_) { bad++; } }
+  toast(`${n} peringatan dihantar${bad ? ` · ${bad} tiada akaun ibu bapa (guna WhatsApp)` : ''}`, !!bad); app.render(); setTimeout(() => ACTIONS['us-view'](), 60); };
+/** Senarai kelas berkaitan untuk pelajar & program (lokasi pelajar didahulukan). */
+export function classPicker(sid, progId, name = 'cls') {
+  const vens = stuVenues(sid);
+  const L0 = T('classes').filter(c => c.active !== false && c.programme_id === progId), near = L0.filter(c => vens.has(c.venue_id));
+  const L = (near.length ? near : L0).sort((x, y) => (vens.has(x.venue_id) ? 0 : 1) - (vens.has(y.venue_id) ? 0 : 1) || x.weekday - y.weekday || String(x.start_time).localeCompare(String(y.start_time)));
+  if (!L.length) return '<p class="muted">Tiada kelas aktif untuk program ini. Tambah kelas di Jadual Mingguan.</p>';
+  const cnt = c => T('class_enrolments').filter(e => e.class_id === c.id).length;
+  return `<div class="checklist" style="max-height:300px;overflow:auto">${L.map(c => { const on = T('class_enrolments').some(e => e.class_id === c.id && e.student_id === sid);
+    return `<label class="check-row"><input type="checkbox" name="${name}" value="${c.id}" ${on ? 'checked disabled' : ''}><span>${DAYS[c.weekday].slice(0, 3)} ${String(c.start_time).slice(0, 5)} · ${esc(c.title || progName(c.programme_id))} · ${esc(venueName(c.venue_id))}</span><em class="muted">${cnt(c)}${c.capacity ? '/' + c.capacity : ''} pelajar${on ? ' · sudah berdaftar' : ''}${!vens.has(c.venue_id) && vens.size ? ' · lokasi lain' : ''}</em></label>`; }).join('')}</div>`;
+}
+export async function enrolInto(sid, ids) {
+  let n = 0;
+  for (const cid of [].concat(ids || []).filter(Boolean)) { if (T('class_enrolments').some(e => e.class_id === cid && e.student_id === sid)) continue; await insert('class_enrolments', { class_id: cid, student_id: sid }); n++; }
+  return n;
+}
+ACTIONS['us-enrol'] = id => { const p = byId('student_packages', id); if (!p) return; const s = byId('students', p.student_id);
+  openModal({ title: `Masukkan kelas — ${esc(s?.full_name || '')}`, submit: 'Daftar ke kelas',
+    body: `<p class="muted" style="margin-top:0">${esc(p.name)} · ${esc(progName(p.programme_id))}. Pilih satu atau lebih kelas (cth. Sabtu & Ahad). Pelajar akan muncul dalam senarai kelas & jadual sesi mingguan.</p>${classPicker(p.student_id, p.programme_id)}`,
+    onSubmit: async d => { const n = await enrolInto(p.student_id, d.cls); if (!n) { toast('Pilih sekurang-kurangnya satu kelas', true); return false; } toast(`Didaftar ke ${n} kelas`); app.render(); } }); };
+ACTIONS['us-personal'] = id => { const p = byId('student_packages', id); if (!p) return; const s = byId('students', p.student_id);
+  ACTIONS['cal-personal']?.({ students: [p.student_id], programme_id: p.programme_id, venue_id: s?.venue_id || '' }); };
