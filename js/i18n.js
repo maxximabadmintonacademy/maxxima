@@ -678,6 +678,16 @@ const D = {
   'Tekan "Hidupkan notifikasi" di atas supaya peringatan sampai ke telefon.': ['Tap "Turn on notifications" above so reminders reach your phone.', '请点击上方“开启通知”，以便手机收到提醒。'],
   'Tetapan disimpan': ['Settings saved', '设置已保存'],
   'Notis privasi': ['Privacy notice', '隐私声明'],
+  // v83 penggunaan pakej
+  'Lihat sesi yang digunakan': ['See sessions used', '查看已用课程'],
+  'Sesi dalam pakej': ['Sessions in package', '配套内课程'],
+  'Pakej lama': ['Past packages', '旧配套'],
+  'digunakan': ['used', '已用'], 'baki': ['left', '剩余'], 'mula': ['start', '开始'], 'tamat': ['ends', '到期'], 'jam': ['hours', '小时'],
+  'Sesi sebelum sistem digunakan': ['Sessions before the system was used', '系统启用前的课程'],
+  'Direkod oleh admin daripada rekod lama': ['Recorded by admin from old records', '管理员根据旧记录登记'],
+  'Belum ada sesi ditolak daripada pakej ini.': ['No sessions deducted from this package yet.', '此配套尚未扣除任何课程。'],
+  'Sesi yang ditolak melebihi jumlah pakej — semak rekod.': ['Deducted sessions exceed the package total — please check the records.', '已扣课数超过配套总数 — 请检查记录。'],
+  '"Tidak hadir" dan "batal lewat" dikira mengikut polisi akademi. Cuti / trial tidak ditolak.': ['"Absent" and "late cancel" are counted under academy policy. Leave / trial are not deducted.', '「缺席」和「迟取消」按学院政策计算。请假 / 试课不扣除。'],
 };
 
 /* t('teks BM', { n: 3 }) -> teks dalam bahasa semasa; force = paksa bahasa tertentu (untuk dokumen) */

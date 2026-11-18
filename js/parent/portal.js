@@ -7,6 +7,7 @@ import { showTour } from '../tour.js';
 import { remindCard } from './v26.js';
 import { offerCard } from '../admin/ops2.js';
 import { mediaGrid, publicUrl } from '../media.js';
+import '../pkg-usage.js';
 import { S, loadParent, insert, update, remove, refresh, markRead, subscribeNotifications, subscribeTables, setPassword, rpc } from '../data.js';
 import { $, esc, ic, F, RM, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, fmtDate, fmtShort, hm, todayISO, addDays, DAYS, LABEL, friendlyError, liveRender , loadErrorBox } from '../ui.js';
 import { T, byId, venueName, progName, staffName, invStatus, paidOf, creditOf, pkgRemaining } from '../admin/helpers.js';
@@ -150,9 +151,11 @@ PV.utama = () => {
     ${ps.length ? ps.map(p => { const rem = pkgRemaining(p), pct = Math.round(rem / p.sessions_total * 100); return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px"><b>${esc(tr(p.name))}</b><span class="num"><b>${rem}</b> / ${p.sessions_total} ${t('sesi')}</span></div>
       <div class="bar lg" style="margin-top:6px"><span style="width:${pct}%;background:${rem <= 1 ? 'var(--bad)' : 'var(--ok)'}"></span></div>
       <div class="muted" style="font-size:12px;margin-top:4px">${p.expires_on ? t('Sah hingga {d}', { d: fmtDate(p.expires_on) }) : t('Tempoh sah bermula dari sesi pertama yang dihadiri')}${Number(p.extended_days) ? ' · ' + t('dilanjutkan {n} hari', { n: p.extended_days }) : ''}${rem <= 1 ? ` · <b style="color:var(--bad)">${t('hampir habis')}</b>, ${t('invois pembaharuan akan dikeluarkan')}` : ''}</div>
+      <button type="button" class="linkbtn" data-action="pkg-usage" data-id="${p.id}" style="border:0;background:none;color:var(--brand);padding:4px 0 0;font-size:12.5px;text-decoration:underline;cursor:pointer">${t('Lihat sesi yang digunakan')}</button>
       ${pkgReqLine(p)}</div>`; }).join('')
       : `<div class="muted" style="font-size:13px;margin-bottom:10px">${t('Tiada pakej aktif')}${T('student_packages').some(p => p.student_id === k.id && p.status === 'pending') ? ' · ' + t('menunggu bayaran') : ''}.</div>`}
     ${T('student_packages').filter(p => p.student_id === k.id && p.status === 'pending' && T('attendance').some(a => a.student_id === k.id && !a.student_package_id && ['present', 'late', 'absent', 'late_cancel'].includes(a.status))).map(p => `<div class="hint" style="margin-bottom:10px;font-size:12.5px">${t('{p} belum dibayar tetapi anak sudah hadir sesi.', { p: esc(tr(p.name)) })} ${pkgReqLine(p, true)}</div>`).join('')}
+    ${(() => { const old = T('student_packages').filter(p => p.student_id === k.id && ['completed', 'expired'].includes(p.status)).sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))); return old.length ? `<details style="margin-bottom:10px;font-size:13px"><summary style="cursor:pointer;color:var(--brand)">${t('Pakej lama')} (${old.length})</summary><div style="margin-top:6px">${old.map(p => `<button type="button" class="btn sm" style="margin:0 6px 6px 0" data-action="pkg-usage" data-id="${p.id}">${esc(tr(p.name))} · ${p.sessions_used}/${p.sessions_total}</button>`).join('')}</div></details>` : ''; })()}
     <div style="font-size:13px;display:flex;gap:8px;align-items:center">${ic('calendar', 'sm')}${ses ? `<span><b>${t('Sesi seterusnya:')}</b> ${when(ses.date, ses.c)}</span>` : `<span class="muted">${t('Tiada sesi akan datang dijadualkan.')}</span>`}</div></div>`; }).join('')}`;
 };
 

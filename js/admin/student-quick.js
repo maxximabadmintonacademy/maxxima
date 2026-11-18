@@ -5,6 +5,7 @@
    ===================================================================== */
 import { ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove, refresh } from '../data.js';
+import '../pkg-usage.js';
 import { esc, RM, LABEL, badge, openModal, closeModal, toast, todayISO, addDays, fmtShort, DAYS, app } from '../ui.js';
 import { T, byId, progName, venueName, pkgRemaining, studentPackages } from './helpers.js';
 import { calItems, ensureSession, sTime, isPersonal } from './sessions.js';
@@ -22,10 +23,10 @@ ACTIONS['sq-pkg'] = async id => {
   const row = p => { const used = Number(p.sessions_used || 0), tot = Number(p.sessions_total || 0), left = pkgRemaining(p);
     const st = p.status === 'pending' ? badge('pending', 'Menunggu bayaran') : p.status === 'completed' ? badge('completed', 'Sesi habis') : badge(p.status);
     return `<div class="slot" style="border-left-color:${p.status === 'active' ? 'var(--ok)' : 'var(--line)'};margin-bottom:8px;display:flex;gap:10px;align-items:center">
-      <div style="flex:1"><b>${esc(p.name)}</b> ${st}
+      <div style="flex:1;cursor:pointer" data-action="pkg-usage" data-id="${p.id}" title="Lihat sesi yang ditolak daripada pakej ini"><b>${esc(p.name)}</b> ${st}
         <div class="muted" style="font-size:12.5px;margin-top:3px">${esc(progName(p.programme_id))} · <span style="font-weight:700;color:${left <= 1 && p.status === 'active' ? 'var(--bad)' : 'var(--ink)'}">${left}</span> / ${tot} sesi baki (${used} digunakan)${p.expires_on ? ' · tamat ' + fmtShort(p.expires_on) : ''} · ${RM(p.price)}</div>
         ${p.status === 'active' && tot ? `<div class="bar" style="margin-top:6px"><span style="width:${Math.min(used / tot * 100, 100)}%;background:var(--brand)"></span></div>` : ''}</div>
-      <div style="display:flex;flex-direction:column;gap:6px">${p.status === 'active' && left > 0 ? `<button type="button" class="btn sm" data-action="sq-pk-done" data-id="${p.id}" title="Baki sebenar sudah habis (cth. sesi lama sebelum sistem)">Tandakan habis</button>` : ''}<button type="button" class="btn sm" data-action="sp-edit" data-id="${p.id}">Laras</button></div></div>`; };
+      <div style="display:flex;flex-direction:column;gap:6px"><button type="button" class="btn sm primary" data-action="pkg-usage" data-id="${p.id}">Lihat sesi (${T('attendance').filter(a => a.student_package_id === p.id && ['present', 'late', 'absent', 'late_cancel'].includes(a.status)).length})</button>${p.status === 'active' && left > 0 ? `<button type="button" class="btn sm" data-action="sq-pk-done" data-id="${p.id}" title="Baki sebenar sudah habis (cth. sesi lama sebelum sistem)">Tandakan habis</button>` : ''}<button type="button" class="btn sm" data-action="sp-edit" data-id="${p.id}">Laras</button></div></div>`; };
   openModal({ title: `Pakej — ${esc(s.full_name)}`, wide: true, cancel: 'Tutup',
     body: `${L.length ? L.map(row).join('') : '<p class="muted">Tiada pakej lagi.</p>'}
       <p class="muted" style="font-size:12.5px;margin:6px 0 12px">"Laras" untuk tambah sesi, lanjut tarikh tamat atau tukar status. Baki dikira automatik daripada kehadiran.</p>
