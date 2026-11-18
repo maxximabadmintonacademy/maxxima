@@ -1,7 +1,7 @@
 // Penggunaan pakej: senarai sesi yang ditolak daripada satu pakej, dengan kiraan berjalan (1/8, 2/8 …).
 // Dikongsi oleh portal admin & ibu bapa supaya kedua-duanya nampak angka yang sama.
 import { ACTIONS, INPUTS } from './registry.js';
-import { S, update, remove, refresh } from './data.js';
+import { S, update, remove, refresh, loadStudentHistory } from './data.js';
 import { esc, openModal, closeModal, confirmModal, toast, app, fmtShort, DAYS, LABEL } from './ui.js';
 import { t } from './i18n.js';
 import { T, byId, venueName, progName, pkgRemaining } from './admin/helpers.js';
@@ -33,7 +33,7 @@ function editCtl(a, p) {
     <button type="button" class="btn sm" data-action="pu-class" data-id="${a.id}" title="Tukar kelas (tarikh sama)">Kelas</button>
     <button type="button" class="btn sm danger-o" data-action="pu-del" data-id="${a.id}|${p.id}" title="Padam rekod kehadiran">✕</button></div>`;
 }
-const reopen = async pkId => { if (S.mode === 'supabase') { try { await refresh(['attendance', 'student_packages']); } catch (_) {} } app.render?.(); setTimeout(() => ACTIONS['pkg-usage'](pkId), 40); };
+const reopen = async pkId => { if (S.mode === 'supabase') { try { await refresh(['student_packages']); await loadStudentHistory(byId('student_packages', pkId)?.student_id, true); } catch (_) {} } app.render?.(); setTimeout(() => ACTIONS['pkg-usage'](pkId), 40); };
 INPUTS['pu-status'] = async (v, el) => { const [aid, pk] = el.dataset.key.split('|');
   try { await update('attendance', aid, { status: v, ...(CONS.includes(v) ? {} : { student_package_id: null }) }); toast(`Ditanda: ${LABEL[v] || v}${CONS.includes(v) ? '' : ' — dikeluarkan dari pakej (tidak ditolak)'}`); } catch (e) { toast(e.message || String(e), true); }
   reopen(pk); };
@@ -41,6 +41,7 @@ INPUTS['pu-move'] = async (v, el) => { if (!v) return; const [aid, pk] = el.data
   try { await update('attendance', aid, { student_package_id: v === '-' ? null : v }); toast(v === '-' ? 'Sesi dilepaskan dari pakej' : 'Sesi dipindah ke ' + (byId('student_packages', v)?.name || 'pakej lain')); } catch (e) { toast(e.message || String(e), true); }
   reopen(pk); };
 ACTIONS['pu-class'] = id => ACTIONS['sq-att-move']?.(id);
+ACTIONS['pu-old'] = id => { const p = byId('student_packages', id); if (p) ACTIONS['sq-att-old']?.(p.student_id, p.id); };
 ACTIONS['pu-del'] = key => { const [aid, pk] = key.split('|'), a = byId('attendance', aid);
   confirmModal({ title: 'Padam rekod kehadiran?', message: `${fmtShort(a?.session_date)} — rekod ini dipadam dan sesi tidak lagi ditolak daripada pakej. Ibu bapa tidak akan nampak rekod ini.`, ok: 'Padam', danger: true,
     onOk: async () => { await remove('attendance', aid); toast('Rekod dipadam'); reopen(pk); } }); };
@@ -64,10 +65,12 @@ export function pkgUsageHtml(p, { admin = false } = {}) {
 }
 
 /** Tetingkap penggunaan pakej. Admin: + butang pautkan sesi / kembali ke senarai pakej. */
-ACTIONS['pkg-usage'] = id => {
-  const p = byId('student_packages', id); if (!p) return;
+ACTIONS['pkg-usage'] = async id => {
+  let p = byId('student_packages', id); if (!p) return;
+  try { await loadStudentHistory(p.student_id); } catch (_) {}   // kehadiran lama di luar tetingkap 90 hari
+  p = byId('student_packages', id);
   const admin = ['admin', 'official'].includes(S.profile?.role);
   const orph = admin ? T('attendance').filter(a => a.student_id === p.student_id && !a.student_package_id && CONS.includes(a.status)).length : 0;
   openModal({ title: t('Sesi dalam pakej'), wide: true, cancel: t('Tutup'),
-    body: pkgUsageHtml(p, { admin }) + (admin ? `<div class="actions" style="margin-top:12px">${orph ? `<button type="button" class="btn danger-o" data-action="att-link" data-id="${p.student_id}">Pautkan ${orph} sesi ke pakej</button>` : ''}<button type="button" class="btn" data-action="sq-att-old" data-id="${p.student_id}">+ Rekod kehadiran lama</button><button type="button" class="btn" data-action="sq-pkg" data-id="${p.student_id}">← Semua pakej</button></div>` : '') });
+    body: pkgUsageHtml(p, { admin }) + (admin ? `<div class="actions" style="margin-top:12px">${orph ? `<button type="button" class="btn danger-o" data-action="att-link" data-id="${p.student_id}">Pautkan ${orph} sesi ke pakej</button>` : ''}<button type="button" class="btn primary" data-action="pu-old" data-id="${p.id}">+ Tambah sesi ke pakej ini</button><button type="button" class="btn" data-action="sq-pkg" data-id="${p.student_id}">← Semua pakej</button></div>` : '') });
 };

@@ -138,6 +138,27 @@ export async function loadCoach() {
   S.t = next;
 }
 
+/* Semua kehadiran seorang pelajar (termasuk di luar tetingkap 90 hari) + sesinya — untuk pakej & sejarah. */
+const histLoaded = new Map();
+export async function loadStudentHistory(sid, force = false) {
+  if (S.mode !== 'supabase' || !sid) return false;
+  if (!force && Date.now() - (histLoaded.get(sid) || 0) < 60000) return false;
+  const att = [];
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await S.client.from('attendance').select('*').eq('student_id', sid).order('id').range(i, i + 999);
+    if (error) throw error; att.push(...data); if (data.length < 1000) break;
+  }
+  const byIdA = new Map(att.map(r => [r.id, r]));
+  S.t.attendance = S.t.attendance.filter(r => r.student_id !== sid || byIdA.has(r.id)).map(r => byIdA.get(r.id) || r);   // segerakkan (padam/kemas kini)
+  const haveA = new Set(S.t.attendance.map(r => r.id)); S.t.attendance.push(...att.filter(r => !haveA.has(r.id)));
+  const need = [...new Set(att.map(r => r.session_id))].filter(x => x && !S.t.class_sessions.some(s => s.id === x));
+  for (let i = 0; i < need.length; i += 100) {
+    const { data, error } = await S.client.from('class_sessions').select('*').in('id', need.slice(i, i + 100));
+    if (error) throw error; const have = new Set(S.t.class_sessions.map(r => r.id)); S.t.class_sessions.push(...data.filter(r => !have.has(r.id)));
+  }
+  histLoaded.set(sid, Date.now()); return true;
+}
+
 /* Muat sesi + kehadiran untuk julat tarikh di luar tetingkap 90 hari (kalendar). */
 const loadedRanges = [];
 export async function loadRange(from, to) {

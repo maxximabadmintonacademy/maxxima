@@ -1,7 +1,7 @@
 // Invois & Bayaran, Pakej (katalog + pakej pelajar).
 import { msgInvoiceReminder, msgPackageLow, msgModal } from './messages.js';
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
-import { S, insert, update, remove, refresh } from '../data.js';
+import { S, insert, update, remove, refresh, loadStudentHistory } from '../data.js';
 import { adjHint } from './ops2.js';
 const watchAdj = f => { let last = null; const up = () => { const v = f.elements.student_id?.value || ''; if (v !== last) { last = v; const b = f.querySelector('#adjBox'); if (b) b.innerHTML = v ? adjHint(v) : ''; } }; ['change', 'click', 'input'].forEach(ev => f.addEventListener(ev, () => setTimeout(up, 30))); };
 import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, todayISO, addDays, monthKey, monthLabel, LABEL, waLink, $ } from '../ui.js';
@@ -592,7 +592,8 @@ const pkgPatch = (d, edit) => ({ programme_id: d.programme_id, name: (d.name || 
 Object.assign(ACTIONS, {
   'pkg-tab': id => { UI.pkgTab = id; app.render(); },
   /* Pautkan sesi yang sudah dihadiri (tiada pakej) ke pakej pilihan — untuk invois yang lambat dikeluarkan */
-  'att-link': sid => {
+  'att-link': async sid => {
+    if (S.mode === 'supabase') { try { await loadStudentHistory(sid); } catch (_) {} }   // termasuk sesi lama di luar 90 hari
     const un = unallocated().filter(a => a.student_id === sid).sort((a, b) => (a.session_date || '').localeCompare(b.session_date || ''));
     // termasuk pakej lama (tamat tempoh / habis) yang masih ada baki — untuk sesi lama yang tertinggal dipautkan
     const pk = T('student_packages').filter(p => p.student_id === sid && (['active', 'pending'].includes(p.status) || (['expired', 'completed'].includes(p.status) && pkgRemaining(p) > 0)))

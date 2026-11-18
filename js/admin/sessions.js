@@ -114,7 +114,16 @@ export async function syncCoCoaches(sessionIds) {
 export async function ensureSession(classId, date) {
   const ex = T('class_sessions').find(s => s.class_id === classId && s.session_date === date);
   if (ex) return ex;
-  const ns = await insert('class_sessions', { class_id: classId, session_date: date, status: 'scheduled' });
+  let ns;
+  try { ns = await insert('class_sessions', { class_id: classId, session_date: date, status: 'scheduled' }); }
+  catch (e) {   // sesi sudah wujud di pelayan tetapi belum dimuat (di luar tetingkap 90 hari) → ambil yang sedia ada
+    if (S.mode !== 'supabase') throw e;
+    const { data } = await S.client.from('class_sessions').select('*').eq('class_id', classId).eq('session_date', date).limit(1);
+    if (!data?.[0]) throw e; S.t.class_sessions.push(data[0]);
+    const { data: at } = await S.client.from('attendance').select('*').eq('session_id', data[0].id);
+    const have = new Set(S.t.attendance.map(r => r.id)); S.t.attendance.push(...(at || []).filter(r => !have.has(r.id)));
+    return data[0];
+  }
   if ((byId('classes', classId)?.extra_coach_ids || []).length) await syncCoCoaches(ns?.id);
   return ns;
 }
