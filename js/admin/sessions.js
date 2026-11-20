@@ -33,10 +33,11 @@ export function langGap(coachId, venueId) {
 }
 export const langWarn = (coachId, venueId) => { const g = langGap(coachId, venueId); return g.length ? `<div class="hint warn">${ic('alert', 'sm')} ${esc(staffName(coachId))} tidak disenaraikan bertutur ${g.map(langName).join(', ')} — lokasi ini memerlukannya.</div>` : ''; };
 
-/** Pelajar sesi (tetap + tempahan/walk-in) */
+/** Pelajar sesi: kumpulan = tempahan/rekod hari itu sahaja; personal = pelajar kelas + rekod. */
 export function rosterOf(s, c) {
-  const marked = T('attendance').filter(a => a.session_id === s?.id);
-  const ids = new Set([...(c && !isPersonal(c) ? enrolledIn(c.id).map(e => e.student_id) : []), ...marked.map(a => a.student_id)]);
+  // Sesi kumpulan: hanya pelajar yang ditempah / direkod pada tarikh itu (bukan semua pelajar tetap kelas).
+  const marked = s ? T('attendance').filter(a => a.session_id === s.id) : [];
+  const ids = new Set(marked.map(a => a.student_id));
   if (c && isPersonal(c)) enrolledIn(c.id).forEach(e => ids.add(e.student_id));
   return [...ids].map(id => byId('students', id)).filter(Boolean).sort((a, b) => a.full_name.localeCompare(b.full_name));
 }

@@ -92,7 +92,7 @@ const myCat = s => { const me = st(); return s ? groupsOf(s.id).filter(g => g.co
 const myCourt = (s, c) => { const me = st(), gs = s ? groupsOf(s.id).filter(g => g.coach_id === me?.id && g.court) : []; return gs.length ? [...new Set(gs.map(g => g.court))].join(', ') : sCourt(s, c); };
 const vLbl = (s, c) => esc(venueName(sVenue(s, c))) + (s?.venue_id && s.venue_id !== c.venue_id ? ' <b style="color:var(--warn)">(lokasi sementara)</b>' : '');
 const card = ({ s, c, date }, showDate) => {
-  const [a, b] = sTime(s, c), cats = myCat(s), n = s ? rosterOf(s, c).length : T('class_enrolments').filter(e => e.class_id === c.id).length;
+  const [a, b] = sTime(s, c), cats = myCat(s), n = rosterOf(s, c).length;
   const done = s ? T('attendance').filter(x => x.session_id === s.id && x.status !== 'booked').length : 0;
   const court = myCourt(s, c);
   const strip = checkStrip({ s, c, date });
@@ -119,7 +119,7 @@ function countdown(x) {
 }
 const mapsLink = (c, s) => { const v = byId('venues', sVenue(s, c)); if (!v) return ''; const q = v.lat != null && v.lng != null ? `${v.lat},${v.lng}` : encodeURIComponent(`${v.name} ${v.area || ''}`); return `https://www.google.com/maps/search/?api=1&query=${q}`; };
 function heroCard(x) {
-  const [a, b] = sTime(x.s, x.c), n = x.s ? rosterOf(x.s, x.c).length : T('class_enrolments').filter(e => e.class_id === x.c.id).length, court = myCourt(x.s, x.c);
+  const [a, b] = sTime(x.s, x.c), n = rosterOf(x.s, x.c).length, court = myCourt(x.s, x.c);
   const strip = checkStrip(x), who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ')) : `${n} pelajar${trN(x.s, x.c, x.date)}`;
   return `<div class="hero-next k-${kindOf(x.c)}"><div class="hn-top"><span class="hn-lbl">Sesi seterusnya</span><span class="hn-cd" data-cd="${x.date}|${a}|${b}">${countdown(x)}</span></div>
     <div class="hn-time">${a}<span>–${b}</span></div>
@@ -163,7 +163,7 @@ CV.kursus = () => { const cs = T('courses').filter(c => c.status === 'published'
 const monOf = d => addDays(d, -((parseISO(d).getDay() + 6) % 7));
 const DS = ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'];
 function tlItem(x) {
-  const [a, b] = sTime(x.s, x.c), cats = myCat(x.s), n = x.s ? rosterOf(x.s, x.c).length : T('class_enrolments').filter(e => e.class_id === x.c.id).length;
+  const [a, b] = sTime(x.s, x.c), cats = myCat(x.s), n = rosterOf(x.s, x.c).length;
   const court = myCourt(x.s, x.c);
   const done = isDone(x), cancel = x.s?.status === 'cancelled', strip = checkStrip(x);
   const who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ') || '—') : `${n} pelajar${trN(x.s, x.c, x.date)}`;

@@ -17,7 +17,7 @@ export function calRange(c = C()) {
 }
 
 const slot = ({ s, c, date }, showDate) => {
-  const [a, b] = sTime(s, c), al = sessionAlerts(s, c), n = s ? rosterOf(s, c).length : T('class_enrolments').filter(e => e.class_id === c.id).length;
+  const [a, b] = sTime(s, c), al = sessionAlerts(s, c), n = rosterOf(s, c).length;
   const coaches = coachIds(s, c).map(staffName).join(', ');
   const personal = isPersonal(c), who = personal ? rosterOf(s, c).map(x => x.full_name.split(' ').slice(0, 2).join(' ')).join(', ') : '';
   return `<button class="slot ${al.length ? 'alert' : ''} ${s ? '' : 'virtual'} ${s?.status === 'cancelled' ? 'cancel' : ''}" data-action="${s ? 'sess-open' : 'sess-open-v'}" data-id="${s ? s.id : c.id + '|' + date}" style="border-left-color:${progColor(c.programme_id)}">
