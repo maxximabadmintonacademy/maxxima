@@ -7,7 +7,7 @@ import { planCard, planView, openPlanEditor, copyPlan } from '../planner.js';
 import { LANGS_ALL } from '../admin/sessions.js';
 import { $, esc, ic, F, avatar, UI, app, toast, openModal, fmtDate, fmtShort, hm, todayISO, addDays, parseISO, DAYS, LABEL, friendlyError, liveRender , loadErrorBox } from '../ui.js';
 import { T, byId, venueName, progName, attRate, studentName } from '../admin/helpers.js';
-import { courtLbl, calItems, sessionAlerts, sTime, sCourt, groupsOf, rosterOf, ageOn, ageCat, isPersonal, ensureSession, openSession, langName, trialsOf } from '../admin/sessions.js';
+import { courtLbl, calItems, sessionAlerts, sTime, sCourt, sVenue, groupsOf, rosterOf, ageOn, ageCat, isPersonal, ensureSession, openSession, langName, trialsOf } from '../admin/sessions.js';
 import { setI18nActive } from '../i18n.js';
 import { annCard, visibleAnns, showAnnPopup } from '../admin/announce.js';
 import { showTour } from '../tour.js';
@@ -88,14 +88,17 @@ function onboard() {
 const head = (title, sub) => `<div class="page-head"><div><h1>${title}</h1><p>${sub || ''}</p></div></div>`;
 const st = () => meStaff();
 const myCat = s => { const me = st(); return s ? groupsOf(s.id).filter(g => g.coach_id === me?.id && !/^coach \d+$/i.test(g.category || '')).map(g => g.category) : []; };
+/** Court coach ini: kumpulan umur / kumpulan coach miliknya, atau court sesi. */
+const myCourt = (s, c) => { const me = st(), gs = s ? groupsOf(s.id).filter(g => g.coach_id === me?.id && g.court) : []; return gs.length ? [...new Set(gs.map(g => g.court))].join(', ') : sCourt(s, c); };
+const vLbl = (s, c) => esc(venueName(sVenue(s, c))) + (s?.venue_id && s.venue_id !== c.venue_id ? ' <b style="color:var(--warn)">(lokasi sementara)</b>' : '');
 const card = ({ s, c, date }, showDate) => {
   const [a, b] = sTime(s, c), cats = myCat(s), n = s ? rosterOf(s, c).length : T('class_enrolments').filter(e => e.class_id === c.id).length;
   const done = s ? T('attendance').filter(x => x.session_id === s.id && x.status !== 'booked').length : 0;
-  const court = cats.length ? groupsOf(s.id).filter(g => cats.includes(g.category)).map(g => g.court).filter(Boolean).join(', ') : sCourt(s, c);
+  const court = myCourt(s, c);
   const strip = checkStrip({ s, c, date });
   return `${strip ? '<div class="slot-wrap">' : ''}<button class="slot ${s?.status === 'cancelled' ? 'cancel' : ''}" data-action="c-open" data-id="${s ? s.id : c.id + '|' + date}" style="margin-bottom:${strip ? 0 : 8}px">
     <b>${showDate ? DAYS[parseISO(date).getDay()] + ', ' + fmtShort(date) + ' · ' : ''}${a}–${b} · ${esc(c.title || progName(c.programme_id))}</b>
-    <div class="meta">${esc(venueName(c.venue_id))}${court ? ' · ' + courtLbl(court) : ''}${cats.length ? ' · Kategori anda: <b>' + cats.map(esc).join(', ') + '</b>' : ''}</div>
+    <div class="meta">${vLbl(s, c)}${court ? ' · ' + courtLbl(court) : ''}${cats.length ? ' · Kategori anda: <b>' + cats.map(esc).join(', ') + '</b>' : ''}</div>
     <div class="meta">${isPersonal(c) ? esc(rosterOf(s, c).map(x => x.full_name).join(', ')) : n + ' pelajar'}${trN(s, c, date)}${s ? ` · ${done}/${n} direkod` : ''}${s?.status === 'held' ? ' · selesai' : ''}${s?.status === 'cancelled' ? ' · dibatalkan' : ''}</div>
   </button>${strip ? strip + '</div>' : ''}`;
 };
@@ -114,15 +117,15 @@ function countdown(x) {
   if (x.date === addDays(todayISO(), 1)) return `Esok, ${sTime(x.s, x.c)[0]}`;
   return `${DAYS[parseISO(x.date).getDay()]}, ${fmtDate(x.date)} · ${sTime(x.s, x.c)[0]}`;
 }
-const mapsLink = c => { const v = byId('venues', c.venue_id); if (!v) return ''; const q = v.lat != null && v.lng != null ? `${v.lat},${v.lng}` : encodeURIComponent(`${v.name} ${v.area || ''}`); return `https://www.google.com/maps/search/?api=1&query=${q}`; };
+const mapsLink = (c, s) => { const v = byId('venues', sVenue(s, c)); if (!v) return ''; const q = v.lat != null && v.lng != null ? `${v.lat},${v.lng}` : encodeURIComponent(`${v.name} ${v.area || ''}`); return `https://www.google.com/maps/search/?api=1&query=${q}`; };
 function heroCard(x) {
-  const [a, b] = sTime(x.s, x.c), n = x.s ? rosterOf(x.s, x.c).length : T('class_enrolments').filter(e => e.class_id === x.c.id).length, court = sCourt(x.s, x.c);
+  const [a, b] = sTime(x.s, x.c), n = x.s ? rosterOf(x.s, x.c).length : T('class_enrolments').filter(e => e.class_id === x.c.id).length, court = myCourt(x.s, x.c);
   const strip = checkStrip(x), who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ')) : `${n} pelajar${trN(x.s, x.c, x.date)}`;
   return `<div class="hero-next k-${kindOf(x.c)}"><div class="hn-top"><span class="hn-lbl">Sesi seterusnya</span><span class="hn-cd" data-cd="${x.date}|${a}|${b}">${countdown(x)}</span></div>
     <div class="hn-time">${a}<span>–${b}</span></div>
     <div class="hn-title">${esc(x.c.title || progName(x.c.programme_id))}</div>
-    <div class="hn-meta">📍 ${esc(venueName(x.c.venue_id))}${court ? ' · ' + courtLbl(court) : ''}<br>👥 ${who}</div>
-    <div class="hn-btns"><button class="btn primary lg" data-action="c-open" data-id="${x.s ? x.s.id : x.c.id + '|' + x.date}">${ic('users', 'sm')} Buka sesi & kehadiran</button>${mapsLink(x.c) ? `<a class="btn lg" href="${mapsLink(x.c)}" target="_blank" rel="noopener">🧭 Navigasi</a>` : ''}</div>
+    <div class="hn-meta">📍 ${vLbl(x.s, x.c)}${court ? ' · ' + courtLbl(court) : ''}<br>👥 ${who}</div>
+    <div class="hn-btns"><button class="btn primary lg" data-action="c-open" data-id="${x.s ? x.s.id : x.c.id + '|' + x.date}">${ic('users', 'sm')} Buka sesi & kehadiran</button>${mapsLink(x.c, x.s) ? `<a class="btn lg" href="${mapsLink(x.c, x.s)}" target="_blank" rel="noopener">🧭 Navigasi</a>` : ''}</div>
     ${strip ? `<div class="hn-ck">${strip}</div>` : ''}</div>`;
 }
 function todoCard(past) {
@@ -161,13 +164,13 @@ const monOf = d => addDays(d, -((parseISO(d).getDay() + 6) % 7));
 const DS = ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'];
 function tlItem(x) {
   const [a, b] = sTime(x.s, x.c), cats = myCat(x.s), n = x.s ? rosterOf(x.s, x.c).length : T('class_enrolments').filter(e => e.class_id === x.c.id).length;
-  const court = cats.length ? groupsOf(x.s.id).filter(g => cats.includes(g.category)).map(g => g.court).filter(Boolean).join(', ') : sCourt(x.s, x.c);
+  const court = myCourt(x.s, x.c);
   const done = isDone(x), cancel = x.s?.status === 'cancelled', strip = checkStrip(x);
   const who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ') || '—') : `${n} pelajar${trN(x.s, x.c, x.date)}`;
   return `<div class="tl k-${kindOf(x.c)} ${cancel ? 'cancel' : ''}"><div class="tl-t"><b>${a}</b><span>${b}</span></div>
     <div class="tl-body"><button class="tl-card" data-action="c-open" data-id="${x.s ? x.s.id : x.c.id + '|' + x.date}">
       <div class="tl-title">${esc(x.c.title || progName(x.c.programme_id))}${done ? ' <span class="tl-ok">✓</span>' : ''}${cancel ? ' <span class="badge b-muted">Dibatalkan</span>' : ''}</div>
-      <div class="tl-meta">📍 ${esc(venueName(x.c.venue_id))}${court ? ' · ' + courtLbl(court) : ''}</div>
+      <div class="tl-meta">📍 ${vLbl(x.s, x.c)}${court ? ' · ' + courtLbl(court) : ''}</div>
       <div class="tl-meta">👥 ${who}${cats.length ? ' · Kategori: <b>' + cats.map(esc).join(', ') + '</b>' : ''}</div></button>${strip}</div></div>`;
 }
 CV.minggu = () => {

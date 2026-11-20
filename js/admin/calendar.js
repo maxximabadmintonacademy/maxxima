@@ -4,7 +4,7 @@ import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, loadRange } from '../data.js';
 import { ic, esc, F, val, UI, app, toast, openModal, pageHead, hm, todayISO, addDays, parseISO, iso, fmtDate, fmtShort, DAYS, MONTHS } from '../ui.js';
 import { T, byId, venueName, progName, staffName, studentName, progColor, livePackages } from './helpers.js';
-import { courtLbl, calItems, sessionAlerts, sTime, sCoach, sCourt, isPersonal, groupsOf, rosterOf, langWarn, ensureSession, coachIds, syncCoCoaches } from './sessions.js';
+import { courtLbl, calItems, sessionAlerts, sTime, sCoach, sCourt, sVenue, isPersonal, groupsOf, rosterOf, langWarn, ensureSession, coachIds, syncCoCoaches } from './sessions.js';
 
 const mondayOf = d => { const x = parseISO(d), w = (x.getDay() + 6) % 7; x.setDate(x.getDate() - w); return iso(x); };
 const C = () => (UI.cal ||= { mode: 'minggu', date: todayISO(), venue: '', coach: '', prog: '', type: '', alert: false });
@@ -23,7 +23,7 @@ const slot = ({ s, c, date }, showDate) => {
   return `<button class="slot ${al.length ? 'alert' : ''} ${s ? '' : 'virtual'} ${s?.status === 'cancelled' ? 'cancel' : ''}" data-action="${s ? 'sess-open' : 'sess-open-v'}" data-id="${s ? s.id : c.id + '|' + date}" style="border-left-color:${progColor(c.programme_id)}">
     <b>${showDate ? fmtShort(date) + ' · ' : ''}${a}–${b} · ${esc(c.title || progName(c.programme_id))}</b>
     ${who ? `<div style="font-weight:600">${esc(who)}</div>` : ''}
-    <div class="meta">${esc(venueName(c.venue_id))}${sCourt(s, c) ? ' · ' + courtLbl(sCourt(s, c)) : ''}</div>
+    <div class="meta">${esc(venueName(sVenue(s, c)))}${s?.venue_id && s.venue_id !== c.venue_id ? ' (sementara)' : ''}${sCourt(s, c) ? ' · ' + courtLbl(sCourt(s, c)) : ''}</div>
     <div class="meta">${esc(coaches || '—')} · ${n} pelajar${(c.categories || []).length ? ' · ' + c.categories.map(esc).join('/') : ''}</div>
     ${al.length ? `<div class="warnline">${ic('alert', 'sm')} ${al.map(esc).join(' · ')}</div>` : ''}
   </button>`;

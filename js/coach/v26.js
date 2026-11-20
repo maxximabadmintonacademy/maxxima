@@ -108,7 +108,7 @@ ACTIONS['c-checkin'] = async raw => {
         if (S.mode === 'supabase' && kind === 'in' && (now < st0 - 7200000 || now > en0)) throw new Error('Check in hanya dibuka 2 jam sebelum sesi hingga sesi tamat.');
         if (S.mode === 'supabase' && kind === 'out' && now < st0) throw new Error('Check out hanya selepas sesi bermula.'); }
       // lokasi: jika jauh dari dewan, wajib nyatakan sebab
-      const ven = byId('venues', c.venue_id), gg = GEO?.state === 'ok' ? GEO : null;
+      const ven = byId('venues', (sid && byId('class_sessions', sid)?.venue_id) || c.venue_id), gg = GEO?.state === 'ok' ? GEO : null;
       const dist = gg && ven?.lat != null ? Math.round(distM(gg.lat, gg.lng, ven.lat, ven.lng)) : null;
       if (dist != null && dist > (ven.radius_m || 300) && !(d.note || '').trim()) throw new Error(`Anda kira-kira ${dist} m dari ${ven.name}. Nyatakan sebab di ruang Catatan (cth. dewan berlainan).`);
       if (kind === 'in' && GEO?.state === 'no' && !(d.note || '').trim()) throw new Error('Lokasi tidak dibenarkan. Hidupkan lokasi (GPS) atau nyatakan sebab di Catatan.');

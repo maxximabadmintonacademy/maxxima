@@ -37,7 +37,7 @@ const when = (date, c) => {   // masa ikut SESI (jika dipinda), bukan templat ke
   const ss = c?.id ? (S.t.class_sessions || []).find(x => x.class_id === c.id && x.session_date === date) : null, a = hm(ss?.start_time || c?.start_time), b = hm(ss?.end_time || c?.end_time);
   return `${DAYS[new Date(date + 'T00:00:00').getDay()]}, ${fmtShort(date)}${c && a ? ' · ' + a + '–' + b : ''}`;
 };
-const where = c => c ? `${progName(c.programme_id)} · ${venueName(c.venue_id)}` : '';
+const where = (c, s) => c ? `${progName(c.programme_id)} · ${venueName(s?.venue_id || c.venue_id)}${s?.venue_id && s.venue_id !== c.venue_id ? ' (' + t('lokasi sementara') + ')' : ''}` : '';
 const unread = () => T('notifications').filter(n => !n.read_at);
 
 /* ===================================================================== SHELL */
@@ -342,11 +342,11 @@ PV.jadual = () => {
   const hrs = Number(S.t.settings?.find(s => s.key === 'billing')?.value?.cancel_notice_hours ?? 48);
   return `${head(t('Jadual'), t('Sesi akan datang, tempahan dan sejarah kehadiran'))}${kidTabs()}
   <div class="card mb"><div class="card-head"><div><h3>${t('Sesi akan datang')} — ${esc(k.full_name)}</h3><div class="sub">${t('30 hari seterusnya')}</div></div></div>
-   ${up.length ? `<ul class="list">${up.map(u => { const pr = pendingReq(k.id, u.c.id, u.date); return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${when(u.date, u.s?.start_time ? { start_time: u.s.start_time, end_time: u.s.end_time || u.c.end_time } : u.c)}</div><div class="li-sub">${esc(where(u.c))}${u.rec?.note && /Reschedule/.test(u.rec.note) ? ' · ' + esc(u.rec.note) : ''}</div></div>
+   ${up.length ? `<ul class="list">${up.map(u => { const pr = pendingReq(k.id, u.c.id, u.date); return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${when(u.date, u.s?.start_time ? { start_time: u.s.start_time, end_time: u.s.end_time || u.c.end_time } : u.c)}</div><div class="li-sub">${esc(where(u.c, u.s))}${u.rec?.note && /Reschedule/.test(u.rec.note) ? ' · ' + esc(u.rec.note) : ''}</div></div>
      <div class="actions">${u.off ? `<span class="badge b-muted">${u.s?.status === 'cancelled' ? t('Dibatalkan') : esc(tr(LABEL[u.rec?.status] || ''))}</span>` : `${u.booking ? `<span class="badge b-info">${t('Ditempah')}</span>` : isPersonalC(u.c) ? `<span class="badge b-purple">${t('Personal')}</span>` : `<span class="badge b-muted">${t('Kelas tetap')}</span>`}
        ${pr ? `<span class="badge b-warn">${t('Permintaan disemak admin')}</span>` : hoursLeft(u.c, u.date, u.s) > 0 ? `<button class="btn sm" data-action="p-change" data-id="${k.id}|${u.c.id}|${u.date}">${t('Ubah / Batal')}</button>` : ''}`}</div></li>`; }).join('')}</ul>` : `<div class="empty">${t('Tiada sesi dijadualkan dalam 30 hari ini.')}</div>`}</div>
   ${fp ? `<div class="card mb"><div class="card-head"><div><h3>${t('Tempah sesi')}</h3><div class="sub">${t('Pakej fleksibel anda: baki <b>{n}</b> sesi', { n: pkgRemaining(fp) })}${fp.expires_on ? ' · ' + t('sah hingga {d}', { d: fmtDate(fp.expires_on) }) : ''}. ${t('Pembatalan perlu dibuat sekurang-kurangnya {h} jam sebelum kelas.', { h: hrs })}</div></div></div>
-   ${canBook.length ? `<ul class="list">${canBook.map(({ s, c }) => { const seats = seatCache[s.id]; return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${when(s.session_date, c)}</div><div class="li-sub">${esc(where(c))}${seats != null ? ` · ${seats > 0 ? t('{n} tempat kosong', { n: seats }) : `<b style="color:var(--bad)">${t('penuh')}</b>`}` : ''}</div></div>
+   ${canBook.length ? `<ul class="list">${canBook.map(({ s, c }) => { const seats = seatCache[s.id]; return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${when(s.session_date, c)}</div><div class="li-sub">${esc(where(c, s))}${seats != null ? ` · ${seats > 0 ? t('{n} tempat kosong', { n: seats }) : `<b style="color:var(--bad)">${t('penuh')}</b>`}` : ''}</div></div>
      <div class="actions"><button class="btn sm primary" data-action="p-book" data-id="${s.id}" data-kid="${k.id}" ${seats === 0 ? 'disabled' : ''}>${t('Tempah')}</button></div></li>`; }).join('')}</ul>` : `<div class="empty">${t('Tiada sesi tersedia untuk ditempah dalam 21 hari.')}</div>`}</div>` : ''}
   <div class="card"><div class="card-head"><div><h3>${t('Sejarah kehadiran')}</h3><div class="sub">${t('Sahkan kehadiran anak selepas setiap sesi')}</div></div></div>
    ${hist.length ? `<ul class="list">${hist.map(a => { const { c } = classOf(a.session_id); return `<li class="list-item" style="flex-wrap:wrap"><div class="li-main"><div class="li-title">${a.session_date ? when(a.session_date, c) : ''}</div><div class="li-sub">${esc(where(c))}</div></div>
@@ -357,7 +357,7 @@ Object.assign(ACTIONS, {
   'p-kid': id => { UI.pKid = id; app.render(); },
   'p-book': async (id, el) => {
     const kid = el.dataset.kid, { s, c } = classOf(id);
-    confirmModal({ title: t('Tempah sesi?'), message: `<b>${esc(kidName(kid))}</b><br>${when(s.session_date, c)}<br>${esc(where(c))}<br><span class="muted">${t('1 sesi akan ditolak daripada pakej fleksibel apabila anak hadir.')}</span>`, ok: t('Tempah'),
+    confirmModal({ title: t('Tempah sesi?'), message: `<b>${esc(kidName(kid))}</b><br>${when(s.session_date, c)}<br>${esc(where(c, s))}<br><span class="muted">${t('1 sesi akan ditolak daripada pakej fleksibel apabila anak hadir.')}</span>`, ok: t('Tempah'),
       onOk: async () => {
         if (S.mode === 'demo') { const fp = flexPkg(kid); if (!fp) throw new Error(t('Tiada pakej fleksibel aktif untuk program ini.')); await insert('attendance', { session_id: id, student_id: kid, status: 'booked' }); }
         else { const { error } = await S.client.rpc('book_session', { p_student: kid, p_session: id }); if (error) throw error; await refresh(['attendance', 'student_packages']); }

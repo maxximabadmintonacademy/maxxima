@@ -546,7 +546,7 @@ const D = {
   // --- jadual ---
   'Sesi akan datang, tempahan dan sejarah kehadiran': ['Upcoming sessions, bookings and attendance history', '即将上课、预约与出席记录'],
   'Sesi akan datang': ['Upcoming sessions', '即将上课'], '30 hari seterusnya': ['Next 30 days', '未来 30 天'],
-  'Ditempah': ['Booked', '已预约'], 'Kelas tetap': ['Fixed class', '固定班'], 'Tiada sesi dijadualkan dalam 30 hari ini.': ['No sessions scheduled in the next 30 days.', '未来 30 天没有已安排的课程。'],
+  'Ditempah': ['Booked', '已预约'], 'lokasi sementara': ['temporary location', '临时地点'], 'Kelas tetap': ['Fixed class', '固定班'], 'Tiada sesi dijadualkan dalam 30 hari ini.': ['No sessions scheduled in the next 30 days.', '未来 30 天没有已安排的课程。'],
   'Tempah sesi': ['Book a session', '预约课程'], 'Tempah': ['Book', '预约'], 'Tempah sesi?': ['Book this session?', '预约这节课？'],
   'Pakej fleksibel anda: baki <b>{n}</b> sesi': ['Your flexible package: <b>{n}</b> session(s) left', '您的灵活配套：剩余 <b>{n}</b> 节课'],
   'Pembatalan perlu dibuat sekurang-kurangnya {h} jam sebelum kelas.': ['Cancellations must be made at least {h} hours before class.', '取消须在上课前至少 {h} 小时提出。'],
