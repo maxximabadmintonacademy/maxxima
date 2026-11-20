@@ -42,6 +42,14 @@ const eligTxt = c => { const b = c.birth_from, g = c.girls_from;
 const eligible = (c, by, g) => { const lo = g === 'girl' && c.girls_from ? c.girls_from : c.birth_from;
   return (!by || ((!lo || by >= lo) && (!c.birth_to || by <= c.birth_to))) && (!g || c.gender === 'open' || c.gender === 'mixed' || (c.gender === 'boys' ? g === 'boy' : g === 'girl')); };
 const mapUrl = T => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([T.venue, T.venue_area].filter(Boolean).join(', '))}`;
+/* Teks bebas kejohanan ikut bahasa: tournaments.i18n = { en: { notice, description, prizes, rules, scoring_note, eligibility_note }, zh: {...}, ms: {...} } */
+const tx = (T, f) => { const v = T?.i18n?.[getLang()]?.[f]; return v != null && v !== '' ? v : T?.[f]; };
+/* Nama kategori ikut bahasa (cth. "Boys' Singles Under 12" → "Perseorangan Lelaki Bawah 12" / "男子单打 12岁以下") */
+const catName = nm => { const s = String(nm || ''), n = (s.match(/(\d+)/) || [])[1]; if (!n) return s;
+  const g = /girl|perempuan|女/i.test(s) && !/boys?\s*&|&\s*girls?|lelaki\s*&/i.test(s) ? 'g' : /boy|lelaki|男/i.test(s) && !/&/.test(s) ? 'b' : 'm', L = getLang();
+  if (L === 'zh') return g === 'b' ? `男子单打 ${n}岁以下` : g === 'g' ? `女子单打 ${n}岁以下` : `${n}岁以下单打（男女）`;
+  if (L === 'en') return g === 'b' ? `Boys' Singles Under ${n}` : g === 'g' ? `Girls' Singles Under ${n}` : `Singles Under ${n} (Boys & Girls)`;
+  return g === 'b' ? `Perseorangan Lelaki Bawah ${n}` : g === 'g' ? `Perseorangan Perempuan Bawah ${n}` : `Perseorangan Bawah ${n} (Lelaki & Perempuan)`; };
 function countdown(T) {
   if (!isOpen(T) || !T.registration_deadline) return '';
   const ms = new Date(T.registration_deadline + 'T23:59:59+08:00') - Date.now(); if (ms <= 0) return '';
@@ -51,22 +59,22 @@ function countdown(T) {
 
 function page() {
   if (!INFO?.ok) return `<div class="wrap done"><div class="big">🏸</div><h1>${t('Kejohanan tidak dijumpai')}</h1><p class="muted">${t('Pautan mungkin salah atau halaman belum diterbitkan.')}</p></div>`;
-  const T = INFO.t, cats = INFO.cats || [], open = isOpen(T), rules = parseRules(T.rules);
+  const T = INFO.t, cats = INFO.cats || [], open = isOpen(T), rules = parseRules(tx(T, 'rules'));
   const max = cats.reduce((n, c) => Math.max(n, c.max || 0), 0);
   const dates = [[T.early_deadline, t('Akhir jersi percuma & bayaran penuh')], [T.registration_deadline, t('Tutup pendaftaran (atau lebih awal jika penuh)')], [T.list_date, t('Senarai peserta dikongsi')], [T.protest_end, t('Tempoh bantahan kelayakan tamat')], [T.start_date, t('Hari pertandingan'), 'game']].filter(x => x[0]).sort((a, b) => a[0].localeCompare(b[0]));
   const showRes = RES && (T.draw_public || ['ongoing', 'completed', 'closed'].includes(T.status)) && (RES.matches || []).length;
-  const prizes = String(T.prizes || '').split('\n').filter(l => l.trim()).map(l => { const i = l.indexOf(':'); return i > 0 ? [l.slice(0, i).trim(), l.slice(i + 1).trim()] : ['', l.trim()]; });
+  const prizes = String(tx(T, 'prizes') || '').split('\n').filter(l => l.trim()).map(l => { const i = l.indexOf(':'); return i > 0 ? [l.slice(0, i).trim(), l.slice(i + 1).trim()] : ['', l.trim()]; });
   const nameParts = String(T.name).match(/^(.*?)(\s+(?:\d{4}))?$/) || [T.name, T.name, ''];
   const contact = T.contact_phone ? wa(T.contact_phone, t('Hi, saya ingin bertanya tentang {n}', { n: T.name })) : '';
   return `
   <header class="topbar"><div class="wrap"><a class="brand" href="#top"><img src="assets/logo.png" alt=""><span>${esc(T.academy || 'Maxxima')}</span></a>
     <nav><a href="#kategori">${t('Kategori')}</a>${(T.shirt_sizes || []).length ? `<a href="#jersi">${t('Jersi')}</a>` : ''}${T.pay_note || T.pay_qr_path ? `<a href="#bayaran">${t('Bayaran')}</a>` : ''}<a href="#format">${t('Format')}</a>${rules.length ? `<a href="#peraturan">${t('Peraturan')}</a>` : ''}${showRes ? `<a href="#keputusan">${T.status === 'open' || T.status === 'closed' ? t('Cabutan') : t('Keputusan')}</a>` : ''}<a href="#peserta">${t('Portal peserta')}</a><a href="#semak">${t('Semak status')}</a>${open ? `<a class="cta" href="#daftar" data-reg>${t('Daftar')}</a>` : ''}</nav>
     <div class="langsw2">${LANGS.map(([c, l]) => `<button type="button" class="${c === getLang() ? 'on' : ''}" data-lang="${c}">${l}</button>`).join('')}</div></div></header>
-  ${T.notice ? `<div class="notice"><div class="wrap"><span class="tag">${t('NOTIS')}</span><span>${esc(T.notice)}</span>${contact ? `<a href="${contact}" target="_blank" rel="noopener">${t('Hubungi admin')}</a>` : ''}</div></div>` : ''}
+  ${T.notice ? `<div class="notice"><div class="wrap"><span class="tag">${t('NOTIS')}</span><span>${esc(tx(T, 'notice'))}</span>${contact ? `<a href="${contact}" target="_blank" rel="noopener">${t('Hubungi admin')}</a>` : ''}</div></div>` : ''}
   <section class="hero" id="top"><div class="wrap"><div>
     <div class="chips">${cats.length ? `<span class="chip2">${t('Junior')} ${esc(cats.map(c => (String(c.name).match(/(\d+)/) || [])[1]).filter(Boolean).sort((a, b) => a - b).filter((v, i, a) => i === 0 || i === a.length - 1).map(x => 'U' + x).join('–'))}</span>` : ''}<span class="chip2">${T.format === 'rr_groups' ? t('Round robin perseorangan') : t('Kalah mati')}</span></div>
     <h1>${esc(nameParts[1])}${nameParts[2] ? ` <em>${esc(nameParts[2].trim())}</em>` : ''}</h1>
-    ${T.description ? `<p class="lead">${esc(T.description)}</p>` : ''}
+    ${T.description ? `<p class="lead">${esc(tx(T, 'description'))}</p>` : ''}
     <div class="when"><span>📅 ${fd(T.start_date)}</span>${T.start_time ? `<span>⏰ ${hm(T.start_time)}${T.end_time ? '–' + hm(T.end_time) : ''}</span>` : ''}<span>📍 ${esc(T.venue || '')}${T.venue_area ? ', ' + esc(T.venue_area) : ''}</span></div>
     <div class="btns">${open ? `<a class="b lime" href="#daftar" data-reg>${t('Daftar pemain')} · ${RM(T.entry_fee)}</a>` : `<span class="b ghost">${t('Pendaftaran ditutup')}</span>`}${rules.length ? `<a class="b ghost" href="#peraturan">${t('Lihat peraturan')}</a>` : ''}</div>
     ${countdown(T)}</div>
@@ -83,15 +91,15 @@ function page() {
   ${showRes ? `<section class="sec wrap" id="keputusan"><h2>${['ongoing', 'completed'].includes(T.status) ? t('Keputusan & kedudukan langsung') : t('Cabutan kumpulan & jadual')}</h2>${results()}</section>` : ''}
 
   <section class="sec wrap" id="kategori"><h2>${t('Kategori')}</h2><p class="sub">${t('{n} kategori perseorangan · kelayakan ikut tahun lahir, bukan tarikh hari jadi.', { n: cats.length })}</p>
-    <div class="cards">${cats.map(c => { const left = c.max ? c.max - c.taken : null, pct = c.max ? Math.min(100, Math.round(c.taken / c.max * 100)) : 0; return `<div class="cat ${left === 0 ? 'full' : ''}"><div class="n">${esc(c.name)}</div><div class="el">${G[c.gender]?.() || ''} · ${eligTxt(c)}</div>
+    <div class="cards">${cats.map(c => { const left = c.max ? c.max - c.taken : null, pct = c.max ? Math.min(100, Math.round(c.taken / c.max * 100)) : 0; return `<div class="cat ${left === 0 ? 'full' : ''}"><div class="n">${esc(catName(c.name))}</div><div class="el">${G[c.gender]?.() || ''} · ${eligTxt(c)}</div>
       ${c.max ? `<div class="bar"><i style="width:${pct}%"></i></div><div class="row"><span>${t('{a}/{b} berdaftar', { a: c.taken, b: c.max })}</span><b>${left > 0 ? t('{n} tempat lagi', { n: left }) : t('Penuh')}</b></div>` : ''}
       <div class="row"><span>${t('Yuran')}</span><b>${RM(c.fee)}</b></div>${open && left !== 0 ? `<button class="b dark" style="justify-content:center" data-pick="${c.id}">${t('Pilih kategori')}</button>` : ''}</div>`; }).join('')}</div>
-    ${T.eligibility_note ? `<div class="warn">⚠️ ${esc(T.eligibility_note)}</div>` : ''}</section>
+    ${T.eligibility_note ? `<div class="warn">⚠️ ${esc(tx(T, 'eligibility_note'))}</div>` : ''}</section>
 
   <section class="sec wrap" id="format"><h2>${t('Format')}</h2><p class="sub">${T.format === 'rr_groups' ? t('Setiap pemain dijamin {m} perlawanan kumpulan.', { m: (T.group_size || 4) - 1 }) : t('Kalah mati (knockout).')}</p>
     ${T.format === 'rr_groups' ? `<div class="two"><div class="box"><span class="step-n">1</span><h3>${t('Peringkat kumpulan')}</h3><p>${t('{p} pemain dibahagi kepada kumpulan A–D, {g} pemain setiap kumpulan. Setiap pemain bermain {m} perlawanan. Hanya juara kumpulan mara.', { p: max || 16, g: T.group_size || 4, m: (T.group_size || 4) - 1 })}</p></div>
       <div class="box"><span class="step-n">2</span><h3>${t('Pusingan akhir round robin')}</h3><p>${t('4 juara kumpulan bermain {m} lagi perlawanan setiap seorang. Kedudukan akhir menentukan tempat 1 hingga 4.', { m: 3 })}</p></div></div>` : ''}
-    <div class="box" style="margin-top:12px"><h3>🏸 ${t('Pemarkahan')}</h3><p>${esc(T.scoring_note || t('Satu game hingga {p} mata.', { p: T.points_to }))}</p></div></section>
+    <div class="box" style="margin-top:12px"><h3>🏸 ${t('Pemarkahan')}</h3><p>${esc(tx(T, 'scoring_note') || t('Satu game hingga {p} mata.', { p: T.points_to }))}</p></div></section>
 
   ${prizes.length ? `<section class="sec wrap" id="hadiah"><h2>${t('Hadiah setiap kategori')}</h2><div class="prizes">${prizes.map(([a, b], i) => `<div class="prize ${i === 0 ? 'p1' : i === 1 ? 'p2' : ''}">${a ? `<b>${esc(a)}</b>` : ''}<span>${esc(b)}</span></div>`).join('')}</div></section>` : ''}
 
@@ -107,7 +115,7 @@ function page() {
   ${rules.length ? `<section class="sec wrap rules" id="peraturan"><h2>${t('Peraturan')}</h2><div class="jump">${rules.map((r, i) => `<a href="#r${i}">${esc(r.h)}</a>`).join('')}</div>${rules.map((r, i) => `<details id="r${i}" ${i === 0 ? 'open' : ''}><summary>${esc(r.h)}</summary><ul>${r.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`).join('')}</section>` : ''}
 
   ${T.pay_note || T.pay_qr_path ? `<section class="sec wrap" id="bayaran"><h2>${t('Yuran & bayaran')}</h2><div class="jer"><div class="box">
-    <div class="fees">${[...new Set((INFO.cats || []).map(c => Number(c.fee || 0)))].length > 1 ? (INFO.cats || []).map(c => `<div><span>${esc(c.name)}</span><b>${RM(c.fee)}</b></div>`).join('') : `<div><span>${t('Yuran penyertaan setiap kategori')}</span><b>${RM((INFO.cats || [])[0]?.fee ?? T.entry_fee)}</b></div>`}</div>
+    <div class="fees">${[...new Set((INFO.cats || []).map(c => Number(c.fee || 0)))].length > 1 ? (INFO.cats || []).map(c => `<div><span>${esc(catName(c.name))}</span><b>${RM(c.fee)}</b></div>`).join('') : `<div><span>${t('Yuran penyertaan setiap kategori')}</span><b>${RM((INFO.cats || [])[0]?.fee ?? T.entry_fee)}</b></div>`}</div>
     <ol class="paysteps"><li>${t('Daftar dan simpan no. rujukan anda.')}</li><li>${t('Bayar ke akaun di sebelah — guna no. rujukan sebagai rujukan bayaran.')}</li><li>${t('Muat naik bukti bayaran di "Semak status & bayaran".')}</li></ol>
     ${T.registration_deadline ? `<p class="muted" style="font-size:13px;margin-top:8px">${t('Pendaftaran & bayaran ditutup {d}.', { d: fd(T.registration_deadline) })}</p>` : ''}</div>
     <div>${payBox('', null)}</div></div></section>` : ''}
@@ -164,7 +172,7 @@ function form() {
     <label class="f full">${t('No. IC / MyKid (12 digit)')}<input name="ic" inputmode="numeric" maxlength="14" value="${esc(v.ic || '')}" placeholder="cth. 140523101234"><small class="muted" style="font-size:11.5px">${t('Untuk semakan umur sahaja. Hanya 4 digit terakhir disimpan.')}</small></label>
     <label class="f">${t('Jantina')}<select name="gender"><option value="">—</option><option value="boy" ${v.gender === 'boy' ? 'selected' : ''}>${t('Lelaki')}</option><option value="girl" ${v.gender === 'girl' ? 'selected' : ''}>${t('Perempuan')}</option></select></label>
     <label class="f">${t('Tahun lahir')}<select name="birth_year"><option value="">—</option>${years.map(y => `<option ${Number(v.birth_year) === y ? 'selected' : ''}>${y}</option>`).join('')}</select></label>
-    <label class="f full">${t('Kategori')}<select name="category_id"><option value="">${v.birth_year && v.gender ? (elig.length ? t('Pilih kategori yang layak') : t('Tiada kategori yang layak / kosong')) : t('Pilih tahun lahir & jantina dahulu')}</option>${elig.map(c => `<option value="${c.id}" ${v.category_id === c.id ? 'selected' : ''}>${esc(c.name)} · ${RM(c.fee)}</option>`).join('')}</select></label>
+    <label class="f full">${t('Kategori')}<select name="category_id"><option value="">${v.birth_year && v.gender ? (elig.length ? t('Pilih kategori yang layak') : t('Tiada kategori yang layak / kosong')) : t('Pilih tahun lahir & jantina dahulu')}</option>${elig.map(c => `<option value="${c.id}" ${v.category_id === c.id ? 'selected' : ''}>${esc(catName(c.name))} · ${RM(c.fee)}</option>`).join('')}</select></label>
     <label class="f full">${t('Akademi / kelab / sekolah (pilihan)')}<input name="club" value="${esc(v.club || '')}" maxlength="120"></label></div>`;
   if (s === 2) body = `<div class="form-grid">
     <label class="f full">${t('Nama penjaga')}<input name="guardian_name" value="${esc(v.guardian_name || '')}" maxlength="120"></label>
@@ -198,7 +206,7 @@ function results() {
       return `<div class="card card-pad mb"><b>${title}</b><table class="st" style="margin-top:6px"><tr><th>${t('Pemain')}</th><th>${t('M')}</th><th>${t('K')}</th><th>+/-</th></tr>${st.map((r, i) => `<tr><td>${i + 1}. ${nm(r.id)}</td><td>${r.w}</td><td>${r.l}</td><td>${r.pf - r.pa}</td></tr>`).join('')}</table>
       <table class="st" style="margin-top:8px">${list.sort((a, b) => a.round_no - b.round_no || a.match_no - b.match_no).map(m => `<tr><td>${nm(m.entry_a)}</td><td><b>${m.status === 'pending' ? (m.play_time ? hm(m.play_time) : 'vs') : m.status === 'walkover' ? 'WO' : `${m.score_a}–${m.score_b}`}</b>${m.status === 'pending' && m.court ? `<div style="font-size:11px;color:#64748b">C${esc(m.court)}</div>` : ''}</td><td style="text-align:right">${nm(m.entry_b)}</td></tr>`).join('')}</table></div>`; };
     const ko = ms.filter(m => m.stage === 'ko');
-    return `<h3 style="margin:14px 0 8px">${esc(c.name)}</h3>${fin.length ? tbl(t('Pusingan akhir'), fin) : ''}${grp.map(g => tbl(t('Kumpulan') + ' ' + GROUP_NAMES[g - 1], ms.filter(m => m.stage === 'group' && m.group_no === g))).join('')}
+    return `<h3 style="margin:14px 0 8px">${esc(catName(c.name))}</h3>${fin.length ? tbl(t('Pusingan akhir'), fin) : ''}${grp.map(g => tbl(t('Kumpulan') + ' ' + GROUP_NAMES[g - 1], ms.filter(m => m.stage === 'group' && m.group_no === g))).join('')}
       ${ko.length ? `<div class="card card-pad mb">${ko.sort((a, b) => a.round_no - b.round_no || a.match_no - b.match_no).map(m => `<div style="font-size:13px;margin:3px 0">${esc(m.round_label || '')} #${m.match_no}: ${nm(m.entry_a)} vs ${nm(m.entry_b)} ${m.score_text ? '· <b>' + esc(m.score_text) + '</b>' : ''}</div>`).join('')}</div>` : ''}`;
   }).join('');
 }
@@ -212,7 +220,7 @@ function startFeed() {
   const ago = iso => { const m = Math.max(1, Math.round((Date.now() - new Date(iso)) / 6e4)); return m < 60 ? t('{n} minit lalu', { n: m }) : m < 1440 ? t('{n} jam lalu', { n: Math.round(m / 60) }) : t('{n} hari lalu', { n: Math.round(m / 1440) }); };
   let i = 0;
   const show = () => { const x = FEED[i % FEED.length]; i++;
-    el.innerHTML = `<div class="feed-ic">🏸</div><div><b>${esc(x.name)}</b> ${t('baru mendaftar')}<br><span>${esc(x.cat)}${x.club ? ' · ' + esc(x.club) : ''} · ${ago(x.at)}</span></div><button aria-label="x" data-feedx>✕</button>`;
+    el.innerHTML = `<div class="feed-ic">🏸</div><div><b>${esc(x.name)}</b> ${t('baru mendaftar')}<br><span>${esc(catName(x.cat))}${x.club ? ' · ' + esc(x.club) : ''} · ${ago(x.at)}</span></div><button aria-label="x" data-feedx>✕</button>`;
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     el.querySelector('[data-feedx]').onclick = () => { clearInterval(startFeed._t); el.remove(); try { sessionStorage.setItem('tn_feed_off', '1'); } catch { /* abaikan */ } }; };
   setTimeout(() => { show(); startFeed._t = setInterval(show, 3000); }, 2500);
@@ -229,7 +237,7 @@ function playerBox() {
   const tbl = (title, list) => { if (!list.length) return ''; const ids = [...new Set(list.flatMap(m => [m.entry_a, m.entry_b]).filter(Boolean))], st = standings(ids, list);
     return `<div class="box pbx" style="margin-top:10px"><b>${title}</b><table class="st" style="margin-top:6px"><tr><th>${t('Pemain')}</th><th>${t('M')}</th><th>${t('K')}</th><th>+/-</th></tr>${st.map((r, i) => `<tr style="${r.id === e.id ? 'background:#eef4ff;font-weight:700' : ''}"><td>${i + 1}. ${nm(r.id)}</td><td>${r.w}</td><td>${r.l}</td><td>${r.pf - r.pa}</td></tr>`).join('')}</table></div>`; };
   const place = placeOf(ME), withdrawn = e.status === 'withdrawn';
-  return `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start"><div><div style="font-size:20px;font-weight:800">${esc(e.name)}</div><div class="muted">${esc(ME.cat.name)} · ${esc(e.ref)}${e.club ? ' · ' + esc(e.club) : ''}</div></div><button class="b out" data-plout>${t('Log keluar')}</button></div>
+  return `<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start"><div><div style="font-size:20px;font-weight:800">${esc(e.name)}</div><div class="muted">${esc(catName(ME.cat.name))} · ${esc(e.ref)}${e.club ? ' · ' + esc(e.club) : ''}</div></div><button class="b out" data-plout>${t('Log keluar')}</button></div>
     <div class="dates" style="margin-top:12px"><div><b>${t('Status')}</b><span>${withdrawn ? t('Tarik diri') : e.status === 'confirmed' ? t('Disahkan ✓') : t('Berdaftar')}</span></div>
       <div><b>${t('Bayaran')}</b><span>${(PST[e.pay_status] || PST.unpaid)()}${e.refund_amount ? ` · ${t('dipulangkan')} ${RM(e.refund_amount)}${e.refunded_at ? ' (' + fd(e.refunded_at) + ')' : ''}` : ''}</span></div>
       ${e.shirt ? `<div><b>${t('Jersi')}</b><span>${esc(e.shirt)}${e.jersey ? ' · ' + t('percuma ✓') : ''}</span></div>` : ''}
@@ -251,7 +259,7 @@ async function openCert(P) {
   const e = P.entry, T = P.t, place = placeOf(P);
   let cfg = {}; try { cfg = (await rpc('public_cert_info')) || {}; } catch { /* abaikan */ }
   const winPlain = place && (cfg.winner_mode || 'plain') === 'plain';
-  openDoc(certDoc([{ name: e.name, cat: P.cat.name, place: winPlain ? 0 : place, ref: e.ref }], { event: T.name, dates: fd(T.start_date), venue: T.venue, academy: 'Maxxima Badminton Academy',
+  openDoc(certDoc([{ name: e.name, cat: catName(P.cat.name), place: winPlain ? 0 : place, ref: e.ref }], { event: T.name, dates: fd(T.start_date), venue: T.venue, academy: 'Maxxima Badminton Academy',
     logo: new URL('assets/logo.png', location.href).href, cfg, imgUrl: p => (/^https?:/.test(p) ? p : `${CONFIG.SUPABASE_URL}/storage/v1/object/public/public-media/${p.split('/').map(encodeURIComponent).join('/')}`) }), `sijil-${e.ref}.html`);
 }
 async function plLogin(ref, phone, silent) {
