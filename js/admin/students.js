@@ -96,24 +96,8 @@ Object.assign(ACTIONS, {
     app.render();
   },
   'copy-text': async v => { try { await navigator.clipboard.writeText(v); toast('Disalin'); } catch { toast('Tidak dapat menyalin', true); } },
-  'lead-trial': id => {
-    const l = byId('leads', id);
-    openModal({
-      title: `Jadual Trial — ${esc(l.child_name)}`, submit: 'Jadualkan',
-      body: `<p class="muted" style="margin-bottom:12px">Percubaan percuma: satu sesi kumpulan 2 jam untuk pelajar baharu. Personal coaching memerlukan sesi pengenalan berbayar.</p>
-      <div class="form-grid">
-        ${F('Jenis', 'kind', { opts: [['group_trial', 'Trial percuma (kumpulan, 2 jam)'], ['personal_intro', 'Sesi pengenalan personal (60 min, berbayar)']], full: true })}
-        ${F('Lokasi', 'venue_id', { value: l.venue_id, opts: venueOpts() })}
-        ${F('Coach', 'coach_id', { opts: coachOpts('— Tentukan kemudian —') })}
-        ${F('Tarikh', 'trial_date', { type: 'date', value: addDays(todayISO(), 3), req: true })}
-        ${F('Masa', 'trial_time', { type: 'time', value: '17:00' })}
-      </div>`,
-      onSubmit: async d => {
-        await insert('trials', { lead_id: id, kind: d.kind, venue_id: val(d.venue_id), coach_id: val(d.coach_id), trial_date: d.trial_date, trial_time: val(d.trial_time), status: 'scheduled' });
-        await update('leads', id, { status: 'trial_scheduled' }); toast('Trial dijadualkan'); app.render();
-      },
-    });
-  },
+  'lead-trial': id => trialForm(id),
+  'trial-edit': id => { const t = byId('trials', id); if (t) trialForm(t.lead_id, t); },
 
   'lead-enrol': id => {
     const l = byId('leads', id), tr = T('trials').filter(t => t.lead_id === id && t.status === 'done').pop();
@@ -149,12 +133,14 @@ VIEWS.trial = () => {
       <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
         <div style="display:flex;gap:8px;align-items:center">${ic('calendar', 'sm')} ${fmtDate(t.trial_date)}${t.trial_time ? ', ' + hm(t.trial_time) : ''}</div>
         <div style="display:flex;gap:8px;align-items:center">${ic('pin', 'sm')} ${esc(venueName(t.venue_id))}</div>
+        ${t.status === 'scheduled' ? (t.class_id && byId('classes', t.class_id) ? `<div style="display:flex;gap:8px;align-items:center">${ic('users', 'sm')} ${esc(byId('classes', t.class_id).title || progName(byId('classes', t.class_id).programme_id))}</div>` : `<div class="hint warn" style="font-size:12px;padding:6px 10px">${ic('alert', 'sm')} Belum dipautkan ke kelas — tidak muncul dalam kehadiran sesi. Tekan Ubah.</div>`) : ''}
         <div style="display:flex;gap:8px;align-items:center">${ic('award', 'sm')} ${esc(staffName(t.coach_id))} <span class="badge b-muted" style="margin-left:auto">${LABEL[t.kind]}</span></div>
       </div>
       ${t.status === 'done' ? `<div style="background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12.5px"><b>Cadangan: ${esc(progName(t.recommended_programme_id))}</b><div class="muted">${esc(t.notes || '')}</div></div>
         ${l.status === 'trial_done' ? `<button class="btn accent" data-action="lead-enrol" data-id="${l.id}">${ic('userplus', 'sm')} Mohon Daftar</button>` : ''}`
         : `<div class="actions"><button class="btn primary" style="flex:1" data-action="trial-result" data-id="${t.id}">${ic('tick', 'sm')} Rekod Keputusan</button>
            ${l.phone ? `<a class="btn" href="${waLink(l.phone, msgTrialReminder({ guardian: l.guardian_name, child: l.child_name, date: fmtDate(t.trial_date), time: t.trial_time ? hm(t.trial_time) : '', venue: venueName(t.venue_id) }))}" target="_blank" rel="noopener" title="Peringatan WhatsApp">${ic('msg', 'sm')}</a>` : ''}
+           <button class="btn" data-action="trial-edit" data-id="${t.id}" title="Ubah tarikh / kelas">${ic('edit', 'sm')}</button>
            <button class="btn" data-action="trial-cancel" data-id="${t.id}" title="Batal">${ic('x', 'sm')}</button></div>`}
     </div>`;
   };
@@ -683,3 +669,53 @@ ACTIONS['st-report'] = id => openModal({ title: 'Laporan Progres Bulanan', submi
 
 ACTIONS['st-show-all'] = () => { const q = (UI.studentQ || '').toLowerCase(), arch = T('students').some(s => s.archived_at && s.full_name.toLowerCase().includes(q)) && !T('students').some(s => !s.archived_at && s.status !== UI.studentStatus && s.full_name.toLowerCase().includes(q));
     Object.assign(UI, { studentStatus: arch ? 'archived' : 'all', studentProg: '', studentVenue: '', studentLink: '', studentLater: false }); app.render(); };
+
+/* ---- Borang jadual / ubah trial: pilih KELAS supaya trial muncul dalam senarai kehadiran sesi (admin & coach) ---- */
+const groupProg = c => byId('programmes', c.programme_id)?.kind !== 'personal';
+function trialClasses(venueId, date) {
+  const wd = date ? new Date(date + 'T00:00:00').getDay() : -1;
+  return T('classes').filter(c => c.active && groupProg(c) && c.weekday === wd && (!venueId || c.venue_id === venueId))
+    .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)));
+}
+function trialForm(leadId, tr) {
+  const l = byId('leads', leadId); if (!l) return;
+  const preCls = tr?.class_id ? byId('classes', tr.class_id) : null;
+  openModal({
+    title: `${tr ? 'Ubah Trial' : 'Jadual Trial'} — ${esc(l.child_name)}`, submit: tr ? 'Simpan' : 'Jadualkan',
+    body: `<p class="muted" style="margin-bottom:12px">Percubaan percuma: satu sesi kumpulan 2 jam untuk pelajar baharu. Pilih kelas supaya nama pelajar muncul dalam senarai kehadiran sesi & coach dimaklumkan.</p>
+    <div class="form-grid">
+      ${F('Jenis', 'kind', { value: tr?.kind, opts: [['group_trial', 'Trial percuma (kumpulan, 2 jam)'], ['personal_intro', 'Sesi pengenalan personal (60 min, berbayar)']], full: true })}
+      ${F('Lokasi', 'venue_id', { value: tr?.venue_id || preCls?.venue_id || l.venue_id, opts: venueOpts() })}
+      ${F('Tarikh', 'trial_date', { type: 'date', value: tr?.trial_date || addDays(todayISO(), 3), req: true })}
+      <label class="f full">Kelas<select name="class_id" id="trCls"></select><span class="muted" id="trClsHint" style="font-size:12px;font-weight:500"></span></label>
+      ${F('Masa', 'trial_time', { type: 'time', value: tr?.trial_time ? hm(tr.trial_time) : '17:00' })}
+      ${F('Coach', 'coach_id', { value: tr?.coach_id, opts: coachOpts('— Ikut coach kelas —') })}
+    </div>`,
+    onSubmit: async d => {
+      const c = d.class_id ? byId('classes', d.class_id) : null;
+      if (!c && !d.trial_time) throw new Error('Pilih kelas atau isi masa trial.');
+      const row = { kind: d.kind, venue_id: c?.venue_id || val(d.venue_id), coach_id: val(d.coach_id) || c?.coach_id || null, trial_date: d.trial_date,
+        trial_time: c ? c.start_time : val(d.trial_time), class_id: c?.id || null, child_name: l.child_name, child_age: l.child_age ?? null };
+      if (tr) await update('trials', tr.id, row);
+      else { await insert('trials', { ...row, lead_id: leadId, status: 'scheduled' }); await update('leads', leadId, { status: 'trial_scheduled' }); }
+      toast(tr ? 'Trial dikemas kini' : 'Trial dijadualkan'); app.render();
+    },
+  });
+  const f = document.getElementById('mform'); if (!f) return;
+  const fill = (keep) => {
+    const list = trialClasses(f.venue_id.value, f.trial_date.value), sel = f.class_id, cur = keep ?? sel.value;
+    const pick = list.find(c => c.id === cur) || (keep === undefined ? list.find(c => c.programme_id === l.programme_id) || (list.length === 1 ? list[0] : null) : null);
+    sel.innerHTML = `<option value="">${list.length ? '— Tiada kelas (isi masa sendiri) —' : '— Tiada kelas kumpulan pada hari ini —'}</option>` + list.map(c => `<option value="${c.id}" ${pick?.id === c.id ? 'selected' : ''}>${hm(c.start_time)}–${hm(c.end_time)} · ${esc(c.title || progName(c.programme_id))}${f.venue_id.value ? '' : ' · ' + esc(venueName(c.venue_id))}${c.coach_id ? ' · ' + esc(staffName(c.coach_id)) : ''}</option>`).join('');
+    sync();
+  };
+  const sync = () => {
+    const c = f.class_id.value ? byId('classes', f.class_id.value) : null;
+    f.trial_time.closest('.f, label')?.style.setProperty('display', c ? 'none' : '');
+    if (c) { f.trial_time.value = hm(c.start_time); if (!f.venue_id.value) f.venue_id.value = c.venue_id; }
+    const h = document.getElementById('trClsHint'); if (h) h.textContent = c ? `Masa ikut kelas (${hm(c.start_time)}). Coach kelas akan dimaklumkan.` : f.trial_date.value ? DAYS[new Date(f.trial_date.value + 'T00:00:00').getDay()] : '';
+  };
+  f.venue_id.addEventListener('change', () => fill(null));
+  f.trial_date.addEventListener('change', () => fill(f.class_id.value));
+  f.class_id.addEventListener('change', sync);
+  fill(tr?.class_id || undefined);
+}

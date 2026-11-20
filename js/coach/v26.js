@@ -113,7 +113,7 @@ ACTIONS['c-checkin'] = async raw => {
       if (dist != null && dist > (ven.radius_m || 300) && !(d.note || '').trim()) throw new Error(`Anda kira-kira ${dist} m dari ${ven.name}. Nyatakan sebab di ruang Catatan (cth. dewan berlainan).`);
       if (kind === 'in' && GEO?.state === 'no' && !(d.note || '').trim()) throw new Error('Lokasi tidak dibenarkan. Hidupkan lokasi (GPS) atau nyatakan sebab di Catatan.');
       if (d.photo && d.photo.size) d.photo = await stampPhoto(d.photo, [`${m.full_name} · ${kind === 'in' ? 'CHECK IN' : 'CHECK OUT'}`, `${new Date().toLocaleString('ms-MY', { dateStyle: 'medium', timeStyle: 'short' })} · ${ven?.name || ''}`, gg ? `GPS ${gg.lat.toFixed(5)}, ${gg.lng.toFixed(5)} (±${Math.round(gg.acc)} m)${dist != null ? ` · ${dist} m dari dewan` : ''}` : 'GPS tidak tersedia']);
-      if (!sid) { const date = parts[1]; sid = S.mode === 'supabase' ? await rpc('ensure_session', { p_class: parts[0], p_date: date }) : (T('class_sessions').find(x => x.class_id === parts[0] && x.session_date === date)?.id); }
+      if (!sid) { const date = parts[1]; sid = S.mode === 'supabase' ? await rpc('coach_ensure_session', { p_class: parts[0], p_date: date }) : (T('class_sessions').find(x => x.class_id === parts[0] && x.session_date === date)?.id); }
       const photo = d.photo && d.photo.size ? await uploadMedia('checkins', m.id, d.photo, { maxMB: 5 }) : null;
       const g = GEO?.state === 'ok' ? GEO : {};
       let row;
@@ -151,7 +151,7 @@ ACTIONS['c-cover'] = raw => {
     <p class="muted" style="font-size:12.5px;margin-top:8px">Admin akan dimaklumkan segera untuk mencari coach pengganti atau membatalkan sesi. Maklumkan seawal mungkin — sekurang-kurangnya 24 jam sebelum sesi jika boleh.</p>`,
     onSubmit: async d => { if (!(d.r || '').trim()) throw new Error('Nyatakan sebab.');
       const m = me(); if (!m) throw new Error('Akaun belum dipautkan kepada rekod coach.');
-      if (!sid) sid = S.mode === 'supabase' ? await rpc('ensure_session', { p_class: parts[0], p_date: parts[1] }) : T('class_sessions').find(x => x.class_id === parts[0] && x.session_date === parts[1])?.id;
+      if (!sid) sid = S.mode === 'supabase' ? await rpc('coach_ensure_session', { p_class: parts[0], p_date: parts[1] }) : T('class_sessions').find(x => x.class_id === parts[0] && x.session_date === parts[1])?.id;
       const id = S.mode === 'supabase' ? await rpc('coach_request_cover', { p_session: sid, p_reason: d.r.trim() }) : crypto.randomUUID();
       (S.t.cover_requests ||= []).push({ id, session_id: sid, staff_id: m.id, reason: d.r.trim(), status: 'open', created_at: new Date().toISOString() });
       toast('Admin dimaklumkan — anda akan diberitahu bila pengganti ditetapkan'); app.render(); } });

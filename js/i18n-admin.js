@@ -1439,3 +1439,35 @@ PATTERNS.unshift(
   [/^(.+) · sekarang dalam (.+) \((.+)\)\. Rekod \((.+)\) dipindah ke kelas di bawah pada tarikh yang sama, dan ditolak daripada pakej program kelas baharu\.$/, (m, l, tr) => (en(l) ? `${m[1]} · currently in ${m[2]} (${m[3]}). The record (${tr(m[4]) ?? m[4]}) moves to the class below on the same date, and is deducted from the new class's programme package.` : `${m[1]} · 目前在 ${m[2]}（${m[3]}）。记录（${tr(m[4]) ?? m[4]}）将移到下方同日期的班级，并从新班级课程的配套扣除。`)],
   [/^(\d+) sesi dipautkan ke (.+)$/, (m, l) => (en(l) ? `${m[1]} sessions linked to ${m[2]}` : `${m[1]} 节课已关联到 ${m[2]}`)],
 );
+
+/* v90 — trial dalam kelas */
+Object.assign(AD, {
+  'Pelajar trial': ['Trial students', '试课学员'],
+  'Trial': ['Trial', '试课'],
+  'Hadir': ['Present', '出席'],
+  'Tidak hadir': ['Absent', '缺席'],
+  'Keputusan': ['Result', '结果'],
+  'Belum direkod': ['Not recorded', '未记录'],
+  'Hadir — trial selesai': ['Present — trial done', '出席 — 试课完成'],
+  'Trial percuma — tidak masuk kehadiran pelajar & tidak tolak pakej. Selepas trial, admin susuli pendaftaran.': ['Free trial — not counted in student attendance and does not use a package. After the trial, admin follows up on enrolment.', '免费试课 — 不计入学员出勤，也不扣配套。试课后由管理员跟进报名。'],
+  'Trial: hadir': ['Trial: present', '试课：出席'],
+  'Trial: tidak hadir': ['Trial: absent', '试课：缺席'],
+  'Trial: belum direkod': ['Trial: not recorded', '试课：未记录'],
+  'Ubah Trial': ['Edit Trial', '修改试课'],
+  'Kelas': ['Class', '班级'],
+  '— Tiada kelas (isi masa sendiri) —': ['— No class (enter time) —', '— 无班级（自行填时间）—'],
+  '— Tiada kelas kumpulan pada hari ini —': ['— No group class on this day —', '— 当天无团体班 —'],
+  '— Ikut coach kelas —': ['— Class coach —', '— 按班级教练 —'],
+  'Pilih kelas atau isi masa trial.': ['Choose a class or enter the trial time.', '请选择班级或填写试课时间。'],
+  'Trial dikemas kini': ['Trial updated', '试课已更新'],
+  'Ubah tarikh / kelas': ['Change date / class', '更改日期 / 班级'],
+  'Belum dipautkan ke kelas — tidak muncul dalam kehadiran sesi. Tekan Ubah.': ['Not linked to a class — will not appear in session attendance. Tap Edit.', '未关联班级 — 不会出现在课程出勤中。请点修改。'],
+  'Program dicadangkan & catatan': ['Recommended programme & notes', '建议课程与备注'],
+});
+PATTERNS.push(
+  [/^Percubaan percuma: satu sesi kumpulan 2 jam untuk pelajar baharu\. Pilih kelas supaya nama pelajar muncul dalam senarai kehadiran sesi & coach dimaklumkan\.$/, (m, l) => (en(l) ? 'Free trial: one 2-hour group session for new students. Choose a class so the student appears in the session attendance list and the coach is notified.' : '免费试课：新学员一节 2 小时团体课。请选择班级，学员会出现在课程出勤名单中并通知教练。')],
+  [/^Masa ikut kelas \((.+)\)\. Coach kelas akan dimaklumkan\.$/, (m, l) => (en(l) ? `Time follows the class (${m[1]}). The class coach will be notified.` : `时间按班级（${m[1]}）。将通知班级教练。`)],
+  [/^\+(\d+) trial$/, (m, l) => (en(l) ? `+${m[1]} trial` : `+${m[1]} 试课`)],
+  [/^Jadual Trial — (.+)$/, (m, l) => (en(l) ? `Schedule Trial — ${m[1]}` : `安排试课 — ${m[1]}`)],
+  [/^Ubah Trial — (.+)$/, (m, l) => (en(l) ? `Edit Trial — ${m[1]}` : `修改试课 — ${m[1]}`)],
+);

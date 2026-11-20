@@ -52,7 +52,19 @@ export function byCategory(s, c) {
   return out;
 }
 
-export const trialsOf = (s, c) => T('trials').filter(t => t.status === 'scheduled' && t.trial_date === s?.session_date && (t.class_id ? t.class_id === c?.id : t.venue_id === c?.venue_id && hm(t.trial_time) === hm(c?.start_time)));
+/** Trial dalam sesi: dipautkan ke kelas, atau (trial lama) lokasi sama & masa trial dalam waktu sesi. */
+export const trialsOf = (s, c) => { const [a, b] = sTime(s, c); return T('trials').filter(t => t.status !== 'cancelled' && t.trial_date === s?.session_date && (t.class_id ? t.class_id === c?.id : t.venue_id === c?.venue_id && !!t.trial_time && hm(t.trial_time) >= a && hm(t.trial_time) < b)); };
+const trialName = t => t.child_name || byId('leads', t.lead_id)?.child_name || 'Pelajar trial';
+const trialAge = t => t.child_age || byId('leads', t.lead_id)?.child_age;
+function trialBox(s, c) {
+  const list = trialsOf(s, c); if (!list.length) return '';
+  const btn = (t, st, lbl, cls) => `<button type="button" class="btn sm ${t.status === st ? cls : 'ghost'}" data-action="sp-trial" data-id="${t.id}|${t.status === st ? 'scheduled' : st}">${lbl}</button>`;
+  return `<div class="card card-pad" style="margin:0 0 10px;padding:10px 12px;border-left:3px solid var(--warn)"><b>${ic('flag', 'sm')} Pelajar trial <span class="muted">(${list.length})</span></b>
+    <ul class="list">${list.map(t => `<li class="list-item" style="padding:8px 4px;flex-wrap:wrap">${avatar(trialName(t))}<div class="li-main"><div class="li-title">${esc(trialName(t))} <span class="badge b-warn">Trial</span>${trialAge(t) ? ` <span class="muted" style="font-size:11.5px">${trialAge(t)} thn</span>` : ''}</div>
+      <div class="li-sub">${t.status === 'done' ? 'Hadir — trial selesai' : t.status === 'no_show' ? 'Tidak hadir' : 'Belum direkod'}${t.notes ? ' · ' + esc(t.notes) : ''}</div></div>
+      <div class="actions" style="gap:6px">${btn(t, 'done', 'Hadir', 'primary')}${btn(t, 'no_show', 'Tidak hadir', 'danger-o')}${!isCoach() && ACTIONS['trial-result'] ? `<button type="button" class="btn sm ghost" data-action="sp-trial-res" data-id="${t.id}" title="Program dicadangkan & catatan">Keputusan</button>` : ''}</div></li>`).join('')}</ul>
+    <div class="muted" style="font-size:12px">Trial percuma — tidak masuk kehadiran pelajar & tidak tolak pakej. Selepas trial, admin susuli pendaftaran.</div></div>`;
+}
 /** Amaran sesi kumpulan: coach / court belum ditetapkan. */
 export function sessionAlerts(s, c) {
   if (!c || isPersonal(c) || s?.status === 'cancelled') return [];
@@ -163,7 +175,7 @@ export function openSession(sid) {
   const body = `
     <div class="sp-when"><span class="muted">${DAYS[parseISO(s.session_date).getDay()]}, ${fmtDate(s.session_date)} · ${t1}–${t2} · ${esc(venueName(c.venue_id))}${s.status === 'cancelled' ? ' · <b style="color:var(--bad)">Dibatalkan</b>' : ''}</span>
       ${isCoach() ? '' : `<span class="sp-when-a">${s.status !== 'cancelled' ? `<button type="button" class="btn sm" data-action="sp-move" data-id="${s.id}">${ic('calendar', 'sm')} ${personal ? 'Ubah tarikh / masa / lokasi' : 'Ubah tarikh / masa sesi ini'}</button>` : ''}${personal ? '' : `<button type="button" class="btn sm ghost" data-action="sp-class-edit" data-id="${c.id}" title="Ubah hari, masa, lokasi, program & coach untuk setiap minggu">${ic('edit', 'sm')} Edit kelas mingguan</button>`}</span>`}</div>
-    ${trialsOf(s, c).length ? `<div class="hint" style="margin-bottom:10px;background:var(--surface-2);border-radius:10px;padding:9px 12px">${ic('flag', 'sm')} <b>Trial:</b> ${trialsOf(s, c).map(t => `${esc(t.child_name || '')}${t.child_age ? ' (' + t.child_age + ' thn)' : ''}${t.notes ? ' — ' + esc(t.notes) : ''}`).join(' · ')}</div>` : ''}
+    ${s.status !== 'cancelled' ? trialBox(s, c) : ''}
     ${alerts.length ? `<div class="hint bad" style="margin-bottom:10px">${ic('alert', 'sm')} Belum lengkap: ${alerts.map(esc).join(' · ')}</div>` : ''}
     ${isCoach() ? '' : `<div class="form-grid" style="margin-bottom:8px">
       <label class="f">Coach sesi<select data-on-change="sp-coach" data-key="${s.id}">${coachOpts().map(([v, l]) => `<option value="${v}" ${sCoach(s, c) === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
@@ -322,6 +334,17 @@ Object.assign(ACTIONS, {
   'sp-plan-new': sid => { const s = byId('class_sessions', sid), c = byId('classes', s.class_id), [t1, t2] = sTime(s, c);
     openPlanEditor({ title: `${progName(c.programme_id)} — ${fmtDate(s.session_date)}`, programme_id: c.programme_id, venue_id: c.venue_id, plan_date: s.session_date, start_time: t1, end_time: t2 }, { coachId: myStaffId() || sCoach(s, c), onSaved: async () => {
       const p = T('lesson_plans').filter(x => !x.session_id && x.plan_date === s.session_date).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))[0]; if (p) await update('lesson_plans', p.id, { session_id: sid, class_id: c.id }); setTimeout(reopen, 0); } }); },
+  'sp-trial': async key => {
+    const [id, st] = key.split('|'), t = byId('trials', id); if (!t) return;
+    if (isCoach() && S.mode === 'supabase') { await rpc('coach_trial_mark', { p_trial: id, p_status: st }); await refresh(['trials']); }
+    else {
+      await update('trials', id, { status: st });
+      const l = byId('leads', t.lead_id);
+      if (l && ['trial_scheduled', 'trial_done', 'contacted'].includes(l.status)) await update('leads', l.id, { status: st === 'done' ? 'trial_done' : st === 'no_show' ? 'contacted' : 'trial_scheduled' });
+    }
+    toast(st === 'done' ? 'Trial: hadir' : st === 'no_show' ? 'Trial: tidak hadir' : 'Trial: belum direkod'); reopen();
+  },
+  'sp-trial-res': id => ACTIONS['trial-result']?.(id),
   'sp-held': async sid => { await update('class_sessions', sid, { status: 'held' }); toast('Sesi ditandakan selesai'); reopen(); },
   'sp-rm': key => {
     const [sid, stid] = key.split('|'), s = byId('class_sessions', sid), c = byId('classes', s.class_id), st = byId('students', stid);

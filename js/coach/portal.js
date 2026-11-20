@@ -7,7 +7,7 @@ import { planCard, planView, openPlanEditor, copyPlan } from '../planner.js';
 import { LANGS_ALL } from '../admin/sessions.js';
 import { $, esc, ic, F, avatar, UI, app, toast, openModal, fmtDate, fmtShort, hm, todayISO, addDays, parseISO, DAYS, LABEL, friendlyError, liveRender , loadErrorBox } from '../ui.js';
 import { T, byId, venueName, progName, attRate, studentName } from '../admin/helpers.js';
-import { courtLbl, calItems, sessionAlerts, sTime, sCourt, groupsOf, rosterOf, ageOn, ageCat, isPersonal, ensureSession, openSession, langName } from '../admin/sessions.js';
+import { courtLbl, calItems, sessionAlerts, sTime, sCourt, groupsOf, rosterOf, ageOn, ageCat, isPersonal, ensureSession, openSession, langName, trialsOf } from '../admin/sessions.js';
 import { setI18nActive } from '../i18n.js';
 import { annCard, visibleAnns, showAnnPopup } from '../admin/announce.js';
 import { showTour } from '../tour.js';
@@ -96,13 +96,14 @@ const card = ({ s, c, date }, showDate) => {
   return `${strip ? '<div class="slot-wrap">' : ''}<button class="slot ${s?.status === 'cancelled' ? 'cancel' : ''}" data-action="c-open" data-id="${s ? s.id : c.id + '|' + date}" style="margin-bottom:${strip ? 0 : 8}px">
     <b>${showDate ? DAYS[parseISO(date).getDay()] + ', ' + fmtShort(date) + ' · ' : ''}${a}–${b} · ${esc(c.title || progName(c.programme_id))}</b>
     <div class="meta">${esc(venueName(c.venue_id))}${court ? ' · ' + courtLbl(court) : ''}${cats.length ? ' · Kategori anda: <b>' + cats.map(esc).join(', ') + '</b>' : ''}</div>
-    <div class="meta">${isPersonal(c) ? esc(rosterOf(s, c).map(x => x.full_name).join(', ')) : n + ' pelajar'}${s ? ` · ${done}/${n} direkod` : ''}${s?.status === 'held' ? ' · selesai' : ''}${s?.status === 'cancelled' ? ' · dibatalkan' : ''}</div>
+    <div class="meta">${isPersonal(c) ? esc(rosterOf(s, c).map(x => x.full_name).join(', ')) : n + ' pelajar'}${trN(s, c, date)}${s ? ` · ${done}/${n} direkod` : ''}${s?.status === 'held' ? ' · selesai' : ''}${s?.status === 'cancelled' ? ' · dibatalkan' : ''}</div>
   </button>${strip ? strip + '</div>' : ''}`;
 };
 
 /* ---------- Bantuan paparan v69 ---------- */
 const kindOf = c => isPersonal(c) ? 'personal' : /trial|percubaan/i.test(progName(c.programme_id) + ' ' + (c.title || '')) ? 'trial' : 'group';
 const startAt = x => new Date(`${x.date}T${sTime(x.s, x.c)[0]}:00`), endAt = x => new Date(`${x.date}T${sTime(x.s, x.c)[1]}:00`);
+const trN = (s, c, date) => { const n = (s || date) && !isPersonal(c) && s?.status !== 'cancelled' ? trialsOf(s || { session_date: date }, c).length : 0; return n ? ` · <b style="color:var(--warn)">+${n} trial</b>` : ''; };
 const isDone = x => { if (!x.s) return false; if (x.s.status === 'held') return true; const n = rosterOf(x.s, x.c).length; return n > 0 && T('attendance').filter(a => a.session_id === x.s.id && a.status !== 'booked').length >= n; };
 const rel = ms => { const m = Math.round(ms / 60000); if (m < 60) return `${m} minit`; const h = Math.floor(m / 60), r = m % 60; return r ? `${h} jam ${r} minit` : `${h} jam`; };
 function countdown(x) {
@@ -116,7 +117,7 @@ function countdown(x) {
 const mapsLink = c => { const v = byId('venues', c.venue_id); if (!v) return ''; const q = v.lat != null && v.lng != null ? `${v.lat},${v.lng}` : encodeURIComponent(`${v.name} ${v.area || ''}`); return `https://www.google.com/maps/search/?api=1&query=${q}`; };
 function heroCard(x) {
   const [a, b] = sTime(x.s, x.c), n = x.s ? rosterOf(x.s, x.c).length : T('class_enrolments').filter(e => e.class_id === x.c.id).length, court = sCourt(x.s, x.c);
-  const strip = checkStrip(x), who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ')) : `${n} pelajar`;
+  const strip = checkStrip(x), who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ')) : `${n} pelajar${trN(x.s, x.c, x.date)}`;
   return `<div class="hero-next k-${kindOf(x.c)}"><div class="hn-top"><span class="hn-lbl">Sesi seterusnya</span><span class="hn-cd" data-cd="${x.date}|${a}|${b}">${countdown(x)}</span></div>
     <div class="hn-time">${a}<span>–${b}</span></div>
     <div class="hn-title">${esc(x.c.title || progName(x.c.programme_id))}</div>
@@ -162,7 +163,7 @@ function tlItem(x) {
   const [a, b] = sTime(x.s, x.c), cats = myCat(x.s), n = x.s ? rosterOf(x.s, x.c).length : T('class_enrolments').filter(e => e.class_id === x.c.id).length;
   const court = cats.length ? groupsOf(x.s.id).filter(g => cats.includes(g.category)).map(g => g.court).filter(Boolean).join(', ') : sCourt(x.s, x.c);
   const done = isDone(x), cancel = x.s?.status === 'cancelled', strip = checkStrip(x);
-  const who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ') || '—') : `${n} pelajar`;
+  const who = isPersonal(x.c) ? esc(rosterOf(x.s, x.c).map(z => z.full_name).join(', ') || '—') : `${n} pelajar${trN(x.s, x.c, x.date)}`;
   return `<div class="tl k-${kindOf(x.c)} ${cancel ? 'cancel' : ''}"><div class="tl-t"><b>${a}</b><span>${b}</span></div>
     <div class="tl-body"><button class="tl-card" data-action="c-open" data-id="${x.s ? x.s.id : x.c.id + '|' + x.date}">
       <div class="tl-title">${esc(x.c.title || progName(x.c.programme_id))}${done ? ' <span class="tl-ok">✓</span>' : ''}${cancel ? ' <span class="badge b-muted">Dibatalkan</span>' : ''}</div>
