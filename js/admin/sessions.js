@@ -161,6 +161,7 @@ export function openSession(sid) {
   if (!c) return toast('Sesi tidak dijumpai', true);
   const [t1, t2] = sTime(s, c), personal = isPersonal(c), cats = byCategory(s, c), gs = groupsOf(s.id), alerts = sessionAlerts(s, c);
   const multi = !personal && ((c.categories || []).length > 0 || gs.some(g => !isCoGroup(g)));
+  const sc = sCoach(s, c), sct = sCourt(s, c);
   // Beberapa coach dalam sesi kumpulan (tanpa kategori umur) → satu tab setiap coach, pelajar diagih melalui attendance.category = "Coach n".
   const coG = !personal && !multi ? gs.filter(g => isCoGroup(g) && g.coach_id).sort((a, b) => a.category.localeCompare(b.category, undefined, { numeric: true })) : [];
   const coMode = coG.length > 1, roster = rosterOf(s, c);
@@ -178,7 +179,7 @@ export function openSession(sid) {
       <select class="att-select ${a ? 'a-' + a.status : ''}" data-on-change="sp-att" data-key="${s.id}|${st.id}"><option value="">${a?.status === 'booked' ? 'ditempah — belum direkod' : '— belum direkod —'}</option>${ATT_OPTS.map(o => `<option value="${o}" ${a?.status === o ? 'selected' : ''}>${LABEL[o]}</option>`).join('')}</select>${isCoach() ? '' : `<button type="button" class="sp-x" data-action="sp-rm" data-id="${s.id}|${st.id}" title="Keluarkan ${esc(st.full_name)} dari sesi">✕</button>`}</li>`;
   };
   // Satu kumpulan sahaja → ikut coach & court sesi (tiada isian berulang). Beberapa kumpulan → boleh asingkan, kosong = ikut sesi.
-  const oneGroup = cats.size <= 1, sc = sCoach(s, c), sct = sCourt(s, c);
+  const oneGroup = cats.size <= 1;
   const assign = (k, g) => oneGroup && !coMode ? '' : isCoach() ? `<span class="muted" style="font-size:12.5px">${esc(staffName(g?.coach_id || sc))} · ${esc(g?.court || sct || '—')}</span>` : `
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
       <label class="field"><select data-on-change="sp-gcoach" data-key="${s.id}|${esc(k)}">${coMode ? '' : `<option value="">Ikut sesi${sc ? ' (' + esc(staffName(sc)) + ')' : ''}</option>`}${coachOpts().filter(([v]) => v).map(([v, l]) => `<option value="${v}" ${g?.coach_id === v && (coMode || g.coach_id !== sc) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
