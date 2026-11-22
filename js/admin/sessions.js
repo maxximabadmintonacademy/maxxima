@@ -192,7 +192,7 @@ export function openSession(sid) {
     ${alerts.length ? `<div class="hint bad" style="margin-bottom:10px">${ic('alert', 'sm')} Belum lengkap: ${alerts.map(esc).join(' · ')}</div>` : ''}
     ${isCoach() ? '' : `<div class="form-grid" style="margin-bottom:8px">
       <label class="f">Coach sesi<select data-on-change="sp-coach" data-key="${s.id}">${coachOpts().map(([v, l]) => `<option value="${v}" ${sCoach(s, c) === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
-      <label class="f">Court no.<input value="${esc(sCourt(s, c) || '')}" placeholder="cth. 3" data-on-change="sp-court" data-key="${s.id}"></label>
+      <label class="f">Court no.<input value="${esc(sCourt(s, c) || '')}" placeholder="cth. 3" enterkeyhint="done" onkeydown="if(event.key==='Enter')this.blur()" data-on-change="sp-court" data-key="${s.id}"></label>
     </div>${!multi ? (() => { const extra = gs.filter(isCoGroup).map(g => g.coach_id).filter(x => x && x !== sCoach(s, c));
       return `<div class="f" style="margin-bottom:8px">Coach tambahan <span class="muted" style="font-weight:500">(${personal ? 'cth. 2 coach untuk 3:1' : 'untuk sesi ini sahaja — untuk setiap minggu, guna Edit kelas mingguan'} · setiap coach dikira dalam gaji)</span><div class="pw-chips">${T('staff').filter(x => x.active !== false && x.id !== sCoach(s, c)).map(x => `<button type="button" class="pw-chip sm ${extra.includes(x.id) ? 'on' : ''}" data-action="sp-xcoach" data-id="${s.id}|${x.id}">${esc(x.full_name)}</button>`).join('')}</div></div>`; })() : ''}${langWarn(sCoach(s, c), c.venue_id)}`}
     ${tabs.length ? `<div class="chips" style="margin:12px 0 0;gap:6px;flex-wrap:wrap">${tabs.map(t => `<button type="button" class="chip ${t.key === tabKey ? 'on' : ''}" data-action="sp-tab" data-id="${s.id}|${esc(t.key)}">${esc(t.label)} <span class="muted">(${t.list.length})</span>${t.court && !t.none ? ` · ${esc(courtLbl(t.court))}` : ''}${me && t.coach === me ? ' ★' : ''}</button>`).join('')}</div>
@@ -214,7 +214,7 @@ export function openSession(sid) {
   openModal({ title: `${esc(c.title || progName(c.programme_id))}${s.status === 'cancelled' ? ' · ' + badge('cancelled') : ''}`, body, wide: true, cancel: 'Tutup' });
   openSession.cur = s.id;
 }
-const reopen = () => { app.render(); if (openSession.cur) openSession(openSession.cur); };
+const reopen = () => { app.render(); if (openSession.cur && document.querySelector('#modal.open')) openSession(openSession.cur); };
 /* ---- Pelan latihan dipautkan ke sesi ---- */
 const planOf = sid => T('lesson_plans').find(p => p.session_id === sid);
 function planBox(s, c) {
@@ -311,9 +311,9 @@ Object.assign(INPUTS, {
     await update('class_sessions', sid, { court: val(v.trim()) });
     const one = !isPersonal(byId('classes', s.class_id)) && (byId('classes', s.class_id)?.categories || []).length <= 1;
     for (const g of groupsOf(sid)) if ((one && !isCoGroup(g)) || !g.court || g.court === old) await update('session_groups', g.id, { court: val(v.trim()) });
-    reopen(); },
+    toast(v.trim() ? `Court ${v.trim()} disimpan` : 'Court dikosongkan'); if (groupsOf(sid).length) reopen(); else app.render(); },
   'sp-gcoach': async (v, el) => { const [sid, k] = keyOf(el), s = byId('class_sessions', sid); await setGroup(sid, k, { coach_id: val(v) || sCoach(s, byId('classes', s.class_id)) || null }); reopen(); },
-  'sp-gcourt': async (v, el) => { const [sid, k] = keyOf(el), s = byId('class_sessions', sid); await setGroup(sid, k, { court: val(v.trim()) || sCourt(s, byId('classes', s.class_id)) || null }); reopen(); },
+  'sp-gcourt': async (v, el) => { const [sid, k] = keyOf(el), s = byId('class_sessions', sid); await setGroup(sid, k, { court: val(v.trim()) || sCourt(s, byId('classes', s.class_id)) || null }); toast('Court kumpulan disimpan'); reopen(); },
   'sp-plan': async (v, el) => { await update('class_sessions', keyOf(el)[0], { lesson_plan: val(v) }); toast('Nota disimpan'); },
 });
 Object.assign(ACTIONS, {

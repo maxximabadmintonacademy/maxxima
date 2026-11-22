@@ -1,4 +1,4 @@
-export const APP_VERSION = 'v96';
+export const APP_VERSION = 'v97';
 // Pembantu UI dikongsi: ikon, format, lencana, modal, toast, borang.
 import { t, getLang } from './i18n.js';
 export const $ = (s, r = document) => r.querySelector(s);
@@ -235,7 +235,12 @@ export function bindModalBackdrop(m) {
     closeModal();
   });
 }
-export function closeModal() { const m = $('#modal'); if (!m) return; m.classList.remove('open'); m.innerHTML = ''; }
+export function closeModal() {
+  const m = $('#modal'); if (!m) return;
+  // Simpan medan yang sedang ditaip (cth. court) — blur mencetuskan 'change' sebelum borang dibuang.
+  const ae = document.activeElement; if (ae && m.contains(ae) && typeof ae.blur === 'function') { m.classList.remove('open'); ae.blur(); }
+  m.classList.remove('open'); m.innerHTML = '';
+}
 export function confirmModal({ title, message, ok, danger = false, onOk }) {
   title = title ?? t('Pasti?'); ok = ok ?? t('Ya, teruskan');
   openModal({ title, body: `<p style="font-size:14px">${message}</p>`, submit: ok, onSubmit: async () => { await onOk(); } });
