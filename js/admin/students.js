@@ -4,7 +4,7 @@ import { withLang, getLang } from '../i18n.js';
 import { langOf } from '../lang-of.js';
 import { msgLeadThanks, msgTrialReminder, msgEnrolEnquiry, msgEnrolInvoice } from './messages.js';
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
-import { S, insert, update, remove, refresh, rpc } from '../data.js';
+import { S, insert, update, remove, refresh, rpc, loadStudentHistory } from '../data.js';
 import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, hm, todayISO, addDays, monthKey, monthLabel, DAYS, waLink, LABEL, barColor } from '../ui.js';
 import { T, byId, venueName, progName, staffName, studentName, invStatus, paidOf, attRate, classLabel, enrolledIn, ageOf, billing, academy, livePackages, studentPackages, pkgRemaining, catalogFor, daysLeft } from './helpers.js';
 import { sellPackage, dueDefault } from './finance.js';
@@ -554,7 +554,8 @@ Object.assign(ACTIONS, {
         toast(`${a.full_name} digabungkan ke ${b.full_name}`); app.render();
       } });
   },
-  'student-view': id => {
+  'student-view': async id => {
+    if (S.mode === 'supabase' && !ACTIONS['student-view'].busy) { ACTIONS['student-view'].busy = true; try { await loadStudentHistory(id); } catch (_) {} ACTIONS['student-view'].busy = false; }
     const s = byId('students', id), enr = T('class_enrolments').filter(e => e.student_id === id).map(e => byId('classes', e.class_id)).filter(Boolean);
     const invs = T('invoices').filter(i => (i.student_id === id || T('invoice_items').some(it => it.invoice_id === i.id && it.student_id === id)) && i.status !== 'void').sort((a, b) => (b.issued_on || '').localeCompare(a.issued_on || '')).slice(0, 5);
     const sibs = T('students').filter(x => x.id !== id && ((s.family_ref && x.family_ref === s.family_ref) || (s.guardian_phone && x.guardian_phone === s.guardian_phone)));
@@ -575,6 +576,7 @@ Object.assign(ACTIONS, {
         ${sibs.length ? `<dt>Adik-beradik</dt><dd>${sibs.map(x => `<a href="#" data-action="student-view" data-id="${x.id}" style="color:var(--info)">${esc(x.full_name)}</a>`).join(', ')}</dd>` : ''}
         ${s.notes ? `<dt>Catatan</dt><dd style="font-weight:400">${esc(s.notes)}</dd>` : ''}
       </dl>
+      ${unpaidBlock(id)}
       <h4 style="margin:18px 0 8px;font-size:13.5px">Pakej</h4>
       ${pkgs.length ? pkgs.slice(0, 4).map(p => `<div class="slot click" data-action="sq-pkg" data-id="${id}" title="Klik untuk laras / tandakan habis / jual pakej" style="cursor:pointer;border-left-color:${p.status === 'active' ? 'var(--ok)' : 'var(--line)'};margin-bottom:6px"><b>${esc(p.name)}</b> ${badge(p.status === 'pending' ? 'pending' : p.status, p.status === 'pending' ? 'Menunggu bayaran' : p.status === 'completed' ? 'Sesi habis' : undefined)}<div class="meta">${LABEL[p.schedule_mode]} · ${p.status === 'pending' ? 'belum aktif' : `${pkgRemaining(p)} sesi berbaki (${p.sessions_used}/${p.sessions_total})${p.expires_on ? ' · tamat ' + fmtDate(p.expires_on) : ''}`} · ${RM(p.price)}</div></div>`).join('') : '<div class="muted" style="font-size:13px">Belum ada pakej.</div>'}
       <h4 style="margin:18px 0 8px;font-size:13.5px">Kelas</h4>
@@ -612,6 +614,38 @@ Object.assign(ACTIONS, {
   },
   'student-del': id => confirmModal({ title: 'Padam pelajar?', message: `Semua rekod <b>${esc(byId('students', id).full_name)}</b> (kehadiran, invois, penyertaan kejohanan) akan dipadam kekal. Pertimbangkan "Berhenti" jika mahu simpan sejarah.`, ok: 'Padam Kekal', danger: true, onOk: async () => { await remove('students', id); toast('Pelajar dipadam'); app.render(); } }),
 });
+
+/* ---------- Sesi sudah hadir tetapi belum dibayar ----------
+   Sesi yang menolak pakej (hadir / lewat / tidak hadir tanpa notis / batal lewat) tetapi:
+   • tiada pakej langsung, atau
+   • pakejnya belum dibayar (invois masih terbuka / pakej "pending").
+   Sesi trial, dimaafkan dan pelajar dikecualikan yuran tidak dikira. */
+const CONSUME = ['present', 'late', 'absent', 'late_cancel'];
+export function unpaidSessions(id) {
+  const s = byId('students', id); if (!s || s.fee_exempt) return [];
+  return T('attendance').filter(a => a.student_id === id && CONSUME.includes(a.status) && (a.session_date || '') <= todayISO()).map(a => {
+    const cs = byId('class_sessions', a.session_id), c = cs && byId('classes', cs.class_id);
+    if (cs?.status === 'cancelled') return null;
+    const p = a.student_package_id && byId('student_packages', a.student_package_id), inv = (p?.invoice_id && byId('invoices', p.invoice_id)) || (a.invoice_id && byId('invoices', a.invoice_id));
+    let why = null;
+    const open = i => ['issued', 'overdue'].includes(invStatus(i));
+    if (a.invoice_id && inv && !open(inv)) return null;
+    if (!p && !a.invoice_id) why = 'Tiada pakej';
+    else if (inv && open(inv)) why = `Invois ${inv.number || ''} belum dibayar`;
+    else if (p && p.status === 'pending') why = 'Pakej belum dibayar';
+    return why ? { a, c, why, inv } : null;
+  }).filter(Boolean).sort((x, y) => (y.a.session_date || '').localeCompare(x.a.session_date || ''));
+}
+function unpaidBlock(id) {
+  const list = unpaidSessions(id); if (!list.length) return '';
+  const fmtS = x => `${fmtShort(x.a.session_date)} · ${esc(x.c ? progName(x.c.programme_id) : 'Sesi')}${x.a.status !== 'present' ? ' · ' + esc(LABEL[x.a.status] || x.a.status) : ''}`;
+  const groups = {}; for (const x of list) (groups[x.why] ||= []).push(x);
+  return `<div class="card card-pad" style="margin:16px 0 4px;border:1px solid var(--bad);background:color-mix(in srgb, var(--bad) 6%, transparent)">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><b style="color:var(--bad)">⚠ ${list.length} sesi sudah hadir tetapi belum dibayar</b>
+      <span style="display:flex;gap:6px;flex-wrap:wrap">${list.some(x => x.why === 'Tiada pakej') ? `<button type="button" class="btn sm" data-action="att-link" data-id="${id}">Pautkan ke pakej</button>` : ''}<button type="button" class="btn sm primary" data-action="sell" data-id="${id}">Jual pakej</button></span></div>
+    ${Object.entries(groups).map(([why, xs]) => `<div style="margin-top:8px"><div class="muted" style="font-size:12.5px;font-weight:600">${esc(why)} (${xs.length})</div><div style="font-size:13px;line-height:1.7">${xs.slice(0, 20).map(fmtS).join('<br>')}${xs.length > 20 ? `<br><span class="muted">+${xs.length - 20} lagi</span>` : ''}</div></div>`).join('')}
+  </div>`;
+}
 
 /* ---------- Akaun portal ibu bapa: cipta / set semula kata laluan, kemudian hantar melalui WhatsApp ---------- */
 const portalUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');   // tanpa ?v=… / #…
