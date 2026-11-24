@@ -40,7 +40,7 @@ VIEWS.leads = () => {
     requested: `<a class="btn sm" href="#kemasukan">Lihat Pendaftaran</a>`,
   }[l.status] || '<span class="muted">—</span>');
   return `
-  ${pageHead('Leads', 'Pertanyaan ibu bapa — susuli sehingga trial dan permohonan daftar.', `<button class="btn" data-action="site-ref">${ic('pin', 'sm')} Rujukan yuran & jadual</button><button class="btn primary" data-action="lead-add">${ic('plus', 'sm')} Lead Baharu</button>`)}
+  ${pageHead('Leads', 'Pertanyaan ibu bapa — susuli sehingga trial dan permohonan daftar.', `<button class="btn primary" data-action="lead-shared-trial">${ic('msg', 'sm')} Share Trial Form</button><button class="btn" data-action="site-ref">${ic('pin', 'sm')} Rujukan yuran & jadual</button><button class="btn primary" data-action="lead-add">${ic('plus', 'sm')} Lead Baharu</button>`)}
   ${siteStatsCard()}
   <div class="chips">${LEAD_STATUSES.map(s => `<button class="chip ${f === s ? 'on' : ''}" data-action="lead-filter" data-id="${s}">${s === 'all' ? 'Semua' : LABEL[s]}<span class="n">${s === 'all' ? leads.filter(l => !l.archived_at).length : leads.filter(l => !l.archived_at && l.status === s).length}</span></button>`).join('')}${leads.some(l => l.archived_at) ? `<button class="chip ${f === 'archived' ? 'on' : ''}" data-action="lead-filter" data-id="archived">Arkib<span class="n">${leads.filter(l => l.archived_at).length}</span></button>` : ''}</div>
   <div class="card"><div class="table-wrap"><table>
@@ -82,6 +82,14 @@ Object.assign(ACTIONS, {
   'lead-contacted': async id => { await update('leads', id, { status: 'contacted' }); toast('Ditandakan: dihubungi'); app.render(); },
   'lead-lost': async id => { await update('leads', id, { status: 'lost' }); closeModal(); toast('Ditandakan: tidak berminat'); app.render(); },
   'lead-del': id => confirmModal({ title: 'Padam lead?', message: `Padam <b>${esc(byId('leads', id).child_name)}</b>? Tindakan ini tidak boleh dibatalkan.`, ok: 'Padam', danger: true, onOk: async () => { await remove('leads', id); toast('Lead dipadam'); app.render(); } }),
+
+  'lead-shared-trial': () => {
+    const url = new URL('./trial.html', location.href).href;
+    const msg = `Thanks for your interest in Maxxima Badminton Academy! 🏸\n\nPlease complete this form and choose a free group trial slot that suits your child’s age, location and badminton level:\n${url}\n\nAfter booking, save your private Trial Portal link to check the court number or any class changes.`;
+    openModal({ title: 'Share Trial Form', cancel: 'Close', body: `<p class="muted">Send this link to any prospect. You do not need to create a Lead or know the student’s name first.</p>
+      <textarea readonly aria-label="WhatsApp message" style="width:100%;min-height:140px;margin-top:10px" data-noi18n>${esc(msg)}</textarea>
+      <div class="actions" style="margin-top:10px"><button type="button" class="btn primary" data-action="copy-text" data-id="${esc(url)}">Copy Trial Link</button><button type="button" class="btn" data-action="copy-text" data-id="${esc(msg)}">Copy WhatsApp Message</button></div>` });
+  },
 
   /* Link borang trial peribadi (WhatsApp) — ibu bapa isi butiran anak & pilih slot sesi kumpulan */
   'lead-form': async id => {

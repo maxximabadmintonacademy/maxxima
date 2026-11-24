@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#0B2545">
 <title>Trial — Maxxima Badminton Academy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,6 +31,9 @@
 <body>
 <div class="reg"><div class="reg-card" id="reg"><div class="boot">Memuatkan…</div></div></div>
 <div class="toast" id="toast" role="status"></div>
-<script type="module" src="js/trial.js"></script>
+<script type="module">
+const params = new URLSearchParams(location.search);
+import(params.has('t') || params.has('fb') ? './js/trial.js' : './js/shared-trial.js');
+</script>
 </body>
 </html>
