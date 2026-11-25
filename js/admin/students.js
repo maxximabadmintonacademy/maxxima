@@ -6,7 +6,7 @@ import { msgLeadThanks, msgTrialReminder, msgEnrolEnquiry, msgEnrolInvoice } fro
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove, refresh, rpc, loadStudentHistory } from '../data.js';
 import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, hm, todayISO, addDays, monthKey, monthLabel, DAYS, waLink, LABEL, barColor } from '../ui.js';
-import { T, byId, venueName, progName, staffName, studentName, invStatus, paidOf, attRate, classLabel, enrolledIn, ageOf, billing, academy, livePackages, studentPackages, pkgRemaining, catalogFor, daysLeft } from './helpers.js';
+import { T, byId, venueName, progName, staffName, studentName, invStatus, paidOf, attRate, classLabel, enrolledIn, ageOf, billing, academy, livePackages, studentPackages, pkgRemaining, isOldPkg, catalogFor, daysLeft } from './helpers.js';
 import { sellPackage, dueDefault } from './finance.js';
 
 const venueOpts = (blank = '— Pilih lokasi —') => [['', blank], ...T('venues').filter(v => v.active).map(v => [v.id, v.name])];
@@ -567,7 +567,7 @@ Object.assign(ACTIONS, {
     const s = byId('students', id), enr = T('class_enrolments').filter(e => e.student_id === id).map(e => byId('classes', e.class_id)).filter(Boolean);
     const invs = T('invoices').filter(i => (i.student_id === id || T('invoice_items').some(it => it.invoice_id === i.id && it.student_id === id)) && i.status !== 'void').sort((a, b) => (b.issued_on || '').localeCompare(a.issued_on || '')).slice(0, 5);
     const sibs = T('students').filter(x => x.id !== id && ((s.family_ref && x.family_ref === s.family_ref) || (s.guardian_phone && x.guardian_phone === s.guardian_phone)));
-    const r = attRate(id), pkgs = studentPackages(id).filter(p => p.status !== 'cancelled').sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    const r = attRate(id), pkgs = studentPackages(id).filter(p => p.status !== 'cancelled' && !isOldPkg(p)).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     openModal({
       title: 'Profil Pelajar', wide: true, cancel: 'Tutup',
       body: `<div class="coach-top" style="margin-bottom:16px">${avatar(s.full_name, 'lg')}<div style="flex:1"><h4 style="font-size:17px">${esc(s.full_name)}</h4><div class="muted">${s.birth_date ? ageOf(s.birth_date) + ' tahun · ' : ''}${s.gender ? LABEL[s.gender] + ' · ' : ''}${badge(s.status)}</div></div></div>

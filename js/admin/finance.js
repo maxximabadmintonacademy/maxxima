@@ -6,7 +6,7 @@ import { adjHint } from './ops2.js';
 const watchAdj = f => { let last = null; const up = () => { const v = f.elements.student_id?.value || ''; if (v !== last) { last = v; const b = f.querySelector('#adjBox'); if (b) b.innerHTML = v ? adjHint(v) : ''; } }; ['change', 'click', 'input'].forEach(ev => f.addEventListener(ev, () => setTimeout(up, 30))); };
 import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, todayISO, addDays, monthKey, monthLabel, LABEL, waLink, $ , DAYS } from '../ui.js';
 import { classPicker, enrolInto } from './student-quick.js';
-import { T, byId, venueName, progName, studentName, invStatus, paidOf, creditOf, dueOf, refundOf, billing, academy, pkgRemaining, studentPackages, catalogFor, pendingPayments, unallocated, daysLeft, lowPackages, expiringPackages, enrolledIn } from './helpers.js';
+import { T, byId, venueName, progName, studentName, invStatus, paidOf, creditOf, dueOf, refundOf, billing, academy, pkgRemaining, studentPackages, isOldPkg, catalogFor, pendingPayments, unallocated, daysLeft, lowPackages, expiringPackages, enrolledIn } from './helpers.js';
 import { openReceipt } from '../receipt.js';
 import { openInvoice, openCreditNote } from '../invoice.js';
 import { itemsEditor, bindItems, readItems, saveItems, itemsOf, legacyItems, itemsTotal, lineAmount, recalcItems, setKids, getKids, itemRow } from './invoice-items.js';
@@ -563,7 +563,7 @@ const lastSeen = sid => {
 const unpaidUsed = p => { const inv = byId('invoices', p.invoice_id); if (!inv || inv.status === 'paid' || inv.status === 'cancelled') return 0; return T('attendance').filter(a => a.student_package_id === p.id && ['present', 'late', 'absent', 'late_cancel'].includes(a.status)).length; };
 function studentView() {
   const f = UI.spFilter || 'active', q = (UI.spQ || '').toLowerCase();
-  const rows = T('student_packages').filter(p => spMatch(p, f) && (!q || studentName(p.student_id).toLowerCase().includes(q)))
+  const rows = T('student_packages').filter(p => spMatch(p, f) && !isOldPkg(p) && (!q || studentName(p.student_id).toLowerCase().includes(q)))
     .sort((a, b) => (a.status === 'active' ? pkgRemaining(a) : 99) - (b.status === 'active' ? pkgRemaining(b) : 99) || studentName(a.student_id).localeCompare(studentName(b.student_id)));
   return `<div class="card">
     <div class="toolbar"><label class="field grow">${ic('search', 'sm')}<input id="spSearch" data-on-input="sp-q" placeholder="Cari pelajar…" value="${esc(UI.spQ || '')}"></label></div>

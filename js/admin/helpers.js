@@ -16,6 +16,8 @@ export const billing = () => setting('billing', { due_days: 7 });
 /* ---- Pakej ---- */
 export const CONSUMING = ['present', 'late', 'absent', 'late_cancel'];
 export const pkgRemaining = sp => Math.max(Number(sp.sessions_total) - Number(sp.sessions_used || 0), 0);
+/** Pakej 2025 (sejarah) tidak dipaparkan — kecuali pakej besar (≥40 sesi) yang masih ada baki. */
+export const isOldPkg = sp => { const d = sp.starts_on || sp.expires_on || ''; return !!d && d < '2026-01-01' && !(Number(sp.sessions_total) >= 40 && pkgRemaining(sp) > 0); };
 export const studentPackages = id => T('student_packages').filter(p => p.student_id === id);
 /** Pakej aktif pelajar (yang paling awal tamat dahulu). */
 export const livePackages = id => studentPackages(id).filter(p => p.status === 'active').sort((a, b) => (a.expires_on || '9999').localeCompare(b.expires_on || '9999'));

@@ -7,7 +7,7 @@ import { ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove, refresh, rpc, loadStudentHistory, loadRange } from '../data.js';
 import '../pkg-usage.js';
 import { esc, RM, LABEL, badge, openModal, closeModal, toast, todayISO, addDays, fmtShort, DAYS, app } from '../ui.js';
-import { T, byId, progName, venueName, pkgRemaining, studentPackages } from './helpers.js';
+import { T, byId, progName, venueName, pkgRemaining, studentPackages, isOldPkg } from './helpers.js';
 import { calItems, ensureSession, sTime, isPersonal } from './sessions.js';
 
 const ATT = ['present', 'late', 'absent', 'excused', 'late_cancel', 'trial'];
@@ -19,7 +19,7 @@ const reopen = (act, id) => { closeModal(); ACTIONS[act](id); };
 ACTIONS['sq-pkg'] = async id => {
   const s = byId('students', id); if (!s) return;
   if (S.mode === 'supabase') { try { await refresh(['student_packages']); await loadStudentHistory(id); } catch (_) {} }   // baki terkini + kehadiran lama dari pelayan
-  const L = studentPackages(id).filter(p => p.status !== 'cancelled').sort((a, b) => (['active', 'pending'].includes(b.status) - ['active', 'pending'].includes(a.status)) || (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 6);
+  const L = studentPackages(id).filter(p => p.status !== 'cancelled' && !isOldPkg(p)).sort((a, b) => (['active', 'pending'].includes(b.status) - ['active', 'pending'].includes(a.status)) || (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 6);
   const row = p => { const used = Number(p.sessions_used || 0), tot = Number(p.sessions_total || 0), left = pkgRemaining(p);
     const st = p.status === 'pending' ? badge('pending', 'Menunggu bayaran') : p.status === 'completed' ? badge('completed', 'Sesi habis') : badge(p.status);
     return `<div class="slot" style="border-left-color:${p.status === 'active' ? 'var(--ok)' : 'var(--line)'};margin-bottom:8px;display:flex;gap:10px;align-items:center">
