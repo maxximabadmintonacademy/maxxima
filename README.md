@@ -57,6 +57,10 @@ Program ──► PAKEJ (sesi, harga, tempoh sah) ──────────
 - Parents choose a venue and badminton level, enter a date of birth to match age groups, pick a suitable slot, and supply the student's name, guardian/contact name and WhatsApp number. Returning the private `#reservation=` link does not require a portal account. It shows the live appointment status, date, time, venue and court, but never returns names, phone numbers, date of birth, medical information or other bookings. Reopen/refresh to check changes; this does not send notifications.
 - The portal token is random, sent to Supabase only in the RPC body and stored as a hash. Access ends seven days after the appointment or 60 days after issuance, whichever is earlier. Keep the private link separate from the reusable form URL. Existing per-lead `?t=` and feedback `?t=…&fb=1` routes are unchanged by design.
 
+### Status (25 Nov 2026)
+
+Migration `20261124_shared_trial.sql` sudah dijalankan di Supabase produksi (diuji dengan tempahan ujian yang di-rollback). Perubahan selepas semakan: slot bermula esok (bukan hari ini), kumpulan Competitive Smash2u dibuka untuk tahap rally/match, nama "Smash2u Sport Hub" dipadankan, had tempahan (3 setiap no. dalam 7 hari, 30 sejam), `public_trial_submit` kini ikut tarikh Malaysia dan terima sesi bertarikh, borang tersedia dalam BM / EN / 中文.
+
 ### Deployment checklist
 
 This repo does not contain the entire production Supabase schema or the existing RPC implementations. **First confirm the migration against a staging copy of the actual schema, then apply it before the Pages change goes live.** The migration intentionally reuses the existing `public_trial_submit` booking transaction, and expects the existing active/archived fields, class capacity, categories, dated session overrides and session-group courts as referenced by the Admin app. Verify the legacy RPC parameter types and return/trigger behavior on staging instead of making changes blindly.

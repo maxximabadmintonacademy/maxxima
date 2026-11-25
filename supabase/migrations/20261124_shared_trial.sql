@@ -1,4 +1,4 @@
--- Deploy to staging and verify against the existing Maxxima schema before publishing Pages.
+-- Borang trial umum + portal percubaan sementara. Bergantung pada public_trial_submit sedia ada (dikemas kini di bawah).
 begin;
 
 do $$
@@ -35,7 +35,7 @@ language sql stable security definer set search_path = ''
 as $$
   with clock as (select timezone('Asia/Kuala_Lumpur', now()) as local_now),
   days as (
-    select (local_now::date+i)::date as d, local_now from clock cross join generate_series(0,20) i
+    select (local_now::date+i)::date as d, local_now from clock cross join generate_series(1,21) i
   ),
   groups as (
     select coalesce(
@@ -63,7 +63,7 @@ as $$
         (a.years < 18 and case p_level
           when 'new' then lower(trim(p.name)) ~ '^(foundation|beginner)( |$)'
           when 'unsure' then lower(trim(p.name)) ~ '^(foundation|beginner)( |$)'
-          when 'rally' then lower(trim(p.name)) ~ '^(foundation|beginner|performance|intermediate)( |$)'
+          when 'rally' then lower(trim(p.name)) ~ '^(foundation|beginner|performance|intermediate|competitive)( |$)'
           when 'match' then lower(trim(p.name)) ~ '^(performance|intermediate|elite|competitive)( |$)'
           else false end)
       )
@@ -133,8 +133,8 @@ declare
   tok text := p->>'token';
   child text := trim(p->>'child');
   guardian text := trim(p->>'guardian');
-  raw_phone text := regexp_replace(coalesce(p->>'phone',''), '[^0-9]', '', 'g');
-  phone text := case when raw_phone like '0%' then '60'||substr(raw_phone,2) else raw_phone end;
+  v_raw text := regexp_replace(coalesce(p->>'phone',''), '[^0-9]', '', 'g');
+  v_phone text := case when v_raw like '0%' then '60'||substr(v_raw,2) else v_raw end;
   venue uuid := (p->>'venue')::uuid;
   birth date := (p->>'birth')::date;
   level text := p->>'level';
@@ -145,7 +145,7 @@ declare
   legacy_token text;
 begin
   if tok is null or tok !~ '^[a-f0-9]{64}$' or coalesce(length(child),0) not between 2 and 120
-     or coalesce(length(guardian),0) not between 2 and 120 or length(phone) not between 9 and 15
+     or coalesce(length(guardian),0) not between 2 and 120 or length(v_phone) not between 9 and 15
      or coalesce((p->>'consent')::boolean,false) is not true or birth is null or level is null
      or venue is null or cls is null or day is null then
     return jsonb_build_object('ok',false,'code','invalid_details');
@@ -159,12 +159,21 @@ begin
     end if;
     return jsonb_build_object('ok',true);
   end if;
-  perform pg_advisory_xact_lock(hashtextextended('shared-trial-contact:'||phone,0));
+  perform pg_advisory_xact_lock(hashtextextended('shared-trial-contact:'||v_phone,0));
+  -- Had asas penyalahgunaan: maksimum 3 tempahan borang umum bagi satu nombor dalam 7 hari,
+  -- dan maksimum 30 tempahan borang umum sejam untuk semua orang.
+  if (select count(*) from public.trial_portal_access a join public.leads l on l.id=a.lead_id
+      where regexp_replace(l.phone,'[^0-9]','','g')=v_phone and a.created_at > now()-interval '7 days') >= 3 then
+    return jsonb_build_object('ok',false,'code','too_many');
+  end if;
+  if (select count(*) from public.trial_portal_access a where a.created_at > now()-interval '1 hour') >= 30 then
+    return jsonb_build_object('ok',false,'code','busy');
+  end if;
   if exists (
     select 1 from public.leads l join public.trials t on t.lead_id=l.id
     where l.archived_at is null and lower(trim(l.child_name))=lower(child)
-      and (regexp_replace(l.phone,'[^0-9]','','g') in (phone,raw_phone)
-           or (phone like '60%' and regexp_replace(l.phone,'[^0-9]','','g')='0'||substr(phone,3)))
+      and (regexp_replace(l.phone,'[^0-9]','','g') in (v_phone,v_raw)
+           or (v_phone like '60%' and regexp_replace(l.phone,'[^0-9]','','g')='0'||substr(v_phone,3)))
       and t.kind='group_trial' and t.status in ('scheduled','done')
   ) then
     return jsonb_build_object('ok',false,'code','duplicate');
@@ -178,7 +187,7 @@ begin
 
   legacy_token := replace(gen_random_uuid()::text,'-','');
   insert into public.leads (child_name, child_age, birth_date, guardian_name, phone, source, status, kind, venue_id, programme_id, experience, trial_token)
-  values (child,extract(year from age(timezone('Asia/Kuala_Lumpur',now())::date,birth))::int,birth,guardian,phone,'WhatsApp','contacted','group_trial',venue,
+  values (child,extract(year from age(timezone('Asia/Kuala_Lumpur',now())::date,birth))::int,birth,guardian,v_phone,'WhatsApp','contacted','group_trial',venue,
     (choice->>'programme_id')::uuid,level,legacy_token)
   returning id into lead;
   perform public.public_trial_submit(legacy_token,child,birth,null,guardian,cls,day,null,null);
@@ -189,6 +198,37 @@ begin
   return jsonb_build_object('ok',true);
 end;
 $$;
+
+-- Kemas kini fungsi trial lama supaya sepadan dengan slot di atas: tarikh ikut waktu Malaysia,
+-- sesi bertarikh (dipindah/ganti) diterima, sesi dibatalkan ditolak. Selebihnya sama seperti asal.
+create or replace function public.public_trial_submit(p_token text, p_child text, p_birth date, p_gender text, p_guardian text, p_class uuid, p_date date, p_medical text, p_notes text)
+returns jsonb language plpgsql security definer set search_path to 'public'
+as $f$
+declare l public.leads; c public.classes; age int; today date := timezone('Asia/Kuala_Lumpur', now())::date; st time;
+begin
+  select * into l from public.leads where trial_token = p_token and length(p_token) >= 16;
+  if l.id is null then raise exception 'Pautan tidak sah atau sudah tamat.'; end if;
+  if l.status in ('trial_scheduled','trial_done','requested','enrolled') then raise exception 'Trial sudah dijadualkan. Hubungi admin untuk sebarang perubahan.'; end if;
+  if coalesce(trim(p_child), '') = '' then raise exception 'Isi nama pelajar.'; end if;
+  select * into c from public.classes where id = p_class and active;
+  if c.id is null or p_date <= today or p_date > today + 30
+     or exists (select 1 from public.class_sessions s where s.class_id = c.id and s.session_date = p_date and s.status = 'cancelled')
+     or not (extract(dow from p_date)::int = c.weekday
+             or exists (select 1 from public.class_sessions s where s.class_id = c.id and s.session_date = p_date and s.status = 'scheduled')) then
+    raise exception 'Slot trial tidak sah. Pilih semula.';
+  end if;
+  select coalesce(s.start_time, c.start_time) into st from (select 1) x left join public.class_sessions s on s.class_id = c.id and s.session_date = p_date;
+  age := case when p_birth is not null then extract(year from age(p_date, p_birth))::int else l.child_age end;
+  update public.leads set child_name = left(trim(p_child), 120), birth_date = p_birth, child_age = age, gender = nullif(p_gender, ''),
+    guardian_name = coalesce(nullif(left(trim(coalesce(p_guardian, '')), 120), ''), guardian_name), medical_notes = left(nullif(trim(coalesce(p_medical, '')), ''), 500),
+    programme_id = c.programme_id, venue_id = c.venue_id, status = 'trial_scheduled', submitted_at = now(),
+    notes = concat_ws(E'\n', nullif(notes, ''), nullif(left(trim(coalesce(p_notes, '')), 500), ''))
+  where id = l.id;
+  insert into public.trials(lead_id, kind, venue_id, coach_id, trial_date, trial_time, status, class_id, child_name, child_age, notes)
+  values (l.id, 'group_trial', c.venue_id, c.coach_id, p_date, coalesce(st, c.start_time), 'scheduled', c.id, left(trim(p_child), 120), age, left(nullif(trim(coalesce(p_medical, '')), ''), 500));
+  perform public.notify_admins('trial', 'Trial baharu dijadualkan', left(trim(p_child), 120) || ' · ' || to_char(p_date, 'DD/MM') || ' ' || to_char(coalesce(st, c.start_time), 'HH24:MI'), 'trial');
+  return jsonb_build_object('ok', true);
+end $f$;
 
 revoke execute on function public.shared_trial_venues(), public.shared_trial_slots(uuid,date,text), public.shared_trial_book(jsonb), public.shared_trial_portal(text)
   from public;

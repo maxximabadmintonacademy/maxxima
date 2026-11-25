@@ -25,7 +25,7 @@ const location={hash:''};
 const context={
   CONFIG:{SUPABASE_URL:'test',SUPABASE_ANON_KEY:'test'},
   document:{querySelector:()=>reg,getElementById:i=>ids[i],documentElement:{}},
-  location, URLSearchParams, Intl, crypto:webcrypto,
+  location, URLSearchParams, Intl, crypto:webcrypto, localStorage:{getItem:()=>'en',setItem(){}},
   history:{replaceState:(_s,_t,url)=>{location.hash=url;}},
   clientStub:{rpc:async (name,data) => {
     if(name==='shared_trial_venues') return {data:[{id:'forum',name:'Forum SBA'},{id:'goteam',name:'GoTeam'}]};
