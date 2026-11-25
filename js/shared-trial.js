@@ -10,6 +10,36 @@ const header = '<div class="reg-top"><div class="auth-brand" style="margin:0"><d
 const levelOptions = [['new', 'Beginner · new to badminton'], ['rally', 'Some experience · can rally'], ['match', 'Competitive · plays matches'], ['unsure', 'Not sure']];
 const dateLabel = date => Intl.DateTimeFormat('en-MY', {dateStyle:'full',timeZone:'UTC'}).format(new Date(date + 'T00:00:00Z'));
 const localDate = () => new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Kuala_Lumpur'}).format(new Date());
+// Public labels follow the approved preview. An unmatched/ambiguous venue is not sent to booking RPCs.
+const catalog = [
+  ['goteam', 'GoTeam Sports Complex, Bukit Raja', ['GoTeam', 'GoTeam Sports Complex']],
+  ['forum', 'Forum SBA, Setia Alam', ['Forum SBA', 'Forum SBA Setia Alam']],
+  ['smash2u', 'Smash2u Sports Hub, Giant Klang', ['Smash2u Sports Hub', 'Smash2u Giant Klang', 'Smash2u']],
+  ['slk', 'SLK Sport Centre, Batu Caves', ['SLK', 'SLK Batu Caves', 'SLK Badminton Court', 'SLK Sport Centre', 'SLK Sports Centre Batu Caves', 'SLK Badminton Court Batu Caves']],
+  ['ultra', 'Ultra Sports Centre, Selayang', ['Ultra Sports Centre', 'Ultra Sport Centre', 'Ultra Sport Centre Selayang', 'Ultra SC Selayang']],
+  ['abedeen', 'Abedeen Clubhouse, Cyberjaya', ['Abedeen Clubhouse', 'Abedeen Cyberjaya']],
+  ['puchong', 'Puchong Sport Centre, Puchong', ['Puchong Sport Centre', 'Puchong Sports Centre', 'Puchong SC']],
+  ['mxspd', 'Arena MXSPD, Telok Panglima Garang', ['Arena MXSPD', 'MXSPD Telok Panglima Garang']],
+  ['armanee', 'Armanee, Damansara Damai', ['Armanee', 'Armanee Condominium', 'Armanee Condominium Damansara Damai']]
+];
+const normalizeVenue = name => String(name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+function matchTrialVenues(online) {
+  return catalog.map(([key,name,aliases]) => {
+    const names = new Set([name,...aliases].map(normalizeVenue));
+    const matches = [...new Set(online.filter(v => v.id && names.has(normalizeVenue(v.name))).map(v => v.id))];
+    return {key,name,id: matches.length === 1 ? matches[0] : null};
+  });
+}
+// The dates and times from the slot RPC are Malaysia-local values, not browser-local instants.
+function rankTrialSlots(slots, preferredDate, preferredTime) {
+  if (!preferredDate && !preferredTime) return [...slots];
+  const day = value => Date.parse(value + 'T00:00:00Z') / 86400000;
+  const minutes = value => Number(value.slice(0,2))*60 + Number(value.slice(3,5));
+  const score = slot =>
+    (preferredDate ? Math.abs(day(slot.date)-day(preferredDate))*1440 : 0) +
+    (preferredTime ? Math.abs(minutes(slot.start)-minutes(preferredTime)) : 0);
+  return [...slots].sort((a,b) => score(a)-score(b));
+}
 const label = v => v ? esc(v) : 'To be confirmed';
 const wa = 'https://wa.me/60124965324';
 let client, demoBooking;
@@ -63,7 +93,9 @@ function showExpired() {
 }
 
 async function showForm() {
-  const venues = await rpc('shared_trial_venues');
+  const online = await rpc('shared_trial_venues');
+  const venues = matchTrialVenues(Array.isArray(online) ? online : []);
+  const selectedVenue = key => venues.find(v => v.key === key)?.id ?? null;
   root.innerHTML = header + `<h1>Book a Free Group Trial</h1>
     <p class="muted">Choose an available session based on the player’s age, venue and badminton experience.</p>
     ${demo ? '<p class="hint warn">Demo only. Information is not saved and no booking is made.</p>' : ''}
@@ -71,9 +103,12 @@ async function showForm() {
       <h3>1. Find a suitable slot</h3>
       <div class="form-grid">
         <label class="f">Student’s date of birth<input name="birth" type="date" max="${localDate()}" required><small>Used to match the age group.</small></label>
-        <label class="f">Training venue<select name="venue" required><option value="">Select a venue</option>${(venues || []).map(v => '<option value="' + esc(v.id) + '">' + esc(v.name) + '</option>').join('')}</select></label>
+        <label class="f">Training venue<select name="venue" required><option value="">Select a venue</option>${(venues || []).map(v => '<option value="' + esc(v.key) + '">' + esc(v.name) + '</option>').join('')}</select></label>
         <label class="f full">Current badminton level<select name="level" required><option value="">Select a level</option>${levelOptions.map(([k,v]) => '<option value="' + k + '">' + esc(v) + '</option>').join('')}</select></label>
+        <label class="f">Preferred date <small>(optional)</small><input name="preferred_date" type="date" min="${localDate()}"></label>
+        <label class="f">Preferred time <small>(optional, Malaysia time)</small><input name="preferred_time" type="time"></label>
       </div>
+      <p class="muted">Closest suitable slots are shown first. Your preference is not a confirmed booking.</p>
       <div id="trial-slots" class="slots" role="status" aria-live="polite" style="margin-top:12px">Enter all three details to see available slots.</div>
       <h3>2. Add your details</h3>
       <div class="form-grid">
@@ -89,15 +124,23 @@ async function showForm() {
   let revision = 0, choices = [], token, busy = false;
   async function loadSlots() {
     const v = ++revision;
-    choices = []; submit.disabled = true; warning.textContent = '';
+    choices = []; submit.disabled = true; warning.textContent = ''; list.textContent = '';
+    if (fields.preferred_date.value && !fields.preferred_date.validity.valid) {
+      list.textContent = 'Choose a preferred date from today onward, or clear it.'; return;
+    }
     if (!fields.birth.validity.valid || !fields.venue.value || !fields.level.value) {
       list.textContent = 'Enter all three details to see available slots.'; return;
     }
+    const venueId = selectedVenue(fields.venue.value);
+    if (!venueId) {
+      list.innerHTML = `<p>Online trial slots are not currently listed for this venue. <a href="${wa}" target="_blank" rel="noopener noreferrer">Contact Maxxima</a> to ask about a trial.</p>`;
+      return;
+    }
     list.textContent = 'Looking for suitable slots…';
     try {
-      const slots = await rpc('shared_trial_slots',{p_birth:fields.birth.value,p_venue:fields.venue.value,p_level:fields.level.value});
+      const slots = await rpc('shared_trial_slots',{p_birth:fields.birth.value,p_venue:venueId,p_level:fields.level.value});
       if (v !== revision) return;
-      choices = slots || [];
+      choices = rankTrialSlots(slots || [], fields.preferred_date.value, fields.preferred_time.value);
       list.innerHTML = choices.map((s,i) => `<label class="slot-r"><input required type="radio" name="slot" value="${i}"><span>
         <b>${esc(dateLabel(s.date))} · ${esc(s.start)}–${esc(s.end)}</b><small>${esc(s.programme)} · ${esc(s.venue)}</small></span></label>`).join('') ||
         `<p>No suitable slots at this venue in the next 3 weeks. Try another venue or <a href="${wa}" target="_blank" rel="noopener noreferrer">ask admin for help</a>.</p>`;
@@ -107,10 +150,10 @@ async function showForm() {
       by('retry-slots').onclick = loadSlots;
     }
   }
-  for (const k of ['birth','venue','level']) fields[k].addEventListener('change',loadSlots);
+  for (const k of ['birth','venue','level','preferred_date','preferred_time']) fields[k].addEventListener('change',loadSlots);
   list.addEventListener('change', () => { if (!busy) submit.disabled = !f.querySelector('[name=slot]:checked'); });
   f.onsubmit = async e => {
-    e.preventDefault(); if (busy) return;
+    e.preventDefault(); if (busy || submit.disabled) return;
     const picked = f.querySelector('[name=slot]:checked'), s = picked && choices[Number(picked.value)];
     if (!s) return;
     const child = fields.child.value.trim(), guardian = fields.guardian.value.trim(), phone = fields.phone.value.trim();
@@ -118,7 +161,7 @@ async function showForm() {
     if (!/^\d{9,15}$/.test(phone.replace(/\D/g,''))) { warning.textContent = 'Enter a valid WhatsApp number including area code.'; return; }
     if (!token) token = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2,'0')).join('');
     busy = true; warning.textContent = '';
-    const payload = {token,child,guardian,phone,birth:fields.birth.value,venue:fields.venue.value,level:fields.level.value,class_id:s.class_id,date:s.date,consent:fields.consent.checked};
+    const payload = {token,child,guardian,phone,birth:fields.birth.value,venue:selectedVenue(fields.venue.value),level:fields.level.value,class_id:s.class_id,date:s.date,consent:fields.consent.checked};
     Array.from(fields).forEach(el => el.disabled = true);
     let outcome;
     try { outcome = await rpc('shared_trial_book',{p:payload}); }
