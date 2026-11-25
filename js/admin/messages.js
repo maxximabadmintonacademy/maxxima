@@ -27,6 +27,16 @@ export const msgTrialReminder = ({ guardian, child, date, time, venue }) => pick
   `${hi(guardian)} a reminder: ${child}'s trial session is on ${date}${time ? ' at ' + time : ''} at ${venue}. Please arrive 10–15 minutes early and bring a racket, sports shoes, water and a towel.`,
   `${hi(guardian)}温馨提醒：${child} 的试课时间为 ${date}${time ? ' ' + time : ''}，地点 ${venue}。请提早 10–15 分钟到达，并携带球拍、运动鞋、水和毛巾。`);
 
+export const msgTrialConfirm = ({ guardian, child, date, time, venue }) => pick(
+  `${hi(guardian)} slot trial ${child} telah DISAHKAN: ${date}${time ? ' jam ' + time : ''} di ${venue}. Sila datang 10–15 minit lebih awal, bawa raket (jika ada), kasut sukan dan air.`,
+  `${hi(guardian)} ${child}'s trial slot is CONFIRMED: ${date}${time ? ' at ' + time : ''} at ${venue}. Please arrive 10–15 minutes early with a racket (if any), sports shoes and water.`,
+  `${hi(guardian)}${child} 的试课时段已确认：${date}${time ? ' ' + time : ''}，地点 ${venue}。请提早 10–15 分钟到达，并携带球拍（如有）、运动鞋和水。`);
+
+export const msgTrialCancel = ({ guardian, child, date, time, venue }) => pick(
+  `${hi(guardian)} harap maaf, kelas pada ${date}${time ? ' jam ' + time : ''} di ${venue} DIBATALKAN. Trial ${child} perlu ditukar ke slot lain — boleh kami cadangkan tarikh baharu?`,
+  `${hi(guardian)} we're sorry, the class on ${date}${time ? ' at ' + time : ''} at ${venue} has been CANCELLED. ${child}'s trial needs to move to another slot — may we suggest a new date?`,
+  `${hi(guardian)}抱歉，${date}${time ? ' ' + time : ''} 在 ${venue} 的课程已取消。${child} 的试课需要改到其他时段，我们可以为您建议新日期吗？`);
+
 export const msgEnrolEnquiry = ({ guardian, student }) => pick(
   `${hi(guardian)} mengenai permohonan ${student} di Maxxima Badminton Academy…`,
   `${hi(guardian)} regarding ${student}'s application at Maxxima Badminton Academy…`,

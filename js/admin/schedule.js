@@ -1,11 +1,24 @@
 // Jadual Kelas (templat mingguan) dan Kehadiran (sesi bertarikh).
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove } from '../data.js';
-import { ic, esc, F, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, hm, todayISO, addDays, parseISO, iso, fmtShort, monthKey, monthLabel, DAYS, LABEL, barColor, $ } from '../ui.js';
+import { ic, esc, F, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, hm, todayISO, addDays, parseISO, iso, fmtShort, monthKey, monthLabel, DAYS, LABEL, barColor, $, waLink } from '../ui.js';
 import { T, byId, venueName, progName, staffName, studentName, progColor, enrolledIn, classLabel, attRate, activeStudents, livePackages, pkgRemaining } from './helpers.js';
-import { ageGroups, langWarn, langGap, langName, calItems, sTime, sCoach, sCourt, groupsOf, rosterOf, syncCoCoaches, coachIds } from './sessions.js';
+import { ageGroups, langWarn, langGap, langName, calItems, sTime, sCoach, sCourt, groupsOf, rosterOf, syncCoCoaches, coachIds, trialsOf } from './sessions.js';
+import { msgTrialCancel } from './messages.js';
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0];
+
+/** Selepas batal sesi: ingatkan admin untuk maklumkan ibu bapa pelajar trial dalam sesi itu. */
+function trialCancelNotice(list) {
+  openModal({ title: 'Maklumkan ibu bapa trial', cancel: 'Kemudian',
+    body: `<p class="hint warn" style="margin-bottom:10px">${ic('alert', 'sm')} Ada <b>${list.length}</b> pelajar trial dalam sesi yang dibatalkan. Sistem tidak menghantar notifikasi — sila maklumkan ibu bapa melalui WhatsApp dan tukar slot trial.</p>
+      <ul class="list">${list.map(t => { const l = byId('leads', t.lead_id) || {};
+        const m = msgTrialCancel({ guardian: l.guardian_name, child: t.child_name || l.child_name, date: fmtDate(t.trial_date), time: t.trial_time ? hm(t.trial_time) : '', venue: venueName(t.venue_id) });
+        return `<li class="list-item">${avatar(t.child_name || l.child_name || 'Trial')}<div class="li-main"><div class="li-title">${esc(t.child_name || l.child_name || 'Pelajar trial')}</div><div class="li-sub">${esc(l.guardian_name || '')}${t.status === 'requested' ? ' · belum disahkan' : ''}</div></div>
+          ${l.phone ? `<a class="btn sm accent" href="${waLink(l.phone, m)}" target="_blank" rel="noopener">${ic('msg', 'sm')} WhatsApp</a>` : '<span class="muted" style="font-size:12px">tiada no. telefon</span>'}
+          <button type="button" class="btn sm" data-action="trial-notified" data-id="${t.id}">Sudah dimaklumkan</button></li>`; }).join('')}</ul>
+      <p class="muted" style="font-size:12.5px;margin-top:8px">Peringatan ini kekal dalam dashboard & halaman Kelas Percubaan sehingga ditanda "Sudah dimaklumkan".</p>` });
+}
 
 /* =====================================================================
    JADUAL KELAS
@@ -243,7 +256,12 @@ Object.assign(ACTIONS, {
   'sess-cancel': id => openModal({
     title: 'Batalkan Sesi', submit: 'Batalkan Sesi',
     body: F('Sebab (cth. cuaca, gelanggang tidak tersedia)', 'reason', { full: true }),
-    onSubmit: async d => { await update('class_sessions', id, { status: 'cancelled', cancel_reason: val(d.reason) }); toast('Sesi dibatalkan'); app.render(); },
+    onSubmit: async d => {
+      await update('class_sessions', id, { status: 'cancelled', cancel_reason: val(d.reason) }); toast('Sesi dibatalkan'); app.render();
+      const ss = byId('class_sessions', id), c = ss && byId('classes', ss.class_id);
+      const list = trialsOf(ss, c).filter(t => ['requested', 'scheduled'].includes(t.status));
+      if (list.length) setTimeout(() => trialCancelNotice(list), 50);
+    },
   }),
   'sess-add': () => {
     const cls = T('classes').filter(c => c.active).sort((a, b) => a.weekday - b.weekday || String(a.start_time).localeCompare(String(b.start_time)));

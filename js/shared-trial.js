@@ -59,6 +59,8 @@ const DICT = {
   'Checking the latest class details…': ['Menyemak maklumat kelas terkini…', '正在查看最新课程资料…'],
   'We couldn’t load your latest trial details. Please try again.': ['Maklumat percubaan tidak dapat dimuatkan. Sila cuba lagi.', '无法加载体验课资料，请重试。'],
   'Demo only. No booking was made.': ['Demo sahaja. Tiada tempahan dibuat.', '仅供演示。未作任何预约。'],
+  'Waiting for admin confirmation': ['Menunggu pengesahan admin', '等待管理员确认'],
+  'Your request has been received. Admin will place your child in this slot and confirm on WhatsApp. Please wait for confirmation before coming.': ['Permintaan anda telah diterima. Admin akan masukkan anak anda ke slot ini dan sahkan melalui WhatsApp. Sila tunggu pengesahan sebelum datang.', '已收到您的申请。管理员会把孩子安排进此时段，并通过 WhatsApp 确认。请在确认后才前来。'],
   'Confirmed': ['Disahkan', '已确认'], 'Cancelled': ['Dibatalkan', '已取消'], 'Completed': ['Selesai', '已完成'],
   'Not attended': ['Tidak hadir', '未出席'], 'Session date passed': ['Tarikh sesi sudah lepas', '课程日期已过'], 'Contact admin': ['Hubungi admin', '联系管理员'],
   'Please do not travel to this session. Contact us for another slot.': ['Jangan datang ke sesi ini. Hubungi kami untuk slot lain.', '请勿前往此课程。请联系我们安排其他时段。'],
@@ -143,10 +145,10 @@ async function showPortal(token) {
   }
   if (!reservation) return showExpired();
   const r = reservation, cancelled = r.status === 'cancelled';
-  const statuses = {confirmed:tr('Confirmed'),cancelled:tr('Cancelled'),completed:tr('Completed'),not_attended:tr('Not attended'),past:tr('Session date passed')};
+  const statuses = {pending:tr('Waiting for admin confirmation'),confirmed:tr('Confirmed'),cancelled:tr('Cancelled'),completed:tr('Completed'),not_attended:tr('Not attended'),past:tr('Session date passed')};
   root.innerHTML = headerHtml() + `<h1>${tr('Trial Portal')}</h1>
     ${demo ? '<p class="hint warn">' + tr('Demo only. No booking was made.') + '</p>' : ''}
-    <p class="hint ${cancelled ? 'warn' : ''}" role="status"><b>${statuses[r.status] || tr('Contact admin')}</b>${cancelled ? ' · ' + tr('Please do not travel to this session. Contact us for another slot.') : ''}</p>
+    <p class="hint ${cancelled || r.status === 'pending' ? 'warn' : ''}" role="status"><b>${statuses[r.status] || tr('Contact admin')}</b>${cancelled ? ' · ' + tr('Please do not travel to this session. Contact us for another slot.') : ''}${r.status === 'pending' ? ' · ' + tr('Your request has been received. Admin will place your child in this slot and confirm on WhatsApp. Please wait for confirmation before coming.') : ''}</p>
     <dl><dt>${tr('Date')}</dt><dd>${esc(dateLabel(r.date))}</dd><dt>${tr('Time (Malaysia)')}</dt><dd>${label(r.start)}${r.end ? '–' + esc(r.end) : ''}</dd>
     <dt>${tr('Venue')}</dt><dd>${label(r.venue)}</dd><dt>${tr('Programme')}</dt><dd>${label(r.programme)}</dd>
     ${cancelled ? '' : '<dt>' + tr('Court') + '</dt><dd>' + label(r.court) + '</dd>'}</dl>
@@ -241,7 +243,7 @@ async function showForm() {
     try { outcome = await rpc('shared_trial_book',{p:payload}); }
     catch { warning.textContent = tr('We could not confirm the booking. Try again to check whether it went through.'); }
     if (outcome?.ok) {
-      if (demo) demoBooking = {...s,status:'confirmed',court:null};
+      if (demo) demoBooking = {...s,status:'pending',court:null};
       history.replaceState(null,'','#reservation=' + token);
       await showPortal(token);
       return;

@@ -2,11 +2,11 @@ import { dupeCount } from './dupes.js';
 // Leads, Kelas Percubaan (trial), Pendaftaran (kemasukan), Senarai Pelajar.
 import { withLang, getLang } from '../i18n.js';
 import { langOf } from '../lang-of.js';
-import { msgLeadThanks, msgTrialReminder, msgEnrolEnquiry, msgEnrolInvoice } from './messages.js';
+import { msgLeadThanks, msgTrialReminder, msgTrialConfirm, msgTrialCancel, msgEnrolEnquiry, msgEnrolInvoice } from './messages.js';
 import { VIEWS, ACTIONS, INPUTS } from '../registry.js';
 import { S, insert, update, remove, refresh, rpc, loadStudentHistory } from '../data.js';
 import { ic, esc, F, RM, sum, num, val, badge, avatar, UI, app, toast, openModal, closeModal, confirmModal, pageHead, fmtDate, fmtShort, hm, todayISO, addDays, monthKey, monthLabel, DAYS, waLink, LABEL, barColor } from '../ui.js';
-import { T, byId, venueName, progName, staffName, studentName, invStatus, paidOf, attRate, classLabel, enrolledIn, ageOf, billing, academy, livePackages, studentPackages, pkgRemaining, isOldPkg, catalogFor, daysLeft } from './helpers.js';
+import { T, byId, venueName, progName, staffName, studentName, invStatus, paidOf, attRate, classLabel, enrolledIn, ageOf, billing, academy, livePackages, studentPackages, pkgRemaining, isOldPkg, catalogFor, daysLeft, trialSession } from './helpers.js';
 import { sellPackage, dueDefault } from './finance.js';
 
 const venueOpts = (blank = '— Pilih lokasi —') => [['', blank], ...T('venues').filter(v => v.active).map(v => [v.id, v.name])];
@@ -133,11 +133,16 @@ Object.assign(ACTIONS, {
 VIEWS.trial = () => {
   const today = todayISO();
   const trials = T('trials');
+  const msgArgs = (t, l) => ({ guardian: l.guardian_name, child: l.child_name, date: fmtDate(t.trial_date), time: t.trial_time ? hm(t.trial_time) : '', venue: venueName(t.venue_id) });
   const card = t => {
     const l = byId('leads', t.lead_id); if (!l) return '';
     const late = t.status === 'scheduled' && t.trial_date < today;
+    const off = ['requested', 'scheduled'].includes(t.status) && trialSession(t)?.status === 'cancelled';
+    const cancelBox = off ? `<div class="hint ${t.cancel_notified_at ? '' : 'warn'}" style="font-size:12.5px;padding:8px 10px">${ic('alert', 'sm')} <b>Kelas ini dibatalkan.</b> ${t.cancel_notified_at ? 'Ibu bapa sudah dimaklumkan · ' + fmtShort(t.cancel_notified_at.slice(0, 10)) + '. Ubah tarikh trial atau batalkan.' : 'Maklumkan ibu bapa & tukar ke slot lain.'}
+        ${t.cancel_notified_at ? '' : `<div class="actions" style="margin-top:6px">${l.phone ? `<a class="btn sm accent" href="${waLink(l.phone, msgTrialCancel(msgArgs(t, l)))}" target="_blank" rel="noopener">${ic('msg', 'sm')} WhatsApp pembatalan</a>` : ''}<button class="btn sm" data-action="trial-notified" data-id="${t.id}">Sudah dimaklumkan</button></div>`}</div>` : '';
     return `<div class="card coach-card">
-      <div class="coach-top">${avatar(l.child_name, t.status === 'done' ? 'lime' : '')}<div style="flex:1;min-width:0"><h4>${esc(l.child_name)}</h4><div class="muted" style="font-size:12px">${l.child_age ? l.child_age + ' tahun · ' : ''}${esc(l.guardian_name || '')}</div></div>${late ? badge('overdue', 'Perlu keputusan') : badge(t.status)}</div>
+      <div class="coach-top">${avatar(l.child_name, t.status === 'done' ? 'lime' : '')}<div style="flex:1;min-width:0"><h4>${esc(l.child_name)}</h4><div class="muted" style="font-size:12px">${l.child_age ? l.child_age + ' tahun · ' : ''}${esc(l.guardian_name || '')}</div></div>${off ? badge('cancelled', 'Kelas dibatal') : late ? badge('overdue', 'Perlu keputusan') : t.status === 'requested' ? badge('requested', 'Perlu disahkan') : badge(t.status)}</div>
+      ${cancelBox}
       <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
         <div style="display:flex;gap:8px;align-items:center">${ic('calendar', 'sm')} ${fmtDate(t.trial_date)}${t.trial_time ? ', ' + hm(t.trial_time) : ''}</div>
         <div style="display:flex;gap:8px;align-items:center">${ic('pin', 'sm')} ${esc(venueName(t.venue_id))}</div>
@@ -146,16 +151,23 @@ VIEWS.trial = () => {
       </div>
       ${t.status === 'done' ? `<div style="background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12.5px"><b>Cadangan: ${esc(progName(t.recommended_programme_id))}</b><div class="muted">${esc(t.notes || '')}</div></div>
         ${l.status === 'trial_done' ? `<button class="btn accent" data-action="lead-enrol" data-id="${l.id}">${ic('userplus', 'sm')} Mohon Daftar</button>` : ''}`
+        : t.status === 'requested' ? `<div class="actions"><button class="btn primary" style="flex:1" data-action="trial-edit" data-id="${t.id}">${ic('tick', 'sm')} Sahkan & masukkan slot</button>
+           ${l.phone ? `<a class="btn" href="${waLink(l.phone, msgLeadThanks({ guardian: l.guardian_name, child: l.child_name }))}" target="_blank" rel="noopener" title="WhatsApp ibu bapa">${ic('msg', 'sm')}</a>` : ''}
+           <button class="btn" data-action="trial-cancel" data-id="${t.id}" title="Tolak / batal">${ic('x', 'sm')}</button></div>`
         : `<div class="actions"><button class="btn primary" style="flex:1" data-action="trial-result" data-id="${t.id}">${ic('tick', 'sm')} Rekod Keputusan</button>
-           ${l.phone ? `<a class="btn" href="${waLink(l.phone, msgTrialReminder({ guardian: l.guardian_name, child: l.child_name, date: fmtDate(t.trial_date), time: t.trial_time ? hm(t.trial_time) : '', venue: venueName(t.venue_id) }))}" target="_blank" rel="noopener" title="Peringatan WhatsApp">${ic('msg', 'sm')}</a>` : ''}
+           ${l.phone ? `<a class="btn" href="${waLink(l.phone, msgTrialReminder(msgArgs(t, l)))}" target="_blank" rel="noopener" title="Peringatan WhatsApp">${ic('msg', 'sm')}</a>` : ''}
            <button class="btn" data-action="trial-edit" data-id="${t.id}" title="Ubah tarikh / kelas">${ic('edit', 'sm')}</button>
            <button class="btn" data-action="trial-cancel" data-id="${t.id}" title="Batal">${ic('x', 'sm')}</button></div>`}
     </div>`;
   };
+  const requests = trials.filter(t => t.status === 'requested').sort((a, b) => a.trial_date.localeCompare(b.trial_date));
   const upcoming = trials.filter(t => t.status === 'scheduled').sort((a, b) => a.trial_date.localeCompare(b.trial_date));
   const done = trials.filter(t => t.status === 'done').sort((a, b) => b.trial_date.localeCompare(a.trial_date)).slice(0, 9);
   return `
   ${pageHead('Kelas Percubaan (Trial)', 'Sesi percubaan percuma untuk pelajar baharu dan keputusan penilaian coach.')}
+  ${requests.length ? `<h3 style="font-size:14px;margin-bottom:6px">Permintaan baharu — perlu disahkan <span class="muted">(${requests.length})</span></h3>
+  <p class="muted" style="font-size:12.5px;margin-bottom:10px">Dihantar melalui borang trial. Belum sah sehingga admin masukkan ke slot. Ibu bapa nampak "Menunggu pengesahan admin" dalam portal.</p>
+  <div class="grid g-3 mb">${requests.map(card).join('')}</div>` : ''}
   <h3 style="font-size:14px;margin-bottom:10px">Dijadualkan <span class="muted">(${upcoming.length})</span></h3>
   <div class="grid g-3 mb">${upcoming.map(card).join('') || `<div class="card empty" style="grid-column:1/-1">Tiada trial dijadualkan. Jadualkan daripada halaman <a href="#leads" style="color:var(--info)">Leads</a>.</div>`}</div>
   <h3 style="font-size:14px;margin-bottom:10px">Selesai <span class="muted">(terkini)</span></h3>
@@ -179,6 +191,7 @@ Object.assign(ACTIONS, {
       },
     });
   },
+  'trial-notified': async id => { await update('trials', id, { cancel_notified_at: new Date().toISOString() }); toast('Ditanda sudah dimaklumkan'); app.render(); },
   'trial-cancel': id => confirmModal({ title: 'Batalkan trial?', message: 'Lead akan dikembalikan ke status "Dihubungi".', ok: 'Batalkan Trial', onOk: async () => { const t = byId('trials', id); await update('trials', id, { status: 'cancelled' }); await update('leads', t.lead_id, { status: 'contacted' }); toast('Trial dibatalkan'); app.render(); } }),
 });
 
@@ -723,7 +736,7 @@ function trialForm(leadId, tr) {
   const l = byId('leads', leadId); if (!l) return;
   const preCls = tr?.class_id ? byId('classes', tr.class_id) : null;
   openModal({
-    title: `${tr ? 'Ubah Trial' : 'Jadual Trial'} — ${esc(l.child_name)}`, submit: tr ? 'Simpan' : 'Jadualkan',
+    title: `${tr?.status === 'requested' ? 'Sahkan Trial' : tr ? 'Ubah Trial' : 'Jadual Trial'} — ${esc(l.child_name)}`, submit: tr?.status === 'requested' ? 'Sahkan slot' : tr ? 'Simpan' : 'Jadualkan',
     body: `<p class="muted" style="margin-bottom:12px">Percubaan percuma: satu sesi kumpulan 2 jam untuk pelajar baharu. Pilih kelas supaya nama pelajar muncul dalam senarai kehadiran sesi & coach dimaklumkan.</p>
     <div class="form-grid">
       ${F('Jenis', 'kind', { value: tr?.kind, opts: [['group_trial', 'Trial percuma (kumpulan, 2 jam)'], ['personal_intro', 'Sesi pengenalan personal (60 min, berbayar)']], full: true })}
@@ -738,7 +751,14 @@ function trialForm(leadId, tr) {
       if (!c && !d.trial_time) throw new Error('Pilih kelas atau isi masa trial.');
       const row = { kind: d.kind, venue_id: c?.venue_id || val(d.venue_id), coach_id: val(d.coach_id) || c?.coach_id || null, trial_date: d.trial_date,
         trial_time: c ? c.start_time : val(d.trial_time), class_id: c?.id || null, child_name: l.child_name, child_age: l.child_age ?? null };
-      if (tr) await update('trials', tr.id, row);
+      const confirming = tr?.status === 'requested';
+      if (tr) {
+        const moved = tr.class_id !== row.class_id || tr.trial_date !== row.trial_date;
+        await update('trials', tr.id, { ...row, ...(confirming ? { status: 'scheduled' } : {}), ...(moved ? { cancel_notified_at: null } : {}) });
+        if (confirming) await update('leads', leadId, { status: 'trial_scheduled' });
+        if (confirming && l.phone) { const tt = { ...tr, ...row }; toast('Slot trial disahkan'); app.render();
+          return setTimeout(() => openModal({ title: 'Maklumkan ibu bapa', cancel: 'Tutup', body: `<p>Slot trial <b>${esc(l.child_name)}</b> sudah disahkan. Hantar pengesahan kepada ibu bapa:</p><div class="actions" style="margin-top:10px"><a class="btn primary" href="${waLink(l.phone, msgTrialConfirm({ guardian: l.guardian_name, child: l.child_name, date: fmtDate(tt.trial_date), time: tt.trial_time ? hm(tt.trial_time) : '', venue: venueName(tt.venue_id) }))}" target="_blank" rel="noopener">${ic('msg', 'sm')} WhatsApp pengesahan</a></div>` }), 50); }
+      }
       else { await insert('trials', { ...row, lead_id: leadId, status: 'scheduled' }); await update('leads', leadId, { status: 'trial_scheduled' }); }
       toast(tr ? 'Trial dikemas kini' : 'Trial dijadualkan'); app.render();
     },

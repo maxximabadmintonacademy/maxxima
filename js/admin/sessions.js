@@ -64,7 +64,7 @@ function trialBox(s, c) {
   const btn = (t, st, lbl, cls) => `<button type="button" class="btn sm ${t.status === st ? cls : 'ghost'}" data-action="sp-trial" data-id="${t.id}|${t.status === st ? 'scheduled' : st}">${lbl}</button>`;
   return `<div class="card card-pad" style="margin:0 0 10px;padding:10px 12px;border-left:3px solid var(--warn)"><b>${ic('flag', 'sm')} Pelajar trial <span class="muted">(${list.length})</span></b>
     <ul class="list">${list.map(t => `<li class="list-item" style="padding:8px 4px;flex-wrap:wrap">${avatar(trialName(t))}<div class="li-main"><div class="li-title">${esc(trialName(t))} <span class="badge b-warn">Trial</span>${trialAge(t) ? ` <span class="muted" style="font-size:11.5px">${trialAge(t)} thn</span>` : ''}</div>
-      <div class="li-sub">${t.status === 'done' ? 'Hadir — trial selesai' : t.status === 'no_show' ? 'Tidak hadir' : 'Belum direkod'}${t.notes ? ' · ' + esc(t.notes) : ''}</div></div>
+      <div class="li-sub">${t.status === 'done' ? 'Hadir — trial selesai' : t.status === 'no_show' ? 'Tidak hadir' : t.status === 'requested' ? '<b style="color:var(--warn)">Belum disahkan admin</b>' : 'Belum direkod'}${t.notes ? ' · ' + esc(t.notes) : ''}</div></div>
       <div class="actions" style="gap:6px">${btn(t, 'done', 'Hadir', 'primary')}${btn(t, 'no_show', 'Tidak hadir', 'danger-o')}${!isCoach() && ACTIONS['trial-result'] ? `<button type="button" class="btn sm ghost" data-action="sp-trial-res" data-id="${t.id}" title="Program dicadangkan & catatan">Keputusan</button>` : ''}</div></li>`).join('')}</ul>
     <div class="muted" style="font-size:12px">Trial percuma — tidak masuk kehadiran pelajar & tidak tolak pakej. Selepas trial, admin susuli pendaftaran.</div></div>`;
 }

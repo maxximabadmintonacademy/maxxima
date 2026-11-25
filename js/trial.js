@@ -43,7 +43,7 @@ function render() {
   if (!INFO) return;
   if (FB && INFO.ok) return renderFb();
   if (!INFO.ok) { $('#reg').innerHTML = head() + `<div class="done"><div class="big">🔗</div><h1>${t('Pautan tidak sah')}</h1><p class="muted">${t('Sila hubungi admin Maxxima melalui WhatsApp untuk mendapatkan pautan baharu.')}</p></div>`; return bindLang(); }
-  if (INFO.done) { $('#reg').innerHTML = head() + `<div class="done"><div class="big">✅</div><h1>${t('Trial sudah dijadualkan')}</h1><p class="muted">${t('Terima kasih! Admin akan menghubungi anda jika ada perubahan. Jumpa di gelanggang!')}</p></div>`; return bindLang(); }
+  if (INFO.done) { $('#reg').innerHTML = head() + `<div class="done"><div class="big">✅</div><h1>${t('Permintaan trial sudah diterima')}</h1><p class="muted">${t('Admin akan sahkan slot melalui WhatsApp. Sila tunggu pengesahan sebelum datang.')}</p></div>`; return bindLang(); }
   const L = INFO.lead, v = { child: L.child_name, birth: L.birth_date || '', gender: L.gender || '', guardian: L.guardian_name || '', medical: '', notes: '', slot: '', prog: L.programme_id || '', ...VAL };
   const progs = [...new Map((INFO.slots || []).map(s => [s.programme_id, s.programme])).entries()];
   const slots = (INFO.slots || []).filter(s => !v.prog || s.programme_id === v.prog);
@@ -80,7 +80,7 @@ function render() {
     try {
       if (!demo) { const { error } = await client.rpc('public_trial_submit', { p_token: token, p_child: VAL.child.trim(), p_birth: VAL.birth || null, p_gender: VAL.gender || null, p_guardian: VAL.guardian || null, p_class: cid, p_date: d, p_medical: VAL.medical || null, p_notes: VAL.notes || null }); if (error) throw error; }
       const s = INFO.slots.find(x => x.class_id === cid && x.date === d);
-      $('#reg').innerHTML = head() + `<div class="done"><div class="big">🏸</div><h1>${t('Trial disahkan!')}</h1><p><b>${esc(VAL.child)}</b><br>${fmt(d)} · ${s?.start}–${s?.end}<br>${esc(s?.programme || '')} · ${esc(s?.venue || '')}</p><p class="muted" style="margin-top:12px">${t('Sila tiba 10 minit awal dengan kasut sukan (tapak tidak berbekas), raket (jika ada) dan air minuman.')}</p></div>`;
+      $('#reg').innerHTML = head() + `<div class="done"><div class="big">🏸</div><h1>${t('Permintaan trial diterima!')}</h1><p><b>${esc(VAL.child)}</b><br>${fmt(d)} · ${s?.start}–${s?.end}<br>${esc(s?.programme || '')} · ${esc(s?.venue || '')}</p><p class="muted" style="margin-top:12px">${t('Admin akan sahkan slot melalui WhatsApp. Sila tunggu pengesahan sebelum datang.')}</p></div>`;
       bindLang();
     } catch (err) { console.error(err); toast(err.message || String(err), true); btn.disabled = false; }
   });

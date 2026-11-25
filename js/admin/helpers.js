@@ -88,6 +88,11 @@ export function setupChain() {
 }
 export const setupGaps = () => setupChain().filter(s => !s.ok || s.issues.length);
 
+/** Sesi kelas bagi trial (jika ada) — untuk kesan pembatalan. */
+export const trialSession = t => t?.class_id ? T('class_sessions').find(x => x.class_id === t.class_id && x.session_date === t.trial_date) : null;
+/** Trial (permintaan / disahkan) yang sesinya dibatalkan dan ibu bapa belum dimaklumkan. */
+export const trialsToNotify = () => T('trials').filter(t => ['requested', 'scheduled'].includes(t.status) && !t.cancel_notified_at && t.trial_date >= todayISO() && trialSession(t)?.status === 'cancelled');
+
 /** Senarai tugasan yang memerlukan tindakan admin (dashboard + loceng). */
 export const EXTRA_TASKS = [];
 export function tasks() {
@@ -95,6 +100,8 @@ export function tasks() {
   const add = (n, icon, tone, text, href) => { if (n > 0) out.push({ n, icon, tone, text: text.replace('{n}', n), href }); };
   EXTRA_TASKS.forEach(f => { try { f(add); } catch (e) { console.warn(e); } });
   add(T('leads').filter(l => l.status === 'new').length, 'target', 't-info', '{n} lead baharu belum dihubungi', 'leads');
+  add(trialsToNotify().length, 'alert', 't-bad', '{n} trial dalam kelas yang dibatalkan — maklumkan ibu bapa', 'trial');
+  add(T('trials').filter(t => t.status === 'requested').length, 'flag', 't-warn', '{n} permintaan trial — sahkan & masukkan ke slot', 'trial');
   add(T('trials').filter(t => t.status === 'scheduled' && t.trial_date < todayISO()).length, 'flag', 't-warn', '{n} trial sudah lepas — rekod keputusan', 'trial');
   add(T('students').filter(s => s.status === 'pending').length, 'userplus', 't-warn', '{n} permohonan menunggu semakan', 'kemasukan');
   add(T('students').filter(s => s.status === 'awaiting_payment').length, 'wallet', 't-info', '{n} pelajar menunggu pengesahan bayaran', 'kemasukan');
