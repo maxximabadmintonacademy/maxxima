@@ -410,18 +410,23 @@ Object.assign(ACTIONS, {
     const sp = byId('student_packages', spId), pol = byId('packages', sp.package_id)?.mode_policy || 'choose';
     if (!Array.isArray(S.pOpen)) { S.pOpen = null; await loadOpen(); }
     const seen = new Set(), weekly = (Array.isArray(S.pOpen) ? S.pOpen : []).filter(x => x.programme_id === sp.programme_id && !seen.has(x.class_id) && seen.add(x.class_id)).sort((a, b) => new Date(a.session_date + 'T00:00:00').getDay() - new Date(b.session_date + 'T00:00:00').getDay() || hm(a.start_time).localeCompare(hm(b.start_time)));
+    const per = Math.max(1, Math.min(weekly.length || 1, Math.round(Number(sp.sessions_total || 4) / 4)));
     openModal({ title: t('Pilih cara latihan'), cancel: t('Tutup'), body: `<p><b>${esc(kidName(sp.student_id))}</b> · ${esc(tr(sp.name))}</p>
       ${pol !== 'flexible' ? `<div class="card card-pad" style="margin-top:12px"><b>${t('Jadual tetap')}</b><p class="muted" style="font-size:12.5px;margin:4px 0 10px">${t('Anak hadir slot yang sama setiap minggu. Tempat dikhaskan; masih boleh reschedule jika 48 jam lebih awal.')}</p>
-        <label class="f full">${t('Slot mingguan')}<select id="pmCls">${weekly.map(x => `<option value="${x.class_id}" ${Number(x.capacity) - Number(x.booked || 0) <= 0 ? 'disabled' : ''}>${DAYS[new Date(x.session_date + 'T00:00:00').getDay()]} ${hm(x.start_time)}–${hm(x.end_time)} · ${esc(x.venue)}${Number(x.capacity) - Number(x.booked || 0) <= 0 ? ' — ' + t('penuh') : ''}</option>`).join('') || `<option value="">${t('Tiada slot')}</option>`}</select></label>
+        ${per > 1 ? `<div class="f full"><span>${t('Pilih {n} slot mingguan', { n: per })}</span><div id="pmMulti" style="display:grid;gap:6px;margin-top:6px">${weekly.map(x => { const mineE = T('class_enrolments').some(e => e.class_id === x.class_id && e.student_id === sp.student_id), full = !mineE && Number(x.capacity) - Number(x.booked || 0) <= 0; return `<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" value="${x.class_id}" ${full ? 'disabled' : ''}> ${DAYS[new Date(x.session_date + 'T00:00:00').getDay()]} ${hm(x.start_time)}–${hm(x.end_time)} · ${esc(x.venue)}${full ? ' — ' + t('penuh') : ''}</label>`; }).join('') || t('Tiada slot')}</div></div>`
+        : `<label class="f full">${t('Slot mingguan')}<select id="pmCls">${weekly.map(x => `<option value="${x.class_id}" ${Number(x.capacity) - Number(x.booked || 0) <= 0 ? 'disabled' : ''}>${DAYS[new Date(x.session_date + 'T00:00:00').getDay()]} ${hm(x.start_time)}–${hm(x.end_time)} · ${esc(x.venue)}${Number(x.capacity) - Number(x.booked || 0) <= 0 ? ' — ' + t('penuh') : ''}</option>`).join('') || `<option value="">${t('Tiada slot')}</option>`}</select></label>`}
         <button class="btn primary" style="margin-top:10px" data-action="p-mode-go" data-id="${spId}|fixed" ${weekly.length ? '' : 'disabled'}>${t('Pilih jadual tetap')}</button></div>` : ''}
       ${pol !== 'fixed' ? `<div class="card card-pad" style="margin-top:12px"><b>${t('Fleksibel')}</b><p class="muted" style="font-size:12.5px;margin:4px 0 10px">${t('Tempah sendiri slot kosong setiap minggu melalui menu Tempah, ikut masa anda.')}</p>
         <button class="btn" data-action="p-mode-go" data-id="${spId}|flexible">${t('Pilih fleksibel')}</button></div>` : ''}` });
   },
   'p-mode-go': async key => {
-    const [spId, mode] = key.split('|'), cls = mode === 'fixed' ? $('#pmCls')?.value : null, sp = byId('student_packages', spId);
+    const [spId, mode] = key.split('|'), sp = byId('student_packages', spId), box = $('#pmMulti');
+    const multi = mode === 'fixed' && box ? [...box.querySelectorAll('input:checked')].map(i => i.value) : null, cls = mode === 'fixed' && !box ? $('#pmCls')?.value : null;
+    const need = Math.max(1, Math.round(Number(sp.sessions_total || 4) / 4));
+    if (multi && multi.length !== Math.min(need, box.querySelectorAll('input').length)) return toast(t('Sila pilih {n} slot mingguan.', { n: need }), true);
     try {
-      if (S.mode === 'supabase') { await rpc('parent_set_mode', { p_sp: spId, p_mode: mode, p_class: cls }); await refresh(['student_packages', 'class_enrolments', 'classes']); }
-      else { Object.assign(sp, { schedule_mode: mode, mode_set_at: new Date().toISOString() }); if (cls && !T('class_enrolments').some(e => e.class_id === cls && e.student_id === sp.student_id)) await insert('class_enrolments', { class_id: cls, student_id: sp.student_id }); }
+      if (S.mode === 'supabase') { await rpc('parent_set_mode', { p_sp: spId, p_mode: mode, p_class: cls, p_classes: multi }); await refresh(['student_packages', 'class_enrolments', 'classes']); }
+      else { Object.assign(sp, { schedule_mode: mode, mode_set_at: new Date().toISOString() }); for (const c of (multi || [cls]).filter(Boolean)) if (!T('class_enrolments').some(e => e.class_id === c && e.student_id === sp.student_id)) await insert('class_enrolments', { class_id: c, student_id: sp.student_id }); }
       closeModal(); S.pOpen = null; toast(mode === 'fixed' ? t('Jadual tetap disimpan. Anak didaftarkan ke slot mingguan.') : t('Cara fleksibel dipilih. Tempah sesi di menu Tempah.')); render();
     } catch (e) { toast(friendlyError(e), true); }
   },

@@ -334,6 +334,8 @@ const D = {
   "Fleksibel": ["Flexible", "灵活"],
   "Anak hadir slot yang sama setiap minggu. Tempat dikhaskan; masih boleh reschedule jika 48 jam lebih awal.": ["Your child attends the same slot every week. The place is reserved; you can still reschedule 48 hours ahead.", "孩子每周固定上同一时段，名额保留；提前 48 小时仍可改期。"],
   "Slot mingguan": ["Weekly slot", "每周时段"],
+  "Pilih {n} slot mingguan": ["Choose {n} weekly slots", "请选择 {n} 个每周时段"],
+  "Sila pilih {n} slot mingguan.": ["Please choose {n} weekly slots.", "请选择 {n} 个每周时段。"],
   "Tiada slot": ["No slots", "没有时段"],
   "Pilih jadual tetap": ["Choose fixed schedule", "选择固定课表"],
   "Tempah sendiri slot kosong setiap minggu melalui menu Tempah, ikut masa anda.": ["Book open slots yourself each week via the Book menu, at your own time.", "每周通过“预订”菜单自行预订空位，时间自由。"],
