@@ -50,3 +50,30 @@ Program ──► PAKEJ (sesi, harga, tempoh sah) ──────────
 * **Siap:** Portal Admin (Persediaan, Leads, Trial, Pendaftaran, Pelajar, Jadual, Kehadiran, Kejohanan, Invois & Bayaran, Pakej, Coach, HR, Pengguna, Tetapan), skema pangkalan data lengkap untuk 3 peranan, notifikasi dalam app.
 * **Belum:** Portal Coach, Portal Ibu Bapa/Pelajar (tempah sesi, hantar bayaran, muat turun resit — fungsi pangkalan data sudah sedia), notifikasi push telefon (PWA), import pukal CSV.
 * **Tidak diuji secara langsung:** sambungan Supabase sebenar dari pelayar, Edge Function jemputan, Realtime. Skema, trigger dan RLS diuji pada Postgres 16; aplikasi diuji penuh dalam mod demo.
+
+## Shared trial form and temporary portal
+
+- **Leads → Share Trial Form** copies the same `trial.html` link for all prospects. No lead entry, student name or outbound WhatsApp automation is needed.
+- Parents choose a venue and badminton level, enter a date of birth to match age groups, pick a suitable slot, and supply the student's name, guardian/contact name and WhatsApp number. Returning the private `#reservation=` link does not require a portal account. It shows the live appointment status, date, time, venue and court, but never returns names, phone numbers, date of birth, medical information or other bookings. Reopen/refresh to check changes; this does not send notifications.
+- The portal token is random, sent to Supabase only in the RPC body and stored as a hash. Access ends seven days after the appointment or 60 days after issuance, whichever is earlier. Keep the private link separate from the reusable form URL. Existing per-lead `?t=` and feedback `?t=…&fb=1` routes are unchanged by design.
+
+### Status (25 Nov 2026)
+
+Migration `20261124_shared_trial.sql` sudah dijalankan di Supabase produksi (diuji dengan tempahan ujian yang di-rollback). Perubahan selepas semakan: slot bermula esok (bukan hari ini), kumpulan Competitive Smash2u dibuka untuk tahap rally/match, nama "Smash2u Sport Hub" dipadankan, had tempahan (3 setiap no. dalam 7 hari, 30 sejam), `public_trial_submit` kini ikut tarikh Malaysia dan terima sesi bertarikh, borang tersedia dalam BM / EN / 中文.
+
+### Deployment checklist
+
+This repo does not contain the entire production Supabase schema or the existing RPC implementations. **First confirm the migration against a staging copy of the actual schema, then apply it before the Pages change goes live.** The migration intentionally reuses the existing `public_trial_submit` booking transaction, and expects the existing active/archived fields, class capacity, categories, dated session overrides and session-group courts as referenced by the Admin app. Verify the legacy RPC parameter types and return/trigger behavior on staging instead of making changes blindly.
+
+Check that active programme names at each venue match the intended eligibility rules (Foundation/Beginner, Performance/Intermediate, Competitive/Elite, Adult). Verify both a normal booking and one last-seat race, dated cancellation/changed court, wrong and expired links, age cutoffs and the visibility of the booked trial in Admin and Coach. Repeat from a clean browser and with both anonymous and admin sessions. Before promoting the shared link publicly, put the booking action behind verified admission (e.g. WhatsApp verification or anti-bot checks at an Edge Function/gateway) and check production abuse limits. The name/contact duplicate check is not proof of identity and does not replace abuse protection; automatic booking consumes a real slot. Do not send the shared link before these rollout checks pass.
+
+Local checks:
+
+```sh
+node tests/shared_trial_vm.mjs
+python3 -m http.server 8038
+# In another terminal, with Playwright and Chromium installed:
+python3 tests/shared_trial_browser.py
+```
+
+The automated tests substitute the remote RPC transport. They do not validate production SQL or perform live bookings.
