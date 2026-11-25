@@ -9,14 +9,15 @@ const entry = readFileSync(new URL('../js/shared-trial.js', import.meta.url), 'u
   .replace("await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm')", '({createClient: () => clientStub})');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const el = (value = '') => ({value, validity:{valid:true}, disabled:false, textContent:'', innerHTML:'', handlers:{}, addEventListener(key,f){this.handlers[key]=f;}});
-const fields = ['birth','venue','level','child','guardian','phone','consent'].map(() => el());
-Object.assign(fields, Object.fromEntries(['birth','venue','level','child','guardian','phone','consent'].map((k,i) => [k,fields[i]])));
+const fields = ['birth','venue','level','preferred_date','preferred_time','child','guardian','phone','consent'].map(() => el());
+Object.assign(fields, Object.fromEntries(['birth','venue','level','preferred_date','preferred_time','child','guardian','phone','consent'].map((k,i) => [k,fields[i]])));
 let picked = null;
 const ids = Object.fromEntries(['shared-trial','trial-slots','trial-error','refresh','copy-portal'].map(k=>[k,el()]));
 const submit=el();
 Object.assign(ids['shared-trial'], {elements:fields, querySelector: s=>s==='[type=submit]' ? submit : picked});
 const reg=el();
 const date='2099-01-13';
+const adultMorning={class_id:'am',date,start:'09:00',end:'11:00',programme:'Adult',venue:'GoTeam'};
 const junior={class_id:'j',date,start:'08:00',end:'10:00',programme:'Foundation',venue:'Forum SBA'};
 const adult={class_id:'a',date,start:'16:00',end:'18:00',programme:'Adult',venue:'GoTeam'};
 let portal, token, attempts=0, staleResolve;
@@ -31,7 +32,7 @@ const context={
     if(name==='shared_trial_slots') {
       if(data.p_venue==='forum' && data.p_level==='match') return new Promise(resolve=>{staleResolve=resolve;});
       if(data.p_venue==='forum' && data.p_birth==='2015-01-01' && data.p_level==='new') return {data:[junior]};
-      if(data.p_venue==='goteam' && data.p_birth==='1995-01-01' && data.p_level==='new') return {data:[adult]};
+      if(data.p_venue==='goteam' && data.p_birth==='1995-01-01' && data.p_level==='new') return {data:[adultMorning,adult]};
       return {data:[]};
     }
     if(name==='shared_trial_book') {
@@ -59,6 +60,9 @@ const slots=ids['trial-slots'], form=ids['shared-trial'], warning=ids['trial-err
 await run();
 assert.match(reg.innerHTML,/Book a Free Group Trial/);
 assert.match(reg.innerHTML,/Enter all three/);
+assert.equal((reg.innerHTML.match(/<select name="venue"[\s\S]*?<\/select>/)?.[0].match(/<option/g) || []).length,10);
+assert.match(reg.innerHTML,/Preferred date/);
+assert.match(reg.innerHTML,/Preferred time/);
 Object.assign(fields.birth,{value:'2015-01-01'}); fields.venue.value='forum'; fields.level.value='new';
 await fields.level.handlers.change();
 assert.match(slots.innerHTML,/Foundation · Forum SBA/);
@@ -68,16 +72,27 @@ assert.equal(submit.disabled,false);
 fields.level.value='match';
 const stale=fields.level.handlers.change();
 assert.equal(submit.disabled,true);
+fields.venue.value='smash2u'; fields.level.value='new';
+await fields.venue.handlers.change();
+assert.match(slots.innerHTML,/not currently listed/);
+assert.equal(submit.disabled,true);
 fields.birth.value='1995-01-01'; fields.venue.value='goteam'; fields.level.value='new';
 await fields.venue.handlers.change();
 staleResolve({data:[junior]});
 await stale;
 assert.match(slots.innerHTML,/Adult · GoTeam/);
 assert.doesNotMatch(slots.innerHTML,/Foundation/);
+assert.ok(slots.innerHTML.indexOf('09:00') < slots.innerHTML.indexOf('16:00'));
+fields.preferred_time.value='16:00';
+await fields.preferred_time.handlers.change();
+assert.equal(submit.disabled,true);
+assert.ok(slots.innerHTML.indexOf('16:00') < slots.innerHTML.indexOf('09:00'));
+slots.handlers.change();
 fields.child.value='Example Player'; fields.guardian.value='Example Guardian'; fields.phone.value='0123456789'; fields.consent.checked=true;
 await form.onsubmit({preventDefault(){}});
 assert.match(warning.textContent,/no longer available/);
 assert.equal(submit.disabled,true);
+slots.handlers.change();
 await form.onsubmit({preventDefault(){}});
 assert.match(location.hash,/^#reservation=[a-f0-9]{64}$/);
 assert.match(reg.innerHTML,/<dt>Court<\/dt><dd>4<\/dd>/);
