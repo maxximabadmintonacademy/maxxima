@@ -641,10 +641,10 @@ Object.assign(ACTIONS, {
   'sp-filter': id => { UI.spFilter = id; app.render(); },
   'pkg-add': progId => openModal({ title: 'Pakej Baharu', submit: 'Tambah', body: pkgForm(null, progId), onSubmit: async d => { await insert('packages', { ...pkgPatch(d), sort: T('packages').filter(p => p.programme_id === d.programme_id).length + 1 }); toast('Pakej ditambah'); app.render(); } }),
   'pkg-edit': id => openModal({
-    title: 'Edit Pakej', body: pkgForm(byId('packages', id)) + `<div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="pkg-del" data-id="${id}">${ic('trash', 'sm')} Padam pakej</button></div>`,
+    title: 'Edit Pakej', body: pkgForm(byId('packages', id)) + `<div style="margin-top:14px"><button type="button" class="btn sm danger-o" data-action="cat-pkg-del" data-id="${id}">${ic('trash', 'sm')} Padam pakej</button></div>`,
     onSubmit: async d => { await update('packages', id, pkgPatch(d, true)); toast('Pakej dikemas kini'); app.render(); },
   }),
-  'pkg-del': id => confirmModal({ title: 'Padam pakej?', message: 'Pakej yang sudah dijual kepada pelajar kekal (salinan disimpan). Pertimbangkan "Tidak aktif" sahaja.', ok: 'Padam', danger: true, onOk: async () => { await remove('packages', id); closeModal(); toast('Pakej dipadam'); app.render(); } }),
+  'cat-pkg-del': id => confirmModal({ title: 'Padam pakej?', message: 'Pakej yang sudah dijual kepada pelajar kekal (salinan disimpan). Pertimbangkan "Tidak aktif" sahaja.', ok: 'Padam', danger: true, onOk: async () => { await remove('packages', id); closeModal(); toast('Pakej dipadam'); app.render(); } }),
   'sp-remind': id => {
     const p = byId('student_packages', id), s = byId('students', p.student_id);
     msgModal({ title: 'Peringatan Pakej', student: s, build: () => msgPackageLow({ guardian: s.guardian_name, student: s.full_name, pkg: p.name, left: pkgRemaining(p), until: p.expires_on ? fmtDate(p.expires_on) : '', academy: academy().name }) });
