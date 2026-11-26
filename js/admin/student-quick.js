@@ -19,7 +19,8 @@ const reopen = (act, id) => { closeModal(); ACTIONS[act](id); };
 ACTIONS['sq-pkg'] = async id => {
   const s = byId('students', id); if (!s) return;
   if (S.mode === 'supabase') { try { await refresh(['student_packages']); await loadStudentHistory(id); } catch (_) {} }   // baki terkini + kehadiran lama dari pelayan
-  const L = studentPackages(id).filter(p => p.status !== 'cancelled' && !isOldPkg(p)).sort((a, b) => (['active', 'pending'].includes(b.status) - ['active', 'pending'].includes(a.status)) || (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 6);
+  const pkDate = p => p.starts_on || byId('invoices', p.invoice_id)?.paid_on || byId('invoices', p.invoice_id)?.issued_on || (p.created_at || '').slice(0, 10);   // pakej terkini di atas
+  const L = studentPackages(id).filter(p => p.status !== 'cancelled' && !isOldPkg(p)).sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || pkDate(b).localeCompare(pkDate(a))).slice(0, 12);
   const row = p => { const used = Number(p.sessions_used || 0), tot = Number(p.sessions_total || 0), left = pkgRemaining(p);
     const st = p.status === 'pending' ? badge('pending', 'Menunggu bayaran') : p.status === 'completed' ? badge('completed', 'Sesi habis') : badge(p.status);
     return `<div class="slot" style="border-left-color:${p.status === 'active' ? 'var(--ok)' : 'var(--line)'};margin-bottom:8px;display:flex;gap:10px;align-items:center">
